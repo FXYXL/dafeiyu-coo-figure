@@ -29,6 +29,13 @@ export default {
     'monocle-face': 'monocle', // 单片眼镜
     'pan-face': 'pan',         // 钢盆
   },
+  // 参数动作：用模型自己的参数做透视姿态，由 frame.gesture 的进度驱动。
+  // LeanInput 是模型的"前倾输入"：负值往镜头靠（物理会据此联动身体），正值后退。
+  paramActs: {
+    'lean-in':  { params: [{ id: 'LeanInput', to: -30 }] },
+    'lean-back': { params: [{ id: 'LeanInput', to: 30 }] },
+  },
+
   expressions: {
     happy: 'smile', excited: 'smile', love: 'love',
     shy: 'blush', flustered: 'blush',
