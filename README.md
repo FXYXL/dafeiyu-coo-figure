@@ -9,17 +9,14 @@
 ## 安装
 
 1. 下载本仓库（或 Release 里的 zip）
-2. 整个目录放进：
+2. 把整个目录放进 Coopanion 的 `data/home/companion/data/figures/` 下
 
-```
-<Coopanion 数据目录>/home/companion/data/figures/
-```
+具体位置看你的安装方式：
 
-Windows 上通常是：
+- **便携版**：`<解压 Coopanion 的目录>\data\home\companion\data\figures\`
+- **安装版**：`C:\Users\<你>\AppData\Roaming\Coopanion\data\home\companion\data\figures\`
 
-```
-C:\Users\<你>\AppData\Roaming\Coopanion\data\home\companion\data\figures\
-```
+不确定的话，直接在机器上找已有的 `figures` 目录（里面会有别的形象包），把这份放进去同级就行。
 
 3. 重启 Coopanion → 形象面板里选「大肥鱼」
 
