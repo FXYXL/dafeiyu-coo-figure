@@ -99,7 +99,7 @@ C:\Users\<你>\AppData\Roaming\Coopanion\data\home\companion\data\figures\
 |---|---|---|
 | `<点头>` / `<nod>` | `AngleY` 正弦，0.7s | 头上下点 |
 | `<摇头>` / `<shake>` | `AngleX` 正弦，0.7s | 头左右摇 |
-| `<扭腰>` / `<wiggle>` | 腰 + 歪头 + 转头 + 前后倾 | 腰 1Hz（每秒一下），头慢一倍；四条不同频率叠加 |
+| `<扭腰>` / `<wiggle>` | 胸腔 + 盆骨左右摆（1Hz），头歪与转头慢一倍跟上 | 走 `postWaves`，见下 |
 
 实现：`backends/live2d.js` 的 `applyParamActs()` 读 `frame.gesture.k`，
 静态动作按进度推目标值，波形动作按 `k × dur` 走正弦；配置全在 `profile.paramActs`。
@@ -163,6 +163,26 @@ physicsWaves: [
 写在物理之后意味着是当帧最终值；基准在物理之前已存，所以不会累积。
 
 想调幅度就改 `amp`（相对参数范围 ±1 的百分比），想调快慢改 `hz`（每秒几次）。
+
+**4. 动作要写物理输出参数：`postWaves`**
+
+`ParamBodyAngleZ`（胸腔 Z）、`HipAngleZ`（盆骨 Z）是物理的**输出**——写在 `physics.evaluate()`
+之前会被当场算回 0。所以动作里想驱动它们，得声明在 `postWaves`，由 `applyActPostWaves()`
+在物理之后写：
+
+```js
+wiggle: {
+  dur: 3.6,
+  postWaves: [
+    { id: 'ParamBodyAngleZ', amp: 22, freq: 1 },                  // 胸腔先动
+    { id: 'HipAngleZ', amp: 13, freq: 1, phase: 0.12 },           // 盆骨慢半拍
+    { id: 'ParamBodyAngleRZ', amp: 12, freq: 1, phase: 0.06 },    // 身体位移，物理不管，最显眼
+  ],
+  waves: [ /* 头歪、转头：写在物理之前，走普通通道 */ ],
+}
+```
+
+前两者参数范围都是 ±30，`amp` 22 约 73%；`ParamBodyAngleRZ` 物理既不读也不写，可以自由驱动。
 
 ## 目录结构
 

@@ -86,15 +86,23 @@ export default {
     // 扭腰：腰 + 头 + 歪头 + 身体前后，四条不同频率叠起来才像在跳
     // （不能叫 dance：kit 里 dance 走 setMode，不给 pulse，拿不到进度）
     wiggle: {
-      dur: 3.6,        // 秒；后端注册动作时也用这个值，决定 k 到真实时间的换算
+      dur: 3.6,
+      // 腰的左右摆：ParamBodyAngleZ / HipAngleZ 是物理的**输出**参数，
+      // 写在物理前面会被当场算回 0（这就是之前"腰没动、只剩前后晃"的原因）。
+      // postWaves 放在 physics.evaluate() 之后写，才是当帧最终值。
+      postWaves: [
+        // 胸腔先动，盆骨慢半拍跟上（从腰往上带的感觉）
+        { id: 'ParamBodyAngleZ', amp: 22, freq: 1 },
+        { id: 'HipAngleZ', amp: 13, freq: 1, phase: 0.12 },
+        // ParamBodyAngleRZ 是"身体位移RZ"，物理既不读也不写，可以自由驱动，
+        // 它让整个身体一起摆，比只转胸腔明显得多。
+        { id: 'ParamBodyAngleRZ', amp: 12, freq: 1, phase: 0.06 },
+      ],
+      // 头和上半身跟着同一拍，速度慢一点，形成"腰先动、头后跟"
       waves: [
-        // 腰是主拍：每秒一下（1Hz ≈ 60BPM 的摇摆），头跟着同一拍但稍滞后
-        { id: 'ParamBodyAngleZ', amp: 15, freq: 1 },
-        { id: 'AngleZ', amp: 9, freq: 1, phase: 0.12 },
-        // 转头慢一倍：两拍左右各看一次，避免头和腰一起抽
-        { id: 'AngleX', amp: 8, freq: 0.5, phase: 0.3 },
-        // 前后倾跟腰同拍，滞后四分之一拍，形成"沉—起"的重量感
-        { id: 'LeanInput', amp: -7, freq: 1, phase: 0.25 },
+        { id: 'AngleZ', amp: 10, freq: 1, phase: 0.1 },
+        { id: 'AngleX', amp: 6, freq: 0.5, phase: 0.3 },
+        { id: 'LeanInput', amp: -3, freq: 1, phase: 0.25 },
       ],
     },
   },

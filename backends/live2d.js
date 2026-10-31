@@ -502,6 +502,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
   // frame.gesture = { kind, k: 0..1 }，k 是动作进度。
   const paramActs = profile.paramActs ?? {};
   let activeAct = null;
+  let activePost = null;   // 当前动作里"必须在物理之后写"的波形（腰/胯这类物理输出参数）
 
   /** 动作涉及的所有参数 id（静态 params + 波形 waves），用于结束时归零。 */
   function actParamIds(act) {
@@ -544,6 +545,26 @@ export async function createLive2DBody(base, opts, entry, kit) {
     }
   }
 
+  /**
+   * 动作里声明为 postWaves 的参数必须写在 physics.evaluate() **之后**。
+   * ParamBodyAngleZ / HipAngleZ 这类是物理的输出：写在物理前面会被当场算回旧值，
+   * 表现就是「动作没反应」。写在物理后面则是当帧最终值，物理也没机会再改。
+   */
+  function applyActPostWaves(t) {
+    if (!activePost) return;
+    const act = paramActs[activeAct];
+    const k = act?._k ?? 0;
+    const dur = act?.dur ?? 2.4;
+    const env = k < 0.12 ? k / 0.12 : k > 0.88 ? (1 - k) / 0.12 : 1;
+    const tt = k * dur;
+    for (const w of activePost) {
+      const i = paramIndex.get(w.id);
+      if (i === undefined) continue;
+      const v = (w.base ?? 0) + Math.sin((tt * (w.freq ?? 1) + (w.phase ?? 0)) * Math.PI * 2) * w.amp * env;
+      model._model.setParameterValueByIndex(i, v);
+    }
+  }
+
   function applyPhysicsWaves(t) {
     for (const p of physWaveIdx) {
       const cur = model._model.getParameterValueByIndex(p.idx);
@@ -569,10 +590,12 @@ export async function createLive2DBody(base, opts, entry, kit) {
           if (i !== undefined) model._model.setParameterValueByIndex(i, 0);
         }
         activeAct = null;
+        activePost = null;
       }
       return;
     }
     const k = clamp(g.k ?? 0, 0, 1);
+    act._k = k;
 
     if (act.waves?.length) {
       // 连续动作：按时间走正弦，两端做淡入淡出，避免动作起止生硬
@@ -592,6 +615,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       }
     }
     activeAct = g.kind;
+    activePost = act.postWaves ?? null;
   }
 
   function stepMotion(frame, dt) {
@@ -1087,6 +1111,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       applyPartOpacity(currentId);
       try { model._physics?.evaluate(model._model, dt); } catch { /* 物理失败不致命 */ }
       applyPhysicsWaves(clockT);
+      applyActPostWaves(clockT);
       try { model._pose?.updateParameters(model._model, dt); } catch { /* 姿势失败不致命 */ }
       model._model.update();
       render();
