@@ -28,6 +28,7 @@ export default {
     'glasses-face': 'glasses', // 黑框眼镜
     'monocle-face': 'monocle', // 单片眼镜
     'pan-face': 'pan',         // 钢盆
+    'loading-face': 'loading', // 加载中（原皮 key8）
   },
   // 参数动作：用模型自己的参数做透视姿态，由 frame.gesture 的进度驱动。
   // LeanInput 是模型的"前倾输入"：负值往镜头靠（物理会据此联动身体），正值后退。
@@ -74,6 +75,14 @@ export default {
     side:        { params: [{ id: 'ParamBodyAngleZ', to: 30 }, { id: 'AngleX', to: 12 }, { id: 'AngleZ', to: 6 }] },
     // 斜着凑近：前倾 + 侧身 + 歪头
     peek:        { params: [{ id: 'LeanInput', to: -22 }, { id: 'ParamBodyAngleZ', to: 18 }, { id: 'AngleZ', to: 10 }] },
+    // —— 手臂姿势（模型自带的三只"备用手"）——
+    // Movement1/2/3 不是骨骼，是"切换哪只手显示"的开关：
+    // 1=狗尾草、2=抚胸、3=竖食指。参数一开，对应手臂就替换掉默认手。
+    // 必须把另外两个显式归零，否则切回来时会叠在一起。
+    'finger-point': { dur: 4, params: [{ id: 'Movement1', to: 0 }, { id: 'Movement2', to: 0 }, { id: 'Movement3', to: 1 }] },
+    'chest-hand':   { dur: 4, params: [{ id: 'Movement1', to: 0 }, { id: 'Movement2', to: 1 }, { id: 'Movement3', to: 0 }] },
+    'grass-hand':   { dur: 4, params: [{ id: 'Movement1', to: 1 }, { id: 'Movement2', to: 0 }, { id: 'Movement3', to: 0 }] },
+
     // 歪头
     tilt:        { params: [{ id: 'AngleZ', to: 28 }] },
 

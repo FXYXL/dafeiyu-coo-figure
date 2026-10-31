@@ -2,7 +2,7 @@
   "manifest": 2,
   "api": 2,
   "id": "deepseek",
-  "version": "1.4.5",
+  "version": "1.4.6",
   "name": {
     "zh": "大肥鱼",
     "en": "DaFeiYu"
@@ -730,6 +730,66 @@
         "en": "Wiggle the waist and head"
       },
       "seconds": 3.6
+    },
+    {
+      "id": "finger-point",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "竖食指"
+        ]
+      },
+      "about": {
+        "zh": "伸出一只手指向下点",
+        "en": "伸出一只手指向下点"
+      },
+      "seconds": 4
+    },
+    {
+      "id": "chest-hand",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "抚胸"
+        ]
+      },
+      "about": {
+        "zh": "一只手抚在胸口",
+        "en": "一只手抚在胸口"
+      },
+      "seconds": 4
+    },
+    {
+      "id": "grass-hand",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "狗尾草"
+        ]
+      },
+      "about": {
+        "zh": "手里拿着一根狗尾巴草",
+        "en": "手里拿着一根狗尾巴草"
+      },
+      "seconds": 4
+    },
+    {
+      "id": "loading-face",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "加载中",
+          "转圈圈"
+        ],
+        "en": [
+          "loading"
+        ]
+      },
+      "about": {
+        "zh": "头上出现加载中的标记",
+        "en": "A loading indicator appears"
+      },
+      "seconds": 3.5
     }
   ],
   "sounds": {},

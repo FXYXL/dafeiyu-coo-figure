@@ -100,6 +100,9 @@ C:\Users\<你>\AppData\Roaming\Coopanion\data\home\companion\data\figures\
 | `<点头>` / `<nod>` | `AngleY` 正弦，0.7s | 头上下点 |
 | `<摇头>` / `<shake>` | `AngleX` 正弦，0.7s | 头左右摇 |
 | `<扭腰>` / `<wiggle>` | 胸腔 + 盆骨左右摆（1Hz），头歪与转头慢一倍跟上 | 走 `postWaves`，见下 |
+| `<竖食指>` / `<finger-point>` | 切换出手臂，食指指向下 | 模型自带的第三只手 |
+| `<抚胸>` / `<chest-hand>` | 切换出手臂，手抚在胸口 | 同上 |
+| `<狗尾草>` / `<grass-hand>` | 切换出手臂，手里拿狗尾草 | 同上 |
 
 实现：`backends/live2d.js` 的 `applyParamActs()` 读 `frame.gesture.k`，
 静态动作按进度推目标值，波形动作按 `k × dur` 走正弦；配置全在 `profile.paramActs`。
@@ -109,6 +112,10 @@ C:\Users\<你>\AppData\Roaming\Coopanion\data\home\companion\data\figures\
 - `nod`/`shake` 的时长必须对齐 kit 的 0.7 秒，否则动作会被 kit 提前掐断。
 - `LeanInput` 单独只改 1%，必须靠物理联动；`ParamBodyAngleZ` 之类的物理输出参数会被覆盖，写不进去。
 - 头部只有 `AngleX/Y/Z` 能动，`ParamAngleX/Y/Z` 是死的。
+
+**手臂姿势是"切换"不是"骨骼"**：模型里有三只备用手，由 `Movement1/2/3` 分别对应
+狗尾草、抚胸、竖食指。参数一开，对应手臂替换掉默认手（实测竖食指能正常伸出）。
+切回来时必须把另外两个显式归零，否则会叠在一起。
 
 **注意**：这些动的是整个人，不是手臂。这个模型的手臂是单层绘制的，没有可动骨骼——`LArm`/`LForearm`/`Movement1~3` 这些参数实测都驱动不了可见手臂（它们对应模型里隐藏的另一套手臂，在 VTS 里靠 exp3 切换部件才看得到）。想让它真正抬手，只能在 Cubism Editor 里重新建模。
 
