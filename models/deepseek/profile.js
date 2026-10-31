@@ -31,6 +31,38 @@ export default {
   },
   // 参数动作：用模型自己的参数做透视姿态，由 frame.gesture 的进度驱动。
   // LeanInput 是模型的"前倾输入"：负值往镜头靠（物理会据此联动身体），正值后退。
+  // 待机物理微驱：头发/裙摆/胸/尾巴这四组都是 physics3 算出来的，
+  // 但它们的输入（HipAngleX、ParamBodyAngleX、ParamBreath、PositionY）在桌宠里
+  // 是常量 —— 没有面捕，物理就没有输入，于是全部静止。
+  // 这里给这几个输入叠一层很慢的正弦，等于"人站着自然呼吸、重心轻微移"，
+  // 物理就会把这一点点输入放大成头发/裙摆的持续微摆。
+  // 裙摆/胸的物理输出太细（±0.04），物理算完再叠一层，幅度按参数范围 ±1 的百分比给。
+  // spread 让同组内逐级延迟，摆动会从根部往梢部传，而不是整块平移。
+  physicsWaves: [
+    { prefix: 'SkirtX',      amp: 0.14, hz: 0.11, spread: 0.05 },
+    { prefix: 'SkirtLayerX', amp: 0.12, hz: 0.11, phase: 0.05, spread: 0.04 },
+    { prefix: 'SkirtY',      amp: 0.10, hz: 0.25, phase: 0.50, spread: 0.06 },
+    { prefix: 'SkirtLayerY', amp: 0.08, hz: 0.25, phase: 0.55, spread: 0.05 },
+    { prefix: 'ChestX',      amp: 0.10, hz: 0.11, phase: 0.03, spread: 0.03 },
+    { prefix: 'ChestY',      amp: 0.08, hz: 0.25, phase: 0.10, spread: 0.03 },
+    // 头发/尾巴：物理只在头部有角度时才动，静止时给一点很轻的飘动，避免完全僵住。
+    // 幅度刻意压小（5~7%），真实的大幅甩动仍由物理跟着转头/动作算出来。
+    { prefix: 'FrontHair',   amp: 0.05, hz: 0.13, spread: 0.07 },
+    { prefix: 'LateHair',    amp: 0.06, hz: 0.11, phase: 0.2, spread: 0.07 },
+    { prefix: 'ShortPonytail', amp: 0.07, hz: 0.15, phase: 0.35, spread: 0.06 },
+  ],
+
+  idlePhysics: {
+    // 只写"源头参数"。ParamBodyAngleX / HipAngleX / ParamBodyAngleZ 本身是物理的
+    // 输出，写进去会被下一步覆盖（这也是它们一直读回 0 的原因）。
+    // 链条：PositionX → ParamBodyAngleX → 胸/裙；PositionX+Z → HipAngleX → 裙摆层；
+    //       PositionY → 胸/裙的下垂；ParamBreath → 胸起伏。
+    ParamBreath: { hz: 0.25, amp: 0.45, base: 0.5 },
+    PositionX:   { hz: 0.11, amp: 3.2 },
+    PositionZ:   { hz: 0.09, amp: 2.4, phase: 0.3 },
+    PositionY:   { hz: 0.17, amp: 1.6, phase: 0.4 },
+  },
+
   paramActs: {
     // —— 静态姿态（进入 → 保持 → 退出）——
     // 探身贴近镜头：负值往前靠，物理会联动身体透视（最像 VTS 里的前倾）
@@ -54,12 +86,15 @@ export default {
     // 扭腰：腰 + 头 + 歪头 + 身体前后，四条不同频率叠起来才像在跳
     // （不能叫 dance：kit 里 dance 走 setMode，不给 pulse，拿不到进度）
     wiggle: {
-      dur: 3.6,
+      dur: 3.6,        // 秒；后端注册动作时也用这个值，决定 k 到真实时间的换算
       waves: [
-        { id: 'ParamBodyAngleZ', amp: 17, freq: 2 },
-        { id: 'AngleZ', amp: 11, freq: 2, phase: 0.12 },
-        { id: 'AngleX', amp: 9, freq: 1, phase: 0.35 },
-        { id: 'LeanInput', amp: -9, freq: 2, phase: 0.25 },
+        // 腰是主拍：每秒一下（1Hz ≈ 60BPM 的摇摆），头跟着同一拍但稍滞后
+        { id: 'ParamBodyAngleZ', amp: 15, freq: 1 },
+        { id: 'AngleZ', amp: 9, freq: 1, phase: 0.12 },
+        // 转头慢一倍：两拍左右各看一次，避免头和腰一起抽
+        { id: 'AngleX', amp: 8, freq: 0.5, phase: 0.3 },
+        // 前后倾跟腰同拍，滞后四分之一拍，形成"沉—起"的重量感
+        { id: 'LeanInput', amp: -7, freq: 1, phase: 0.25 },
       ],
     },
   },
@@ -100,9 +135,9 @@ export default {
     mouthForm: {"targets":["ParamMouthForm"],"space":[-1,1],"default":0},
     eyeBallX: {"targets":["ParamEyeBallX"],"space":[-1,1],"default":0},
     eyeBallY: {"targets":["ParamEyeBallY"],"space":[-1,1],"default":0},
-    angleX: {"targets":["ParamAngleX"],"space":[-1,1],"default":0},
-    angleY: {"targets":["ParamAngleY"],"space":[-1,1],"default":0},
-    angleZ: {"targets":["ParamAngleZ"],"space":[-1,1],"default":0},
+    angleX: {"targets":["AngleX","ParamAngleX"],"space":[-1,1],"default":0},
+    angleY: {"targets":["AngleY","ParamAngleY"],"space":[-1,1],"default":0},
+    angleZ: {"targets":["AngleZ","ParamAngleZ"],"space":[-1,1],"default":0},
     bodyX: {"targets":["ParamBodyAngleX"],"space":[-1,1],"default":0},
     breath: {"targets":["ParamBreath"],"space":[0,1],"default":0},
   },

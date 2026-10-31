@@ -511,6 +511,54 @@ export async function createLive2DBody(base, opts, entry, kit) {
     return ids;
   }
 
+  // ---------- 待机物理微驱 ----------
+  // 头发/裙摆/胸/尾巴全靠 physics3 算，而物理的输入（HipAngleX、ParamBodyAngleX、
+  // ParamBreath、PositionY）在桌宠里恒为常量 —— 没有面捕就没有输入，物理等于静止。
+  // 给这几个输入叠一层很慢的正弦，物理会把它放大成持续的微摆。
+  const idlePhys = profile.idlePhysics ?? {};
+  let clockT = 0;   // 累计时间（秒）：draw 里的 t 不是累计值，不能拿来走正弦
+  const idlePhysIdx = new Map();
+  for (const name of Object.keys(idlePhys)) {
+    for (let i = 0; i < model._model.getParameterCount(); i++) {
+      if (model._model.getParameterId(i).getString() === name) { idlePhysIdx.set(name, i); break; }
+    }
+  }
+
+  // ---------- 物理摆幅补强 ----------
+  // 裙摆/胸这几条物理链很"硬"：输入拉满也只输出 3~4%（参数范围 ±1），
+  // 桌宠尺寸下完全看不出来。物理算完再叠一层同频正弦，把幅度提到可见区间。
+  // 写在 physics 之后、update 之前，是当帧最终值；基准在 physics 之前已存，
+  // 所以不会被下一帧 loadParameters 累积。
+  const physWaves = profile.physicsWaves ?? [];
+  const physWaveIdx = [];
+  for (const w of physWaves) {
+    let k = 0;
+    for (let i = 0; i < model._model.getParameterCount(); i++) {
+      const id = model._model.getParameterId(i).getString();
+      if (!id.startsWith(w.prefix)) continue;
+      physWaveIdx.push({
+        idx: i, amp: w.amp, hz: w.hz,
+        // 同组内按顺序加相位差，摆动从根部往梢部传递，不会整块一起晃
+        phase: (w.phase ?? 0) + k++ * (w.spread ?? 0.06),
+      });
+    }
+  }
+
+  function applyPhysicsWaves(t) {
+    for (const p of physWaveIdx) {
+      const cur = model._model.getParameterValueByIndex(p.idx);
+      model._model.setParameterValueByIndex(p.idx, cur + Math.sin((t * p.hz + p.phase) * Math.PI * 2) * p.amp);
+    }
+  }
+
+  function applyIdlePhysics(t) {
+    for (const [name, i] of idlePhysIdx) {
+      const c = idlePhys[name];
+      const v = (c.base ?? 0) + Math.sin((t * c.hz + (c.phase ?? 0)) * Math.PI * 2) * c.amp;
+      model._model.setParameterValueByIndex(i, v);
+    }
+  }
+
   function applyParamActs(frame) {
     const g = frame?.gesture;
     const act = g && paramActs[g.kind];
@@ -1019,6 +1067,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       globalThis.__l2dFitState = { zoom: fitState.zoom, offset: fitState.offset, autoFit: fitState.autoFit, hasExtent: !!extent };
 
       const dt = clamp(frame.dt ?? 0.016, 0.001, 0.05);
+      clockT += dt;
 
       model._model.loadParameters();
       applyFrame(face, frame, dt, !extent);
@@ -1026,6 +1075,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       // 它们会写 key9/10/11/12（兔牙、钢盆、眼镜…），必须排在表情之前，
       // 否则表情刚把 key11 抬起来就被这里按回 0，眼镜永远出不来。
       applyCleanParams();
+      applyIdlePhysics(clockT);
       applyParamActs(frame);
       applySchemeParams();
       // 基准只存 role + 状态。动作、表情、物理都是"每帧重算"的输出，
@@ -1036,6 +1086,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       stepExpression(frame.face, dt);
       applyPartOpacity(currentId);
       try { model._physics?.evaluate(model._model, dt); } catch { /* 物理失败不致命 */ }
+      applyPhysicsWaves(clockT);
       try { model._pose?.updateParameters(model._model, dt); } catch { /* 姿势失败不致命 */ }
       model._model.update();
       render();
@@ -1083,8 +1134,10 @@ export async function createLive2DBody(base, opts, entry, kit) {
   for (const word of Object.keys(profile.extraExpressions ?? {})) {
     if (!words[word]) words[word] = { expression: { seconds: 3 } };
   }
-  for (const word of Object.keys(profile.paramActs ?? {})) {
-    if (!words[word]) words[word] = { motion: { seconds: 2.4 } };
+  for (const [word, act] of Object.entries(profile.paramActs ?? {})) {
+    // 时长必须与 paramActs.dur 一致：它是 k(0..1) 到真实秒数的换算基准，
+    // 不一致会让波形被按比例加速/减速（之前写成 2.4 而 dur 是 3.6，实际快了 1.5 倍）。
+    if (!words[word]) words[word] = { motion: { seconds: act.dur ?? 2.4 } };
   }
 
   publishInfo();

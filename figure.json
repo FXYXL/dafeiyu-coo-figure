@@ -2,14 +2,14 @@
   "manifest": 2,
   "api": 2,
   "id": "deepseek",
-  "version": "1.4.3",
+  "version": "1.4.4",
   "name": {
     "zh": "大肥鱼",
     "en": "DaFeiYu"
   },
   "about": {
-    "zh": "深海女仆。三套服装 + 三档大小；接入模型自带的表情与 9 个整体动作（挥手、鞠躬、跳舞等）。",
-    "en": "Deep-sea maid: 3 outfits, 3 sizes, native expressions and 9 body gestures."
+    "zh": "深海女仆。三套服装 + 三档大小；表情与整体动作；头发/尾巴/裙摆/胸随动作和呼吸摆动。",
+    "en": "Deep-sea maid: 3 outfits, 3 sizes, expressions, body gestures, plus hair/tail/skirt/chest physics."
   },
   "license": "仅供个人测试，请遵守模型自身的授权",
   "entry": "figure.js",

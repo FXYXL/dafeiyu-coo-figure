@@ -99,7 +99,7 @@ C:\Users\<你>\AppData\Roaming\Coopanion\data\home\companion\data\figures\
 |---|---|---|
 | `<点头>` / `<nod>` | `AngleY` 正弦，0.7s | 头上下点 |
 | `<摇头>` / `<shake>` | `AngleX` 正弦，0.7s | 头左右摇 |
-| `<扭腰>` / `<wiggle>` | 腰 + 歪头 + 转头 + 前后倾，四条不同频率 | 像在跳舞 |
+| `<扭腰>` / `<wiggle>` | 腰 + 歪头 + 转头 + 前后倾 | 腰 1Hz（每秒一下），头慢一倍；四条不同频率叠加 |
 
 实现：`backends/live2d.js` 的 `applyParamActs()` 读 `frame.gesture.k`，
 静态动作按进度推目标值，波形动作按 `k × dur` 走正弦；配置全在 `profile.paramActs`。
@@ -111,6 +111,58 @@ C:\Users\<你>\AppData\Roaming\Coopanion\data\home\companion\data\figures\
 - 头部只有 `AngleX/Y/Z` 能动，`ParamAngleX/Y/Z` 是死的。
 
 **注意**：这些动的是整个人，不是手臂。这个模型的手臂是单层绘制的，没有可动骨骼——`LArm`/`LForearm`/`Movement1~3` 这些参数实测都驱动不了可见手臂（它们对应模型里隐藏的另一套手臂，在 VTS 里靠 exp3 切换部件才看得到）。想让它真正抬手，只能在 Cubism Editor 里重新建模。
+
+## 物理：头发 / 尾巴 / 裙摆 / 胸
+
+模型自带 `physics3.json`（131 条链）本来就在跑，但在桌宠里它们几乎没有输入 ——
+没有面捕，`PositionX/Y/Z`、`AngleX/Y/Z` 都是常量，物理算出来就一直是 0。
+现在分两层处理：
+
+**1. 动作时的大幅甩动（物理原生）**
+
+`AngleX/Y/Z` 现在同时写到两处：绘制用模型自定义的 `AngleX`，前发物理用标准的 `ParamAngleX`。
+所以一转头，头发、尾巴、帽带就跟着甩 —— 实测摇头时：
+
+| 参数 | 静止 | 摇头中 |
+|---|---|---|
+| `FrontHairX1`（前发） | +0.05 | **−0.29** |
+| `LateHairX1`（后发） | +0.05 | −0.25 |
+| `ShortPonytailX1`（尾巴） | +0.01 | **−0.39** |
+| `Hat_XA`（帽带） | 0 | −0.37 |
+
+**2. 静止时的呼吸级微摆（`idlePhysics`）**
+
+给物理的**源头输入**叠一层很慢的正弦，让物理持续有活干：
+
+```js
+idlePhysics: {
+  ParamBreath: { hz: 0.25, amp: 0.45, base: 0.5 },  // 呼吸 → 胸 / 裙摆 Y
+  PositionX:   { hz: 0.11, amp: 3.2 },               // 重心左右 → 身体角度 → 胸 / 裙
+  PositionZ:   { hz: 0.09, amp: 2.4, phase: 0.3 },   // 重心前后 → 胯 → 裙摆层
+  PositionY:   { hz: 0.17, amp: 1.6, phase: 0.4 },   // 轻微起伏 → 胸 / 裙下垂
+}
+```
+
+**只写源头参数**。`ParamBodyAngleX/Z`、`HipAngleX/Z` 本身是物理的**输出**，写进去会被
+下一次 `evaluate()` 覆盖（这也是它们一直读回 0 的原因）。
+
+**3. 裙摆 / 胸的幅度补强（`physicsWaves`）**
+
+这两组的物理链很"硬"：输入拉满也只输出 3~4%（参数范围 ±1），桌宠尺寸下看不见。
+所以在 `physics.evaluate()` **之后**再叠一层同频正弦，把幅度提到 8~14%：
+
+```js
+physicsWaves: [
+  { prefix: 'SkirtX', amp: 0.14, hz: 0.11, spread: 0.05 },
+  { prefix: 'ChestX', amp: 0.10, hz: 0.11, phase: 0.03, spread: 0.03 },
+  ...
+]
+```
+
+`spread` 是同组内的相位差，让摆动从根部往梢部传，而不是整块平移。
+写在物理之后意味着是当帧最终值；基准在物理之前已存，所以不会累积。
+
+想调幅度就改 `amp`（相对参数范围 ±1 的百分比），想调快慢改 `hz`（每秒几次）。
 
 ## 目录结构
 
