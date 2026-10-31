@@ -2,7 +2,7 @@
   "manifest": 2,
   "api": 2,
   "id": "deepseek",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "name": {
     "zh": "大肥鱼",
     "en": "DaFeiYu"
@@ -642,6 +642,36 @@
         "en": "左右看看"
       },
       "seconds": 1.2
+    },
+    {
+      "id": "lean-in",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "凑近",
+          "探身"
+        ]
+      },
+      "about": {
+        "zh": "上半身往前靠，贴近镜头",
+        "en": "上半身往前靠，贴近镜头"
+      },
+      "seconds": 2.4
+    },
+    {
+      "id": "lean-back",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "后仰",
+          "后退"
+        ]
+      },
+      "about": {
+        "zh": "上半身往后仰，拉开距离",
+        "en": "上半身往后仰，拉开距离"
+      },
+      "seconds": 2.4
     }
   ],
   "sounds": {},

@@ -496,6 +496,35 @@ export async function createLive2DBody(base, opts, entry, kit) {
     }
   }
 
+  // ---------- 参数动作 ----------
+  // kit 的动作是整体变换（旋转/缩放整张图）；模型自己的参数能做出透视变形，
+  // 比如 LeanInput 让头和胸往镜头靠。两者叠加才像"探身"，单靠旋转只是"歪一下"。
+  // frame.gesture = { kind, k: 0..1 }，k 是动作进度。
+  const paramActs = profile.paramActs ?? {};
+  let activeAct = null;
+  function applyParamActs(frame) {
+    const g = frame?.gesture;
+    const act = g && paramActs[g.kind];
+    if (!act) {
+      if (activeAct) {          // 动作结束：把这几个参数送回默认位，交给物理接管
+        for (const p of paramActs[activeAct].params) {
+          const i = paramIndex.get(p.id);
+          if (i !== undefined) model._model.setParameterValueByIndex(i, 0);
+        }
+        activeAct = null;
+      }
+      return;
+    }
+    const k = clamp(g.k ?? 0, 0, 1);
+    // 0→0.3 进入，0.3→0.7 保持，0.7→1 退出
+    const w = k < 0.3 ? k / 0.3 : k > 0.7 ? (1 - k) / 0.3 : 1;
+    for (const p of act.params) {
+      const i = paramIndex.get(p.id);
+      if (i !== undefined) model._model.setParameterValueByIndex(i, p.to * w);
+    }
+    activeAct = g.kind;
+  }
+
   function stepMotion(frame, dt) {
     if (SIMPLE) return;
     const g = frame.gesture;
@@ -864,6 +893,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
     get hits() { return currentHits(); },
     get anchors() { return currentAnchors(); },
     colors: { z: '#7fb0e8' },
+    // 这几个动作由本图用模型参数实现，kit 不要再叠通用 pulse
+    gestures: Object.keys(profile.paramActs ?? {}),
 
     // 工作台调试接口：直接写 role（不是 ParamXXX），优先级高于表情/待机
     __roles: {
@@ -974,6 +1005,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       // 它们会写 key9/10/11/12（兔牙、钢盆、眼镜…），必须排在表情之前，
       // 否则表情刚把 key11 抬起来就被这里按回 0，眼镜永远出不来。
       applyCleanParams();
+      applyParamActs(frame);
       applySchemeParams();
       // 基准只存 role + 状态。动作、表情、物理都是"每帧重算"的输出，
       // 一旦被 saveParameters 存进基准，下一帧 loadParameters 就会把它们当成默认值
@@ -1029,6 +1061,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
   }
   for (const word of Object.keys(profile.extraExpressions ?? {})) {
     if (!words[word]) words[word] = { expression: { seconds: 3 } };
+  }
+  for (const word of Object.keys(profile.paramActs ?? {})) {
+    if (!words[word]) words[word] = { motion: { seconds: 2.4 } };
   }
 
   publishInfo();

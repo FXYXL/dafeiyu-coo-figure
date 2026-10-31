@@ -76,6 +76,22 @@ C:\Users\<你>\AppData\Roaming\Coopanion\data\home\companion\data\figures\
 | `<发抖>` / `<shiver>` | 抖一下 | 小幅抖动 |
 | `<张望>` / `<look>` | 左右看 | 位移 |
 
+### 参数动作（模型自身透视）
+
+这两个不是 kit 的整体变换，而是写模型自己的 `LeanInput` 参数、由物理联动身体：
+
+| 写法 | 效果 |
+|---|---|
+| `<凑近>` / `<lean-in>` | 上半身探向镜头，脸变大、肩胸压近（满幅时贴近感很强） |
+| `<后仰>` / `<lean-back>` | 反过来，往后仰、拉开距离 |
+
+实现见 `backends/live2d.js` 的 `applyParamActs()`：读 `frame.gesture.k`（0→1 进度），
+在 0~0.3 进入、0.3~0.7 保持、0.7~1 退出，把 `LeanInput` 推到 -30 / +30。
+配置在 `profile.js` 的 `paramActs`，加新动作只要加一条。
+
+**物理必须开着**：`LeanInput` 本身只改 1%，它的效果靠物理把身体角度、Lean Y 系列一起带起来
+（实测开物理后宽度变化 ±24px）。
+
 **注意**：这些动的是整个人，不是手臂。这个模型的手臂是单层绘制的，没有可动骨骼——`LArm`/`LForearm`/`Movement1~3` 这些参数实测都驱动不了可见手臂（它们对应模型里隐藏的另一套手臂，在 VTS 里靠 exp3 切换部件才看得到）。想让它真正抬手，只能在 Cubism Editor 里重新建模。
 
 ## 目录结构
