@@ -32,8 +32,15 @@ export default {
   // 参数动作：用模型自己的参数做透视姿态，由 frame.gesture 的进度驱动。
   // LeanInput 是模型的"前倾输入"：负值往镜头靠（物理会据此联动身体），正值后退。
   paramActs: {
-    'lean-in':  { params: [{ id: 'LeanInput', to: -30 }] },
+    // 探身贴近镜头：负值往前靠，物理会联动身体透视（最像 VTS 里的前倾）
+    'lean-in':   { params: [{ id: 'LeanInput', to: -30 }] },
     'lean-back': { params: [{ id: 'LeanInput', to: 30 }] },
+    // 探身鞠躬：比整体旋转自然，是上半身真的往前压
+    bow:         { params: [{ id: 'LeanInput', to: -24 }] },
+    // 侧身：身体绕竖轴偏过去
+    side:        { params: [{ id: 'ParamBodyAngleZ', to: 24 }] },
+    // 斜着凑近：前倾 + 侧身，最生动
+    peek:        { params: [{ id: 'LeanInput', to: -22 }, { id: 'ParamBodyAngleZ', to: 14 }] },
   },
 
   expressions: {

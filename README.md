@@ -67,7 +67,7 @@ C:\Users\<你>\AppData\Roaming\Coopanion\data\home\companion\data\figures\
 
 | 写法 | 效果 | 实测幅度 |
 |---|---|---|
-| `<鞠躬>` / `<bow>` | 欠身 | 倾斜 13.3°（最明显） |
+| `<鞠躬>` / `<bow>` | 探身欠身（参数版，见下） | 前倾 + 闭眼 |
 | `<挥手>` / `<wave>` | 侧倾打招呼 | 倾斜 4.2° |
 | `<跳舞>` / `<dance>` | 扭动 | 倾斜 2~3° 波动 |
 | `<跳一下>` / `<jump>` | 起跳 | 位移 + 纵向挤压 |
@@ -77,6 +77,28 @@ C:\Users\<你>\AppData\Roaming\Coopanion\data\home\companion\data\figures\
 | `<张望>` / `<look>` | 左右看 | 位移 |
 
 ### 参数动作（模型自身透视）
+
+这几个不是 kit 的整体变换，而是写模型自己的参数（`LeanInput`、`ParamBodyAngleZ`），
+由物理联动身体，做出真正的透视变化：
+
+| 写法 | 效果 |
+|---|---|
+| `<凑近>` / `<lean-in>` | 上半身探向镜头，脸变大、肩胸压近 |
+| `<斜凑>` / `<peek>` | 前倾 + 侧身，斜着凑过来（最生动） |
+| `<侧身>` / `side` | 身体绕竖轴偏过去 |
+| `<鞠躬>` / `bow` | 探身前倾 + 闭眼（覆盖了 kit 原来的整体旋转版） |
+| `<后仰>` / `<lean-back>` | 反过来，往后仰、拉开距离 |
+
+实现见 `backends/live2d.js` 的 `applyParamActs()`：读 `frame.gesture.k`（0→1 进度），
+0~0.3 进入、0.3~0.7 保持、0.7~1 退出，按 `profile.paramActs` 的定义推参数。
+加新动作只要在 `paramActs` 里加一条（可以多个参数组合）。
+
+**物理必须开着**：`LeanInput` 单独只改 1%，它的效果靠物理把身体角度、Lean Y 系列一起带起来。
+
+**做不了的**：点头、摇头、挥手——这个模型的头部和手臂是单层绘制，没有骨骼。
+`ParamAngleX/Y/Z`（头）实测只有 0.01%，`LArm`/`Movement1~3` 指向的是隐藏的另一套手臂。
+
+
 
 这两个不是 kit 的整体变换，而是写模型自己的 `LeanInput` 参数、由物理联动身体：
 
