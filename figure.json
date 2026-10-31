@@ -2,14 +2,14 @@
   "manifest": 2,
   "api": 2,
   "id": "deepseek",
-  "version": "1.3.8",
+  "version": "1.4.0",
   "name": {
     "zh": "大肥鱼",
     "en": "DaFeiYu"
   },
   "about": {
-    "zh": "深海女仆。三套服装 + 三档大小；接入模型自带的 18 个表情（笑眼、脸红、大哭、黑脸、圈圈眼等），会随情绪变化。",
-    "en": "Deep-sea maid with three outfits, three sizes and 18 native expressions."
+    "zh": "深海女仆。三套服装 + 三档大小；接入模型自带的表情与 9 个整体动作（挥手、鞠躬、跳舞等）。",
+    "en": "Deep-sea maid: 3 outfits, 3 sizes, native expressions and 9 body gestures."
   },
   "license": "仅供个人测试，请遵守模型自身的授权",
   "entry": "figure.js",
