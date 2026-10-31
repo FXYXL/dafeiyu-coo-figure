@@ -502,13 +502,22 @@ export async function createLive2DBody(base, opts, entry, kit) {
   // frame.gesture = { kind, k: 0..1 }，k 是动作进度。
   const paramActs = profile.paramActs ?? {};
   let activeAct = null;
+
+  /** 动作涉及的所有参数 id（静态 params + 波形 waves），用于结束时归零。 */
+  function actParamIds(act) {
+    const ids = [];
+    for (const p of act.params ?? []) ids.push(p.id);
+    for (const w of act.waves ?? []) ids.push(w.id);
+    return ids;
+  }
+
   function applyParamActs(frame) {
     const g = frame?.gesture;
     const act = g && paramActs[g.kind];
     if (!act) {
-      if (activeAct) {          // 动作结束：把这几个参数送回默认位，交给物理接管
-        for (const p of paramActs[activeAct].params) {
-          const i = paramIndex.get(p.id);
+      if (activeAct) {
+        for (const id of actParamIds(paramActs[activeAct])) {
+          const i = paramIndex.get(id);
           if (i !== undefined) model._model.setParameterValueByIndex(i, 0);
         }
         activeAct = null;
@@ -516,11 +525,23 @@ export async function createLive2DBody(base, opts, entry, kit) {
       return;
     }
     const k = clamp(g.k ?? 0, 0, 1);
-    // 0→0.3 进入，0.3→0.7 保持，0.7→1 退出
-    const w = k < 0.3 ? k / 0.3 : k > 0.7 ? (1 - k) / 0.3 : 1;
-    for (const p of act.params) {
-      const i = paramIndex.get(p.id);
-      if (i !== undefined) model._model.setParameterValueByIndex(i, p.to * w);
+
+    if (act.waves?.length) {
+      // 连续动作：按时间走正弦，两端做淡入淡出，避免动作起止生硬
+      const t = k * (act.dur ?? 2.4);
+      const env = k < 0.12 ? k / 0.12 : k > 0.88 ? (1 - k) / 0.12 : 1;
+      for (const w of act.waves) {
+        const v = Math.sin((t * w.freq + (w.phase ?? 0)) * Math.PI * 2) * w.amp * env;
+        const i = paramIndex.get(w.id);
+        if (i !== undefined) model._model.setParameterValueByIndex(i, (w.base ?? 0) + v);
+      }
+    } else {
+      // 静态姿态：0~0.3 进入、0.3~0.7 保持、0.7~1 退出
+      const w = k < 0.3 ? k / 0.3 : k > 0.7 ? (1 - k) / 0.3 : 1;
+      for (const p of act.params ?? []) {
+        const i = paramIndex.get(p.id);
+        if (i !== undefined) model._model.setParameterValueByIndex(i, p.to * w);
+      }
     }
     activeAct = g.kind;
   }

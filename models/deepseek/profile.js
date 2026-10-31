@@ -32,15 +32,36 @@ export default {
   // 参数动作：用模型自己的参数做透视姿态，由 frame.gesture 的进度驱动。
   // LeanInput 是模型的"前倾输入"：负值往镜头靠（物理会据此联动身体），正值后退。
   paramActs: {
+    // —— 静态姿态（进入 → 保持 → 退出）——
     // 探身贴近镜头：负值往前靠，物理会联动身体透视（最像 VTS 里的前倾）
     'lean-in':   { params: [{ id: 'LeanInput', to: -30 }] },
     'lean-back': { params: [{ id: 'LeanInput', to: 30 }] },
-    // 探身鞠躬：比整体旋转自然，是上半身真的往前压
+    // 探身鞠躬：上半身真的往前压，配合 kit 自带的闭眼
     bow:         { params: [{ id: 'LeanInput', to: -24 }] },
-    // 侧身：身体绕竖轴偏过去
-    side:        { params: [{ id: 'ParamBodyAngleZ', to: 24 }] },
-    // 斜着凑近：前倾 + 侧身，最生动
-    peek:        { params: [{ id: 'LeanInput', to: -22 }, { id: 'ParamBodyAngleZ', to: 14 }] },
+    // 侧身：身体侧转 + 头跟着转一点，单靠身体参数幅度太小吃不出来
+    side:        { params: [{ id: 'ParamBodyAngleZ', to: 30 }, { id: 'AngleX', to: 12 }, { id: 'AngleZ', to: 6 }] },
+    // 斜着凑近：前倾 + 侧身 + 歪头
+    peek:        { params: [{ id: 'LeanInput', to: -22 }, { id: 'ParamBodyAngleZ', to: 18 }, { id: 'AngleZ', to: 10 }] },
+    // 歪头
+    tilt:        { params: [{ id: 'AngleZ', to: 28 }] },
+
+    // —— 波形动作（连续摆动）——
+    // 点头：头上下点几下
+    nod:   { dur: 0.7, waves: [{ id: 'AngleY', amp: 9, freq: 2.5, base: -4 }] },   // kit 的 nod 只有 0.7 秒；base 偏低才像点头而非仰头
+    // 摇头：头左右摇
+    shake: { dur: 0.7, waves: [{ id: 'AngleX', amp: 15, freq: 2 }] },
+    // 跳舞：腰扭 + 头摆 + 歪头 + 身体前后，四条不同频率叠起来才像在跳
+    // 扭腰：腰 + 头 + 歪头 + 身体前后，四条不同频率叠起来才像在跳
+    // （不能叫 dance：kit 里 dance 走 setMode，不给 pulse，拿不到进度）
+    wiggle: {
+      dur: 3.6,
+      waves: [
+        { id: 'ParamBodyAngleZ', amp: 17, freq: 2 },
+        { id: 'AngleZ', amp: 11, freq: 2, phase: 0.12 },
+        { id: 'AngleX', amp: 9, freq: 1, phase: 0.35 },
+        { id: 'LeanInput', amp: -9, freq: 2, phase: 0.25 },
+      ],
+    },
   },
 
   expressions: {

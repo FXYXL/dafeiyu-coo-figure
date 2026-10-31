@@ -76,43 +76,39 @@ C:\Users\<你>\AppData\Roaming\Coopanion\data\home\companion\data\figures\
 | `<发抖>` / `<shiver>` | 抖一下 | 小幅抖动 |
 | `<张望>` / `<look>` | 左右看 | 位移 |
 
-### 参数动作（模型自身透视）
+### 参数动作（模型自身参数驱动）
 
-这几个不是 kit 的整体变换，而是写模型自己的参数（`LeanInput`、`ParamBodyAngleZ`），
-由物理联动身体，做出真正的透视变化：
+这些不是 kit 的整体变换，而是写模型自己的参数，由物理联动身体 / 直接驱动头部。
+**这才是 VTS 面捕用的那批参数**——注意不是标准 Cubism 的 `ParamAngleX`（那个只有 0.01%），
+而是模型自定义的 `AngleX/Y/Z`（cdi3 里叫 OX/OY/OZ）。
 
-| 写法 | 效果 |
-|---|---|
-| `<凑近>` / `<lean-in>` | 上半身探向镜头，脸变大、肩胸压近 |
-| `<斜凑>` / `<peek>` | 前倾 + 侧身，斜着凑过来（最生动） |
-| `<侧身>` / `side` | 身体绕竖轴偏过去 |
-| `<鞠躬>` / `bow` | 探身前倾 + 闭眼（覆盖了 kit 原来的整体旋转版） |
-| `<后仰>` / `<lean-back>` | 反过来，往后仰、拉开距离 |
+**静态姿态**（进入 0.3 → 保持 0.4 → 退出 0.3）：
 
-实现见 `backends/live2d.js` 的 `applyParamActs()`：读 `frame.gesture.k`（0→1 进度），
-0~0.3 进入、0.3~0.7 保持、0.7~1 退出，按 `profile.paramActs` 的定义推参数。
-加新动作只要在 `paramActs` 里加一条（可以多个参数组合）。
+| 写法 | 参数 | 效果 |
+|---|---|---|
+| `<凑近>` / `<lean-in>` | `LeanInput -30` | 上半身探向镜头，脸变大 |
+| `<后仰>` / `<lean-back>` | `LeanInput +30` | 往后仰、拉开距离 |
+| `<鞠躬>` / `<bow>` | `LeanInput -24` | 探身欠身 + 闭眼 |
+| `<侧身>` / `side` | `ParamBodyAngleZ 30` + `AngleX 12` + `AngleZ 6` | 身体侧转、头跟着转 |
+| `<斜凑>` / `peek` | `LeanInput -22` + `ParamBodyAngleZ 18` + `AngleZ 10` | 斜着凑近，最生动 |
+| `<歪头>` / `tilt` | `AngleZ 28` | 头歪向一边 |
 
-**物理必须开着**：`LeanInput` 单独只改 1%，它的效果靠物理把身体角度、Lean Y 系列一起带起来。
+**波形动作**（按正弦连续摆动，两端淡入淡出）：
 
-**做不了的**：点头、摇头、挥手——这个模型的头部和手臂是单层绘制，没有骨骼。
-`ParamAngleX/Y/Z`（头）实测只有 0.01%，`LArm`/`Movement1~3` 指向的是隐藏的另一套手臂。
+| 写法 | 参数 | 效果 |
+|---|---|---|
+| `<点头>` / `<nod>` | `AngleY` 正弦，0.7s | 头上下点 |
+| `<摇头>` / `<shake>` | `AngleX` 正弦，0.7s | 头左右摇 |
+| `<扭腰>` / `<wiggle>` | 腰 + 歪头 + 转头 + 前后倾，四条不同频率 | 像在跳舞 |
 
+实现：`backends/live2d.js` 的 `applyParamActs()` 读 `frame.gesture.k`，
+静态动作按进度推目标值，波形动作按 `k × dur` 走正弦；配置全在 `profile.paramActs`。
 
-
-这两个不是 kit 的整体变换，而是写模型自己的 `LeanInput` 参数、由物理联动身体：
-
-| 写法 | 效果 |
-|---|---|
-| `<凑近>` / `<lean-in>` | 上半身探向镜头，脸变大、肩胸压近（满幅时贴近感很强） |
-| `<后仰>` / `<lean-back>` | 反过来，往后仰、拉开距离 |
-
-实现见 `backends/live2d.js` 的 `applyParamActs()`：读 `frame.gesture.k`（0→1 进度），
-在 0~0.3 进入、0.3~0.7 保持、0.7~1 退出，把 `LeanInput` 推到 -30 / +30。
-配置在 `profile.js` 的 `paramActs`，加新动作只要加一条。
-
-**物理必须开着**：`LeanInput` 本身只改 1%，它的效果靠物理把身体角度、Lean Y 系列一起带起来
-（实测开物理后宽度变化 ±24px）。
+**几个坑**：
+- `dance` 不能改：kit 里 dance 走 `setMode`，不给 pulse，拿不到进度，所以参数版另起名 `wiggle`。
+- `nod`/`shake` 的时长必须对齐 kit 的 0.7 秒，否则动作会被 kit 提前掐断。
+- `LeanInput` 单独只改 1%，必须靠物理联动；`ParamBodyAngleZ` 之类的物理输出参数会被覆盖，写不进去。
+- 头部只有 `AngleX/Y/Z` 能动，`ParamAngleX/Y/Z` 是死的。
 
 **注意**：这些动的是整个人，不是手臂。这个模型的手臂是单层绘制的，没有可动骨骼——`LArm`/`LForearm`/`Movement1~3` 这些参数实测都驱动不了可见手臂（它们对应模型里隐藏的另一套手臂，在 VTS 里靠 exp3 切换部件才看得到）。想让它真正抬手，只能在 Cubism Editor 里重新建模。
 

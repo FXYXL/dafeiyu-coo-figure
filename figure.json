@@ -2,7 +2,7 @@
   "manifest": 2,
   "api": 2,
   "id": "deepseek",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "name": {
     "zh": "大肥鱼",
     "en": "DaFeiYu"
@@ -701,6 +701,35 @@
         "en": "斜着探身凑近镜头"
       },
       "seconds": 2.4
+    },
+    {
+      "id": "tilt",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "歪头"
+        ]
+      },
+      "about": {
+        "zh": "把头歪向一边",
+        "en": "Tilt head"
+      },
+      "seconds": 2.4
+    },
+    {
+      "id": "wiggle",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "扭腰",
+          "扭一扭"
+        ]
+      },
+      "about": {
+        "zh": "腰和头一起扭动，像在跳舞",
+        "en": "Wiggle the waist and head"
+      },
+      "seconds": 3.6
     }
   ],
   "sounds": {},
