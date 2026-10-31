@@ -513,6 +513,135 @@
         "en": "A steel basin on the head"
       },
       "seconds": 3.5
+    },
+    {
+      "id": "wave",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "挥手",
+          "招手"
+        ]
+      },
+      "about": {
+        "zh": "抬起手挥一挥，打招呼",
+        "en": "抬起手挥一挥，打招呼"
+      },
+      "seconds": 1.6
+    },
+    {
+      "id": "nod",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "点头"
+        ]
+      },
+      "about": {
+        "zh": "上下点头，表示同意",
+        "en": "上下点头，表示同意"
+      },
+      "seconds": 0.7
+    },
+    {
+      "id": "shake",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "摇头"
+        ]
+      },
+      "about": {
+        "zh": "左右摇头，表示不同意",
+        "en": "左右摇头，表示不同意"
+      },
+      "seconds": 0.7
+    },
+    {
+      "id": "bow",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "鞠躬"
+        ]
+      },
+      "about": {
+        "zh": "欠身鞠躬",
+        "en": "欠身鞠躬"
+      },
+      "seconds": 1.6
+    },
+    {
+      "id": "spin",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "转圈"
+        ]
+      },
+      "about": {
+        "zh": "原地转一圈",
+        "en": "原地转一圈"
+      },
+      "seconds": 0.6
+    },
+    {
+      "id": "dance",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "跳舞"
+        ]
+      },
+      "about": {
+        "zh": "扭动身体跳一段",
+        "en": "扭动身体跳一段"
+      },
+      "seconds": 3.2
+    },
+    {
+      "id": "jump",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "跳一下",
+          "蹦"
+        ]
+      },
+      "about": {
+        "zh": "原地跳一下",
+        "en": "原地跳一下"
+      },
+      "seconds": 0.9
+    },
+    {
+      "id": "shiver",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "发抖",
+          "哆嗦"
+        ]
+      },
+      "about": {
+        "zh": "整个人抖一下",
+        "en": "整个人抖一下"
+      },
+      "seconds": 1.8
+    },
+    {
+      "id": "look",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "张望"
+        ]
+      },
+      "about": {
+        "zh": "左右看看",
+        "en": "左右看看"
+      },
+      "seconds": 1.2
     }
   ],
   "sounds": {},

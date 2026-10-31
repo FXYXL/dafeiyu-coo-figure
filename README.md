@@ -9,14 +9,17 @@
 ## 安装
 
 1. 下载本仓库（或 Release 里的 zip）
-2. 把整个目录放进 Coopanion 的 `data/home/companion/data/figures/` 下
+2. 整个目录放进：
 
-具体位置看你的安装方式：
+```
+<Coopanion 数据目录>/home/companion/data/figures/
+```
 
-- **便携版**：`<解压 Coopanion 的目录>\data\home\companion\data\figures\`
-- **安装版**：`C:\Users\<你>\AppData\Roaming\Coopanion\data\home\companion\data\figures\`
+Windows 上通常是：
 
-不确定的话，直接在机器上找已有的 `figures` 目录（里面会有别的形象包），把这份放进去同级就行。
+```
+C:\Users\<你>\AppData\Roaming\Coopanion\data\home\companion\data\figures\
+```
 
 3. 重启 Coopanion → 形象面板里选「大肥鱼」
 
@@ -57,6 +60,23 @@
 | `<钢盆>` / `<pan-face>` | 头顶扣钢盆 |
 
 词表定义在 `figure.json` 的 `vocab` 里。Coo 的校验规则：id 只能是小写字母 / 数字 / 连字符（`/^[a-z0-9][a-z0-9-]{0,31}$/`），`id` 与任一别名不能重复，`names` 里不能有空格、逗号、`<>`、`【】`。
+
+## 动作
+
+这几个是 kit（木偶引擎）层的**整体姿态动作**——倾斜、旋转、缩放、位移。点名才做：
+
+| 写法 | 效果 | 实测幅度 |
+|---|---|---|
+| `<鞠躬>` / `<bow>` | 欠身 | 倾斜 13.3°（最明显） |
+| `<挥手>` / `<wave>` | 侧倾打招呼 | 倾斜 4.2° |
+| `<跳舞>` / `<dance>` | 扭动 | 倾斜 2~3° 波动 |
+| `<跳一下>` / `<jump>` | 起跳 | 位移 + 纵向挤压 |
+| `<转圈>` / `<spin>` | 原地转 | 水平收缩做透视 |
+| `<点头>` / `<nod>`、`<摇头>` / `<shake>` | 点头 / 摇头 | 小幅摆动 |
+| `<发抖>` / `<shiver>` | 抖一下 | 小幅抖动 |
+| `<张望>` / `<look>` | 左右看 | 位移 |
+
+**注意**：这些动的是整个人，不是手臂。这个模型的手臂是单层绘制的，没有可动骨骼——`LArm`/`LForearm`/`Movement1~3` 这些参数实测都驱动不了可见手臂（它们对应模型里隐藏的另一套手臂，在 VTS 里靠 exp3 切换部件才看得到）。想让它真正抬手，只能在 Cubism Editor 里重新建模。
 
 ## 目录结构
 
