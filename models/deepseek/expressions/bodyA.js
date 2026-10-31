@@ -1,0 +1,2 @@
+// 默认体型
+export default {"Type": "Live2D Expression", "IsModelCustomizationExpression": false, "Parameters": [{"Id": "Clothes2", "Value": 0.0, "Blend": "Add"}]};

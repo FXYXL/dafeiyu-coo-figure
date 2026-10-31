@@ -1,0 +1,522 @@
+{
+  "manifest": 2,
+  "api": 2,
+  "id": "deepseek",
+  "version": "1.3.8",
+  "name": {
+    "zh": "大肥鱼",
+    "en": "DaFeiYu"
+  },
+  "about": {
+    "zh": "深海女仆。三套服装 + 三档大小；接入模型自带的 18 个表情（笑眼、脸红、大哭、黑脸、圈圈眼等），会随情绪变化。",
+    "en": "Deep-sea maid with three outfits, three sizes and 18 native expressions."
+  },
+  "license": "仅供个人测试，请遵守模型自身的授权",
+  "entry": "figure.js",
+  "export": "createFigureBody",
+  "thumb": "thumb/cover.png",
+  "axes": [
+    {
+      "id": "model",
+      "name": {
+        "zh": "形象",
+        "en": "Figure"
+      },
+      "options": [
+        {
+          "id": "deepseek",
+          "name": {
+            "zh": "大肥鱼",
+            "en": "DaFeiYu"
+          },
+          "thumb": "thumb/opt-model.png"
+        }
+      ]
+    },
+    {
+      "id": "body",
+      "name": {
+        "zh": "大小",
+        "en": "Size"
+      },
+      "options": [
+        {
+          "id": "default",
+          "name": {
+            "zh": "默认",
+            "en": "Default"
+          },
+          "thumb": "thumb/body-default.png"
+        },
+        {
+          "id": "type1",
+          "name": {
+            "zh": "稍小",
+            "en": "Smaller"
+          },
+          "thumb": "thumb/body-type1.png"
+        },
+        {
+          "id": "type2",
+          "name": {
+            "zh": "Q 版",
+            "en": "Chibi"
+          },
+          "thumb": "thumb/body-type2.png"
+        }
+      ]
+    },
+    {
+      "id": "outfit",
+      "name": {
+        "zh": "服装",
+        "en": "Outfit"
+      },
+      "options": [
+        {
+          "id": "long",
+          "name": {
+            "zh": "长裙装",
+            "en": "Long dress"
+          },
+          "thumb": "thumb/outfit-long.png"
+        },
+        {
+          "id": "short",
+          "name": {
+            "zh": "短裙装",
+            "en": "Short skirt"
+          },
+          "thumb": "thumb/outfit-short.png"
+        },
+        {
+          "id": "goofy",
+          "name": {
+            "zh": "搞怪装",
+            "en": "Goofy"
+          },
+          "thumb": "thumb/outfit-goofy.png"
+        }
+      ]
+    }
+  ],
+  "presets": [],
+  "vocab": [
+    {
+      "id": "happy",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "开心"
+        ],
+        "en": [
+          "Happy"
+        ]
+      },
+      "about": {
+        "zh": "开心的表情",
+        "en": "Happy expression"
+      },
+      "seconds": 0.9
+    },
+    {
+      "id": "wink",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "眨眼"
+        ],
+        "en": [
+          "Wink"
+        ]
+      },
+      "about": {
+        "zh": "眨眼的表情",
+        "en": "Wink expression"
+      },
+      "seconds": 0.9
+    },
+    {
+      "id": "love",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "喜欢"
+        ],
+        "en": [
+          "Love"
+        ]
+      },
+      "about": {
+        "zh": "喜欢的表情",
+        "en": "Love expression"
+      },
+      "seconds": 0.9
+    },
+    {
+      "id": "shy",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "害羞"
+        ],
+        "en": [
+          "Shy"
+        ]
+      },
+      "about": {
+        "zh": "害羞的表情",
+        "en": "Shy expression"
+      },
+      "seconds": 0.9
+    },
+    {
+      "id": "surprised",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "惊讶"
+        ],
+        "en": [
+          "Surprised"
+        ]
+      },
+      "about": {
+        "zh": "惊讶的表情",
+        "en": "Surprised expression"
+      },
+      "seconds": 0.9
+    },
+    {
+      "id": "angry",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "生气"
+        ],
+        "en": [
+          "Angry"
+        ]
+      },
+      "about": {
+        "zh": "生气的表情",
+        "en": "Angry expression"
+      },
+      "seconds": 0.9
+    },
+    {
+      "id": "sad",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "难过"
+        ],
+        "en": [
+          "Sad"
+        ]
+      },
+      "about": {
+        "zh": "难过的表情",
+        "en": "Sad expression"
+      },
+      "seconds": 0.9
+    },
+    {
+      "id": "sleepy",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "困倦"
+        ],
+        "en": [
+          "Sleepy"
+        ]
+      },
+      "about": {
+        "zh": "困倦的表情",
+        "en": "Sleepy expression"
+      },
+      "seconds": 0.9
+    },
+    {
+      "id": "thinking",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "思考"
+        ],
+        "en": [
+          "Thinking"
+        ]
+      },
+      "about": {
+        "zh": "思考的表情",
+        "en": "Thinking expression"
+      },
+      "seconds": 0.9
+    },
+    {
+      "id": "smug",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "得意"
+        ],
+        "en": [
+          "Smug"
+        ]
+      },
+      "about": {
+        "zh": "得意的表情",
+        "en": "Smug expression"
+      },
+      "seconds": 0.9
+    },
+    {
+      "id": "pout",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "嘟嘴"
+        ],
+        "en": [
+          "Pout"
+        ]
+      },
+      "about": {
+        "zh": "嘟嘴的表情",
+        "en": "Pout expression"
+      },
+      "seconds": 0.9
+    },
+    {
+      "id": "worried",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "担心"
+        ],
+        "en": [
+          "Worried"
+        ]
+      },
+      "about": {
+        "zh": "担心的表情",
+        "en": "Worried expression"
+      },
+      "seconds": 0.9
+    },
+    {
+      "id": "determined",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "坚定"
+        ],
+        "en": [
+          "Determined"
+        ]
+      },
+      "about": {
+        "zh": "坚定的表情",
+        "en": "Determined expression"
+      },
+      "seconds": 0.9
+    },
+    {
+      "id": "flustered",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "慌张"
+        ],
+        "en": [
+          "Flustered"
+        ]
+      },
+      "about": {
+        "zh": "慌张的表情",
+        "en": "Flustered expression"
+      },
+      "seconds": 0.9
+    },
+    {
+      "id": "scared",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "害怕"
+        ],
+        "en": [
+          "Scared"
+        ]
+      },
+      "about": {
+        "zh": "害怕的表情",
+        "en": "Scared expression"
+      },
+      "seconds": 0.9
+    },
+    {
+      "id": "excited",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "兴奋"
+        ],
+        "en": [
+          "Excited"
+        ]
+      },
+      "about": {
+        "zh": "兴奋的表情",
+        "en": "Excited expression"
+      },
+      "seconds": 0.9
+    },
+    {
+      "id": "cry",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "哭"
+        ],
+        "en": [
+          "Cry"
+        ]
+      },
+      "about": {
+        "zh": "哭的表情",
+        "en": "Cry expression"
+      },
+      "seconds": 0.9
+    },
+    {
+      "id": "confused",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "困惑"
+        ],
+        "en": [
+          "Confused"
+        ]
+      },
+      "about": {
+        "zh": "困惑的表情",
+        "en": "Confused expression"
+      },
+      "seconds": 0.9
+    },
+    {
+      "id": "circle-eyes",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "圈圈眼",
+          "蚊香眼"
+        ],
+        "en": [
+          "circles"
+        ]
+      },
+      "about": {
+        "zh": "眼睛变成一圈圈的白圈，表示晕头转向",
+        "en": "Eyes become white rings, dizzy"
+      },
+      "seconds": 3.5
+    },
+    {
+      "id": "dark-face",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "黑脸",
+          "阴沉"
+        ],
+        "en": [
+          "gloomy"
+        ]
+      },
+      "about": {
+        "zh": "整张脸暗下来，表示无语或生气",
+        "en": "Face darkens, speechless or angry"
+      },
+      "seconds": 3.5
+    },
+    {
+      "id": "wry-face",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "屑屑眼",
+          "嫌弃"
+        ],
+        "en": [
+          "wry"
+        ]
+      },
+      "about": {
+        "zh": "半眯着眼一脸嫌弃",
+        "en": "Half-lidded, disdainful look"
+      },
+      "seconds": 3.5
+    },
+    {
+      "id": "glasses-face",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "黑框眼镜"
+        ],
+        "en": [
+          "spectacles"
+        ]
+      },
+      "about": {
+        "zh": "戴上黑框眼镜",
+        "en": "Puts on black-framed glasses"
+      },
+      "seconds": 3.5
+    },
+    {
+      "id": "monocle-face",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "单片眼镜"
+        ],
+        "en": [
+          "monocle"
+        ]
+      },
+      "about": {
+        "zh": "戴上一只单片眼镜",
+        "en": "Puts on a monocle"
+      },
+      "seconds": 3.5
+    },
+    {
+      "id": "pan-face",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "钢盆",
+          "扣盆"
+        ],
+        "en": [
+          "basin"
+        ]
+      },
+      "about": {
+        "zh": "头顶扣一个钢盆",
+        "en": "A steel basin on the head"
+      },
+      "seconds": 3.5
+    }
+  ],
+  "sounds": {},
+  "can": {
+    "walk": true
+  }
+}

@@ -1,0 +1,20 @@
+# 系统 / 编辑器
+Thumbs.db
+desktop.ini
+.DS_Store
+*.swp
+
+# 临时与调试产物
+*.tmp
+*.bak
+*.orig
+.workbuddy/
+_l2d_profile/
+_l2d_harness.mjs
+
+# 打包产物（用 Release 分发，不进版本库）
+*.zip
+*.7z
+
+# 无头渲染的截图
+_*.png
