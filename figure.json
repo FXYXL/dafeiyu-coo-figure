@@ -2,7 +2,7 @@
   "manifest": 2,
   "api": 2,
   "id": "deepseek",
-  "version": "1.4.7",
+  "version": "1.4.8",
   "name": {
     "zh": "大肥鱼",
     "en": "DaFeiYu"
@@ -16,23 +16,6 @@
   "export": "createFigureBody",
   "thumb": "thumb/cover.png",
   "axes": [
-    {
-      "id": "model",
-      "name": {
-        "zh": "形象",
-        "en": "Figure"
-      },
-      "options": [
-        {
-          "id": "deepseek",
-          "name": {
-            "zh": "大肥鱼",
-            "en": "DaFeiYu"
-          },
-          "thumb": "thumb/opt-model.png"
-        }
-      ]
-    },
     {
       "id": "body",
       "name": {
@@ -788,6 +771,62 @@
       "about": {
         "zh": "头上出现加载中的标记",
         "en": "A loading indicator appears"
+      },
+      "seconds": 3.5
+    },
+    {
+      "id": "aggrieved",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "委屈"
+        ]
+      },
+      "about": {
+        "zh": "眼泪汪汪还脸红，像快要哭出来",
+        "en": "眼泪汪汪还脸红，像快要哭出来"
+      },
+      "seconds": 3.5
+    },
+    {
+      "id": "speechless",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "无语"
+        ]
+      },
+      "about": {
+        "zh": "黑着脸、眼睛转圈，彻底无话可说",
+        "en": "黑着脸、眼睛转圈，彻底无话可说"
+      },
+      "seconds": 3.5
+    },
+    {
+      "id": "mad",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "生气"
+        ]
+      },
+      "about": {
+        "zh": "黑脸加半眯眼，明显不爽",
+        "en": "黑脸加半眯眼，明显不爽"
+      },
+      "seconds": 3.5
+    },
+    {
+      "id": "guilty",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "心虚"
+        ]
+      },
+      "about": {
+        "zh": "冒冷汗又脸红，像被抓住了",
+        "en": "冒冷汗又脸红，像被抓住了"
       },
       "seconds": 3.5
     }

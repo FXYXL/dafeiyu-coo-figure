@@ -20,6 +20,15 @@ export default {
   // 圈圈眼(confused) / 黑脸(angry) 这类夸张表情不挂默认情绪，否则容易一直挂着。
   // 模型自带、但挂在常规情绪上会很违和的夸张表情。做成独立词：
   // AI 在回复里写 <circleEyes> / <darkFace> 才会用到，平时不会自动出现。
+  // 组合表情：把两个 exp3 的参数并集合并成一个（加载时合成，不增加运行时开销）。
+  // 键是组合后的词名，值是要合并的 exp3 id。
+  expressionCombos: {
+    'aggrieved':  ['tears', 'blush'],    // 委屈：流泪 + 脸红
+    'speechless': ['dark', 'dizzy'],     // 无语：黑脸 + 圈圈眼
+    'mad':        ['dark', 'smug'],      // 生气：黑脸 + 屑屑眼
+    'guilty':     ['sweat', 'blush'],    // 心虚：流冷汗 + 脸红
+  },
+
   extraExpressions: {
     // 键名会被当作可写的词，必须符合 Coo 的 id 规则（小写字母/数字/连字符）
     'circle-eyes': 'dizzy',    // 圈圈眼
@@ -29,6 +38,10 @@ export default {
     'monocle-face': 'monocle', // 单片眼镜
     'pan-face': 'pan',         // 钢盆
     'loading-face': 'loading', // 加载中（原皮 key8）
+    'aggrieved': 'aggrieved',   // 委屈（流泪+脸红）
+    'speechless': 'speechless', // 无语（黑脸+圈圈眼）
+    'mad': 'mad',               // 生气（黑脸+屑屑眼）
+    'guilty': 'guilty',         // 心虚（冷汗+脸红）
   },
   // 参数动作：用模型自己的参数做透视姿态，由 frame.gesture 的进度驱动。
   // LeanInput 是模型的"前倾输入"：负值往镜头靠（物理会据此联动身体），正值后退。
@@ -54,6 +67,10 @@ export default {
     { prefix: 'ShortPonytailX', amp: 0.13, hz: 0.14, phase: 0.35, spread: 0.08 },
     { prefix: 'ShortPonytailY', amp: 0.09, hz: 0.19, phase: 0.55, spread: 0.07 },
   ],
+
+  // 待机时会随机切到这些手臂姿势（1=狗尾草 2=抚胸 3=竖食指），每次 4 秒。
+  // 对应 VTS 的 Auto Idle：闲置久了就自己换个手势，不然一直一个姿势很死。
+  idlePoses: [2, 3],
 
   idlePhysics: {
     // 只写"源头参数"。ParamBodyAngleX / HipAngleX / ParamBodyAngleZ 本身是物理的

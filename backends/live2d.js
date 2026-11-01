@@ -271,14 +271,43 @@ export async function createLive2DBody(base, opts, entry, kit) {
   // ---------- 原生表情（exp3）----------
   // 模型自带的表情文件比通用配方更贴脸；由 profile.expressions 把词映射到文件。
   const expressions = new Map();
+  const exprJson = new Map();     // 保留原始 JSON，供组合表情合并
   for (const e of entry.expressions ?? []) {
     try {
       const mod = await import(new URL(`models/${entry.id}/${e.file}`, base));
+      exprJson.set(e.id, mod.default);
       const bytes = new TextEncoder().encode(JSON.stringify(mod.default));
       const clip = model.loadExpression(bytes.buffer, bytes.length, e.id);
       if (clip) expressions.set(e.id, clip);
     } catch (err) {
       console.warn('表情载入失败', e.id, err);
+    }
+  }
+
+  // ---------- 组合表情 ----------
+  // exp3 本质是"一张参数设置表"，所以组合＝把几张表的参数并集（同 Id 后者覆盖）。
+  // 在载入阶段合成一个 clip，运行时就只是一次 startMotion，不用处理叠加顺序。
+  for (const [comboId, parts] of Object.entries(profile.expressionCombos ?? {})) {
+    const src = (parts ?? []).map((p) => exprJson.get(p)).filter(Boolean);
+    if (!src.length) { console.warn('[l2d] 组合表情缺少来源', comboId, parts); continue; }
+    const params = new Map();
+    const parts2 = new Map();
+    for (const j of src) {
+      for (const p of j.Parameters ?? []) params.set(p.Id, p);
+      for (const p of j.PartOpacities ?? []) parts2.set(p.Id, p);
+    }
+    const merged = {
+      ...src[0],
+      Parameters: [...params.values()],
+      PartOpacities: [...parts2.values()],
+    };
+    try {
+      const bytes = new TextEncoder().encode(JSON.stringify(merged));
+      const clip = model.loadExpression(bytes.buffer, bytes.length, comboId);
+      if (clip) expressions.set(comboId, clip);
+      else console.warn('[l2d] 组合表情合成失败', comboId);
+    } catch (err) {
+      console.warn('[l2d] 组合表情载入失败', comboId, err);
     }
   }
   // 常规情绪 + 模型的"重口味"表情（圈圈眼、黑脸…）。
@@ -443,8 +472,11 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // scheme 形如 "deepseek-<第1轴>-<第2轴>-<第3轴>"，顺序与 figure.json 的 axes 一致。
     // 必须按位置取，不能用 token 名去匹配 —— 每个轴都有 default，按名字会全部命中第一个。
     const tokens = String(opts.scheme || '').split('-');
+    // 兼容两种写法：老 scheme 带形象 id 前缀（deepseek-type1-short），
+    // 新 scheme 只由各轴选项拼成（type1-short）。第一段等于模型 id 就跳过。
+    const start = tokens[0] === (entry.id ?? '') ? 1 : 0;
     const out = {};
-    let slot = 1;
+    let slot = start;
     for (const [axis, options] of Object.entries(profile.schemes ?? {})) {
       const token = tokens[slot++];
       const pick = token && Object.prototype.hasOwnProperty.call(options, token) ? token : 'default';
@@ -454,7 +486,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 取景同样按位置叠加：每个选项可以带自己的 fit（不同身形占的画布区域不同）。
     // 这里也必须按位置取 token —— 用名字找的话，每轴都有 default，会全部命中第一个。
     const optionFit = {};
-    let fitSlot = 1;
+    let fitSlot = start;
     for (const [axis, options] of Object.entries(profile.schemes ?? {})) {
       const token = tokens[fitSlot++];
       const pick = token && Object.prototype.hasOwnProperty.call(options, token) ? token : 'default';
@@ -569,6 +601,39 @@ export async function createLive2DBody(base, opts, entry, kit) {
     for (const p of physWaveIdx) {
       const cur = model._model.getParameterValueByIndex(p.idx);
       model._model.setParameterValueByIndex(p.idx, cur + Math.sin((t * p.hz + p.phase) * Math.PI * 2) * p.amp);
+    }
+  }
+
+  // ---------- 待机小动作（模拟 VTS 的 Auto Idle）----------
+  // VTS 空闲一段时间会随机播一个热键动作；模型的 IDLE.motion3 本身只驱动
+  // 泪花/冒汗这类特效参数，不含手臂。所以"待机换手"要自己做：
+  // 隔 25~50 秒随机把 Movement2/3（抚胸 / 竖食指）打开 4 秒，再收回。
+  let idlePoseUntil = 0;
+  let idlePoseNext = 20 + Math.random() * 20;
+  let idlePoseOn = 0;
+
+  function setMovement(n) {
+    for (const k of [1, 2, 3]) {
+      const i = paramIndex.get('Movement' + k);
+      if (i !== undefined) model._model.setParameterValueByIndex(i, k === n ? 1 : 0);
+    }
+    idlePoseOn = n;
+  }
+
+  function applyIdlePose(t, busy) {
+    const poses = profile.idlePoses ?? [];
+    if (!poses.length) return;
+    if (busy) {                       // 有正式动作时让位，别抢
+      if (idlePoseOn) setMovement(0);
+      return;
+    }
+    if (idlePoseOn && t > idlePoseUntil) {
+      setMovement(0);
+      idlePoseNext = t + 25 + Math.random() * 25;
+    } else if (!idlePoseOn && t > idlePoseNext) {
+      const n = poses[Math.floor(Math.random() * poses.length)];
+      setMovement(n);
+      idlePoseUntil = t + 4;
     }
   }
 
@@ -1102,6 +1167,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       // 否则表情刚把 key11 抬起来就被这里按回 0，眼镜永远出不来。
       applyCleanParams();
       applyIdlePhysics(clockT);
+      applyIdlePose(clockT, !!frame.gesture);
       applyParamActs(frame);
       applySchemeParams();
       // 基准只存 role + 状态。动作、表情、物理都是"每帧重算"的输出，
