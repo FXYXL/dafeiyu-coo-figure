@@ -102,6 +102,11 @@ export default {
     'chest-hand':   { dur: 4, params: [{ id: 'Movement1', to: 0 }, { id: 'Movement2', to: 1 }, { id: 'Movement3', to: 0 }] },
     'grass-hand':   { dur: 4, params: [{ id: 'Movement1', to: 1 }, { id: 'Movement2', to: 0 }, { id: 'Movement3', to: 0 }] },
 
+    // —— 脸部小动作（参数直驱，实测鼓腮最明显）——
+    'puff-cheek': { dur: 3, params: [{ id: 'CheeckPuff', to: 1 }] },
+    'pout-lips':  { dur: 3, params: [{ id: 'Mouthpucker', to: 1 }] },
+    'dazed':      { dur: 4, params: [{ id: 'Param11', to: 6 }] },
+
     // 歪头
     tilt:        { params: [{ id: 'AngleZ', to: 28 }] },
 

@@ -2,7 +2,7 @@
   "manifest": 2,
   "api": 2,
   "id": "deepseek",
-  "version": "1.4.9",
+  "version": "1.5.0",
   "name": {
     "zh": "大肥鱼",
     "en": "DaFeiYu"
@@ -832,6 +832,50 @@
         "en": "冒冷汗又脸红，像被抓住了"
       },
       "seconds": 3.5
+    },
+    {
+      "id": "puff-cheek",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "鼓腮",
+          "鼓脸"
+        ]
+      },
+      "about": {
+        "zh": "把腮帮子鼓起来",
+        "en": "把腮帮子鼓起来"
+      },
+      "seconds": 3
+    },
+    {
+      "id": "pout-lips",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "撅嘴"
+        ]
+      },
+      "about": {
+        "zh": "嘟起嘴巴",
+        "en": "嘟起嘴巴"
+      },
+      "seconds": 3
+    },
+    {
+      "id": "dazed",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "发呆",
+          "放空"
+        ]
+      },
+      "about": {
+        "zh": "眼神呆滞地放空",
+        "en": "眼神呆滞地放空"
+      },
+      "seconds": 4
     }
   ],
   "sounds": {},
