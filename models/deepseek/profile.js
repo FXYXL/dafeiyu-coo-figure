@@ -50,7 +50,9 @@ export default {
     // 幅度刻意压小（5~7%），真实的大幅甩动仍由物理跟着转头/动作算出来。
     { prefix: 'FrontHair',   amp: 0.05, hz: 0.13, spread: 0.07 },
     { prefix: 'LateHair',    amp: 0.06, hz: 0.11, phase: 0.2, spread: 0.07 },
-    { prefix: 'ShortPonytail', amp: 0.07, hz: 0.15, phase: 0.35, spread: 0.06 },
+    // 尾巴：两组不同频率叠加，慢的那组做整体飘，快的那组做尾梢抖
+    { prefix: 'ShortPonytailX', amp: 0.13, hz: 0.14, phase: 0.35, spread: 0.08 },
+    { prefix: 'ShortPonytailY', amp: 0.09, hz: 0.19, phase: 0.55, spread: 0.07 },
   ],
 
   idlePhysics: {

@@ -607,8 +607,10 @@ export async function createLive2DBody(base, opts, entry, kit) {
         if (i !== undefined) model._model.setParameterValueByIndex(i, (w.base ?? 0) + v);
       }
     } else {
-      // 静态姿态：0~0.3 进入、0.3~0.7 保持、0.7~1 退出
-      const w = k < 0.3 ? k / 0.3 : k > 0.7 ? (1 - k) / 0.3 : 1;
+      // 静态姿态：进入 / 保持 / 退出。过渡段用 smoothstep 而不是线性，
+      // 起步和收尾都是缓的 —— 换手臂这类"部件切换"才不会显得一下子跳出来。
+      const ease = (x) => x * x * (3 - 2 * x);
+      const w = k < 0.3 ? ease(k / 0.3) : k > 0.7 ? ease((1 - k) / 0.3) : 1;
       for (const p of act.params ?? []) {
         const i = paramIndex.get(p.id);
         if (i !== undefined) model._model.setParameterValueByIndex(i, p.to * w);
