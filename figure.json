@@ -2,7 +2,7 @@
   "manifest": 2,
   "api": 2,
   "id": "deepseek",
-  "version": "1.4.8",
+  "version": "1.4.9",
   "name": {
     "zh": "大肥鱼",
     "en": "DaFeiYu"
@@ -807,12 +807,15 @@
       "kind": "expression",
       "names": {
         "zh": [
-          "生气"
+          "阴险"
+        ],
+        "en": [
+          "sinister"
         ]
       },
       "about": {
-        "zh": "黑脸加半眯眼，明显不爽",
-        "en": "黑脸加半眯眼，明显不爽"
+        "zh": "黑着脸半眯眼，一脸算计",
+        "en": "Dark face with a sly look"
       },
       "seconds": 3.5
     },
