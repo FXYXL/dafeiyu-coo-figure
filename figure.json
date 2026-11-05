@@ -1,8 +1,8 @@
 {
   "manifest": 2,
   "api": 2,
-  "id": "deepseek",
-  "version": "1.5.0",
+  "id": "deepseek-shenggong",
+  "version": "1.5.1",
   "name": {
     "zh": "大肥鱼",
     "en": "DaFeiYu"
