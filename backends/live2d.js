@@ -703,6 +703,12 @@ export async function createLive2DBody(base, opts, entry, kit) {
       // 连续动作：按时间走正弦，两端做淡入淡出，避免动作起止生硬
       const t = k * (act.dur ?? 2.4);
       const env = k < 0.12 ? k / 0.12 : k > 0.88 ? (1 - k) / 0.12 : 1;
+      // 先落静态参数：换手开关（Movement*）和手型必须一起写，
+      // 否则只有 waves 在动、手根本没换成"拿草"的那只，看起来就跟没做一样。
+      for (const p of act.params ?? []) {
+        const i = paramIndex.get(p.id);
+        if (i !== undefined) model._model.setParameterValueByIndex(i, p.to);
+      }
       for (const w of act.waves) {
         const v = Math.sin((t * w.freq + (w.phase ?? 0)) * Math.PI * 2) * w.amp * env;
         const i = paramIndex.get(w.id);

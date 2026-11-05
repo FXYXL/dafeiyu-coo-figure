@@ -2,7 +2,7 @@
   "manifest": 2,
   "api": 2,
   "id": "deepseek-shenggong",
-  "version": "1.5.9",
+  "version": "1.6.0",
   "name": {
     "zh": "大肥鱼",
     "en": "DaFeiYu"
@@ -887,10 +887,10 @@
         ]
       },
       "about": {
-        "zh": "拿着狗尾草左右甩",
+        "zh": "拿着狗尾草来回挥",
         "en": "Swinging a foxtail grass"
       },
-      "seconds": 3.2
+      "seconds": 3.6
     }
   ],
   "sounds": {},
