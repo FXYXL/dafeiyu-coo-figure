@@ -122,6 +122,16 @@ export default {
       { id: 'Param56', to: 1 },
     ] },
 
+    // 甩草：从"脱捕"那段表演里取的手臂摆动范围（Param41 -0.91~0.01 等），
+    // 用正弦复现甩动感。不跑位（脱捕本身会改 PositionX ±17，桌宠会出画）。
+    'swing': { dur: 3.2,
+      params: [{ id: 'Movement1', to: 1 }, { id: 'Movement3', to: 0 }],
+      waves: [
+        { id: 'Param41', amp: 0.45, freq: 1.6, base: -0.45 },
+        { id: 'Param42', amp: 0.32, freq: 1.6, base: -0.16, phase: 0.1 },
+        { id: 'Param39', amp: 0.28, freq: 1.6, base: -0.15, phase: 0.05 },
+      ] },
+
     // —— 脸部小动作（参数直驱，实测鼓腮最明显）——
     'puff-cheek': { dur: 3, params: [{ id: 'CheeckPuff', to: 1 }] },
     'pout-lips':  { dur: 3, params: [{ id: 'Mouthpucker', to: 1 }] },

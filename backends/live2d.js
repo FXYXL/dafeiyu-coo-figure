@@ -623,11 +623,25 @@ export async function createLive2DBody(base, opts, entry, kit) {
     idlePoseOn = n;
   }
 
+  /** 结束待机手势：部件开关和手臂参数必须一起归零。
+   *  之前只 setMovement(0)，Param41/59/60 这些还停在原值，
+   *  手就会一直举着，直到下一次手势把它覆盖掉。 */
+  function clearIdlePose() {
+    const word = idlePoseWord;
+    idlePoseWord = null;
+    setMovement(0);
+    const act = word ? paramActs[word] : null;
+    for (const p of act?.params ?? []) {
+      const i = paramIndex.get(p.id);
+      if (i !== undefined) model._model.setParameterValueByIndex(i, 0);
+    }
+  }
+
   function applyIdlePose(t, busy) {
     const poses = profile.idlePoses ?? [];
     if (!poses.length) return;
     if (busy) {                       // 有正式动作时让位，别抢
-      if (idlePoseOn) setMovement(0);
+      if (idlePoseOn || idlePoseWord) clearIdlePose();
       return;
     }
     // 待机换手走参数过渡（和 paramActs 同一套参数表）：
@@ -635,8 +649,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
     if (idlePoseWord) {
       const k = (t - idlePoseStart) / 4;
       if (k >= 1) {
-        idlePoseWord = null;
-        setMovement(0);
+        clearIdlePose();
         idlePoseNext = t + 25 + Math.random() * 25;
         return;
       }

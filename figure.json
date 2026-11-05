@@ -2,7 +2,7 @@
   "manifest": 2,
   "api": 2,
   "id": "deepseek-shenggong",
-  "version": "1.5.8",
+  "version": "1.5.9",
   "name": {
     "zh": "大肥鱼",
     "en": "DaFeiYu"
@@ -876,6 +876,21 @@
         "en": "眼神呆滞地放空"
       },
       "seconds": 4
+    },
+    {
+      "id": "swing",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "甩草",
+          "甩狗尾草"
+        ]
+      },
+      "about": {
+        "zh": "拿着狗尾草左右甩",
+        "en": "Swinging a foxtail grass"
+      },
+      "seconds": 3.2
     }
   ],
   "sounds": {},
