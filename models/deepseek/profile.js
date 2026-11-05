@@ -78,7 +78,6 @@ export default {
     // 链条：PositionX → ParamBodyAngleX → 胸/裙；PositionX+Z → HipAngleX → 裙摆层；
     //       PositionY → 胸/裙的下垂；ParamBreath → 胸起伏。
     ParamBreath: { hz: 0.25, amp: 0.45, base: 0.5 },
-    PositionX:   { hz: 0.11, amp: 3.2 },
     PositionZ:   { hz: 0.09, amp: 2.4, phase: 0.3 },
     PositionY:   { hz: 0.17, amp: 1.6, phase: 0.4 },
   },
@@ -172,6 +171,7 @@ export default {
     eyeOpen: {"targets":["ParamEyeLOpen","ParamEyeROpen"],"space":[0,1],"default":1},
     browY: {"targets":["ParamBrowLY","ParamBrowRY"],"space":[-1,1],"default":0},
     browAngle: {"targets":["ParamBrowLAngle","ParamBrowRAngle"],"space":[-1,1],"default":0},
+    eyeSmile: {"targets":["EyeSmile"],"space":[0,1],"default":0},
     mouthOpen: {"targets":["ParamMouthOpenY"],"space":[0,1],"default":0},
     mouthForm: {"targets":["ParamMouthForm"],"space":[-1,1],"default":0},
     eyeBallX: {"targets":["ParamEyeBallX"],"space":[-1,1],"default":0},
@@ -179,12 +179,12 @@ export default {
     angleX: {"targets":["AngleX","ParamAngleX"],"space":[-1,1],"default":0},
     angleY: {"targets":["AngleY","ParamAngleY"],"space":[-1,1],"default":0},
     angleZ: {"targets":["AngleZ","ParamAngleZ"],"space":[-1,1],"default":0},
-    bodyX: {"targets":["ParamBodyAngleX"],"space":[-1,1],"default":0},
+    bodyX: {"targets":["PositionX"],"space":[-1,1],"default":0},
     breath: {"targets":["ParamBreath"],"space":[0,1],"default":0},
   },
   expression: {
-    happy: {"browY":0.35,"mouthForm":0.8},
-    wink: {"browY":0.2,"mouthForm":0.4},
+    happy: {"eyeSmile":1,"browY":0.35,"mouthForm":0.8},
+    wink: {"eyeSmile":0.7,"browY":0.2,"mouthForm":0.4},
     love: {"browY":0.3,"mouthForm":0.6},
     shy: {"browY":0.45,"mouthForm":0.1},
     surprised: {"browY":0.8,"browAngle":1,"mouthOpen":0.45,"mouthForm":0.25},
