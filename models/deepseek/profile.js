@@ -70,7 +70,10 @@ export default {
 
   // 待机时会随机切到这些手臂姿势（1=狗尾草 2=抚胸 3=竖食指），每次 4 秒。
   // 对应 VTS 的 Auto Idle：闲置久了就自己换个手势，不然一直一个姿势很死。
-  idlePoses: [2, 3],
+  idlePoses: [
+    { word: 'chest-hand', movement: 2 },
+    { word: 'finger-point', movement: 3 },
+  ],
 
   idlePhysics: {
     // 只写"源头参数"。ParamBodyAngleX / HipAngleX / ParamBodyAngleZ 本身是物理的
@@ -97,9 +100,9 @@ export default {
     // Movement1/2/3 不是骨骼，是"切换哪只手显示"的开关：
     // 1=狗尾草、2=抚胸、3=竖食指。参数一开，对应手臂就替换掉默认手。
     // 必须把另外两个显式归零，否则切回来时会叠在一起。
-    'finger-point': { dur: 4, params: [{ id: 'Movement1', to: 0 }, { id: 'Movement2', to: 0 }, { id: 'Movement3', to: 1 }] },
-    'chest-hand':   { dur: 4, params: [{ id: 'Movement1', to: 0 }, { id: 'Movement2', to: 1 }, { id: 'Movement3', to: 0 }] },
-    'grass-hand':   { dur: 4, params: [{ id: 'Movement1', to: 1 }, { id: 'Movement2', to: 0 }, { id: 'Movement3', to: 0 }] },
+    'finger-point': { dur: 4, hold: true, params: [{ id: 'Movement1', to: 0 }, { id: 'Movement2', to: 0 }, { id: 'Movement3', to: 1 }] },
+    'chest-hand':   { dur: 4, hold: true, params: [{ id: 'Movement1', to: 0 }, { id: 'Movement2', to: 1 }, { id: 'Movement3', to: 0 }] },
+    'grass-hand':   { dur: 4, hold: true, params: [{ id: 'Movement1', to: 1 }, { id: 'Movement2', to: 0 }, { id: 'Movement3', to: 0 }] },
 
     // —— 脸部小动作（参数直驱，实测鼓腮最明显）——
     'puff-cheek': { dur: 3, params: [{ id: 'CheeckPuff', to: 1 }] },

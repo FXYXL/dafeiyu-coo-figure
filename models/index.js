@@ -15,9 +15,9 @@ export const models = {
     ],
     "motions": [
       {"id": "idle", "file": "motions/idle.js", "duration": 5.98, "loop": true},
-      {"id": "finger-point", "file": "motions/pointIn.js", "duration": 1.0},
-      {"id": "chest-hand", "file": "motions/raise.js", "duration": 1.0},
-      {"id": "grass-hand", "file": "motions/grassIn.js", "duration": 0.9}
+      {"id": "finger-point", "file": "motions/pointIn.js", "duration": 1.3},
+      {"id": "chest-hand", "file": "motions/raise.js", "duration": 1.1},
+      {"id": "grass-hand", "file": "motions/grassIn.js", "duration": 1.2}
     ],
     "idle": [{"id": "idle"}],
     "expressions": [

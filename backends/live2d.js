@@ -631,8 +631,12 @@ export async function createLive2DBody(base, opts, entry, kit) {
       setMovement(0);
       idlePoseNext = t + 25 + Math.random() * 25;
     } else if (!idlePoseOn && t > idlePoseNext) {
-      const n = poses[Math.floor(Math.random() * poses.length)];
+      const pick = poses[Math.floor(Math.random() * poses.length)];
+      const n = typeof pick === 'number' ? pick : pick.movement;
       setMovement(n);
+      // 有对应的原生 motion 就顺便播一次，待机换手也有抬手过程
+      const word = typeof pick === 'object' ? pick.word : null;
+      if (word && clips.has(word)) { try { startClip(word, 3, false); } catch { /* 忽略 */ } }
       idlePoseUntil = t + 4;
     }
   }
@@ -703,6 +707,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
     if (currentId && model._motionManager.isFinished()) {
       currentId = null;
       idlePlaying = false;
+      // 标了 hold 的动作（换手类）：原生 motion 只负责"把手抬到位"，
+      // 播完必须停在最后一帧，否则下一帧就回默认姿势，看起来就是"只做了一半"。
+      if (g?.kind && paramActs[g.kind]?.hold) return;
       model._motionManager.stopAllMotions();
     }
 
