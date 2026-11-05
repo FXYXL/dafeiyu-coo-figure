@@ -90,9 +90,9 @@ export default {
     // 探身鞠躬：上半身真的往前压，配合 kit 自带的闭眼
     bow:         { params: [{ id: 'LeanInput', to: -24 }] },
     // 侧身：身体侧转 + 头跟着转一点，单靠身体参数幅度太小吃不出来
-    side:        { params: [{ id: 'ParamBodyAngleZ', to: 30 }, { id: 'AngleX', to: 12 }, { id: 'AngleZ', to: 6 }] },
+    side:        { params: [{ id: 'PositionX', to: 22 }, { id: 'AngleX', to: 12 }, { id: 'AngleZ', to: 6 }] },
     // 斜着凑近：前倾 + 侧身 + 歪头
-    peek:        { params: [{ id: 'LeanInput', to: -22 }, { id: 'ParamBodyAngleZ', to: 18 }, { id: 'AngleZ', to: 10 }] },
+    peek:        { params: [{ id: 'LeanInput', to: -22 }, { id: 'PositionX', to: 16 }, { id: 'AngleZ', to: 10 }] },
     // —— 手臂姿势（模型自带的三只"备用手"）——
     // Movement1/2/3 不是骨骼，是"切换哪只手显示"的开关：
     // 1=狗尾草、2=抚胸、3=竖食指。参数一开，对应手臂就替换掉默认手。
@@ -125,7 +125,9 @@ export default {
       postWaves: [
         // 胸腔先动，盆骨慢半拍跟上（从腰往上带的感觉）
         { id: 'ParamBodyAngleZ', amp: 22, freq: 1 },
-        { id: 'HipAngleZ', amp: 13, freq: 1, phase: 0.12 },
+        // 走路时胯部动的是 HipAngleX（盆骨 X），不是 Z。之前只写 Z 所以胯看着没动。
+        { id: 'HipAngleX', amp: 18, freq: 1, phase: 0.12 },
+        { id: 'HipAngleZ', amp: 8, freq: 1, phase: 0.15 },
         // ParamBodyAngleRZ 是"身体位移RZ"，物理既不读也不写，可以自由驱动，
         // 它让整个身体一起摆，比只转胸腔明显得多。
         { id: 'ParamBodyAngleRZ', amp: 12, freq: 1, phase: 0.06 },
@@ -134,7 +136,7 @@ export default {
       waves: [
         // PositionX 是物理的输入：身体重心左右移 → 物理推出胸/胯/裙摆/头发
         // 一起动，比单纯转胸腔自然得多（这也是 3.0.0 里 bodyX 的做法）
-        { id: 'PositionX', amp: 9, freq: 1 },
+        { id: 'PositionX', amp: 20, freq: 0.9 },
         { id: 'AngleZ', amp: 8, freq: 1, phase: 0.1 },
         { id: 'AngleX', amp: 6, freq: 0.5, phase: 0.3 },
         { id: 'LeanInput', amp: -3, freq: 1, phase: 0.25 },
