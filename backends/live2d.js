@@ -1222,7 +1222,10 @@ export async function createLive2DBody(base, opts, entry, kit) {
   const words = {};
   for (const m of entry.motions ?? []) {
     if (m.id === 'idle') continue;   // 待机是常驻循环，不该被当成一次性动作词
-    words[m.id] = { motion: { seconds: m.duration || 3 } };
+    // 与 paramActs 同名的动作：手势时长要跟参数层一致（参数要"保持"住），
+    // 原生 motion 只负责开头那段过渡，播完就停、参数继续生效。
+    const act = profile.paramActs?.[m.id];
+    words[m.id] = { motion: { seconds: act?.dur ?? m.duration ?? 3 } };
   }
   for (const word of Object.keys(profile.extraExpressions ?? {})) {
     if (!words[word]) words[word] = { expression: { seconds: 3 } };

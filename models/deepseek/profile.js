@@ -132,7 +132,10 @@ export default {
       ],
       // 头和上半身跟着同一拍，速度慢一点，形成"腰先动、头后跟"
       waves: [
-        { id: 'AngleZ', amp: 10, freq: 1, phase: 0.1 },
+        // PositionX 是物理的输入：身体重心左右移 → 物理推出胸/胯/裙摆/头发
+        // 一起动，比单纯转胸腔自然得多（这也是 3.0.0 里 bodyX 的做法）
+        { id: 'PositionX', amp: 9, freq: 1 },
+        { id: 'AngleZ', amp: 8, freq: 1, phase: 0.1 },
         { id: 'AngleX', amp: 6, freq: 0.5, phase: 0.3 },
         { id: 'LeanInput', amp: -3, freq: 1, phase: 0.25 },
       ],

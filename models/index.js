@@ -14,7 +14,10 @@ export const models = {
       "textures/texture_04.png"
     ],
     "motions": [
-      {"id": "idle", "file": "motions/idle.js", "duration": 5.98, "loop": true}
+      {"id": "idle", "file": "motions/idle.js", "duration": 5.98, "loop": true},
+      {"id": "finger-point", "file": "motions/pointIn.js", "duration": 1.0},
+      {"id": "chest-hand", "file": "motions/raise.js", "duration": 1.0},
+      {"id": "grass-hand", "file": "motions/grassIn.js", "duration": 0.9}
     ],
     "idle": [{"id": "idle"}],
     "expressions": [
