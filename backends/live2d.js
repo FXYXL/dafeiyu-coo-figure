@@ -645,16 +645,20 @@ export async function createLive2DBody(base, opts, entry, kit) {
       return;
     }
     // 待机换手走参数过渡（和 paramActs 同一套参数表）：
-    // 0~15% 抬起、15~85% 保持、85~100% 放下，和手动触发的手势看着一致。
+    // 进 / 停 / 退 的比例跟主动触发完全一致，否则"自己冒出来"和"被叫出来"的手感对不上。
+    // 时长取 paramActs[word].dur（这三个都是 4 秒），过渡占 20%（约 0.8 秒）。
     if (idlePoseWord) {
-      const k = (t - idlePoseStart) / 4;
-      if (k >= 1) {
+      const act = paramActs[idlePoseWord];
+      const dur = act?.dur ?? 4;
+      const tt = t - idlePoseStart;
+      if (tt >= dur) {
         clearIdlePose();
         idlePoseNext = t + 25 + Math.random() * 25;
         return;
       }
-      const w = k < 0.15 ? k / 0.15 : k > 0.85 ? (1 - k) / 0.15 : 1;
-      const act = paramActs[idlePoseWord];
+      const ease = (x) => x * x * (3 - 2 * x);
+      const pad = Math.min(1.1, Math.max(0.32, dur * 0.2));
+      const w = tt < pad ? ease(tt / pad) : tt > dur - pad ? ease(Math.max(0, (dur - tt) / pad)) : 1;
       if (act) {
         for (const p of act.params ?? []) {
           const i = paramIndex.get(p.id);
@@ -715,8 +719,11 @@ export async function createLive2DBody(base, opts, entry, kit) {
       }
       return;
     }
-    const FADE = 0.22;
-    const env = t < FADE ? t / FADE : t > dur - FADE ? Math.max(0, (dur - t) / FADE) : 1;
+    // 过渡时长按动作总时长取比例，别写死秒数。
+    // 之前写死 0.22 秒，3~4 秒的动作 0.2 秒就抬到位、然后干等着，显得"一下子就做完了"；
+    // 待机换手用的是 4 秒里 15% 的过渡（0.6 秒），那个节奏才是舒服的。
+    const pad = Math.min(1.1, Math.max(0.32, dur * 0.2));
+    const env = t < pad ? t / pad : t > dur - pad ? Math.max(0, (dur - t) / pad) : 1;
 
     if (act.waves?.length) {
       // 连续动作：按时间走正弦，两端做淡入淡出，避免动作起止生硬
@@ -735,7 +742,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       // 静态姿态：进入 / 保持 / 退出。过渡段用 smoothstep 而不是线性，
       // 起步和收尾都是缓的 —— 换手臂这类"部件切换"才不会显得一下子跳出来。
       const ease = (x) => x * x * (3 - 2 * x);
-      const w = t < 0.3 ? ease(t / 0.3) : t > dur - 0.4 ? ease(Math.max(0, (dur - t) / 0.4)) : 1;
+      const w = t < pad ? ease(t / pad) : t > dur - pad ? ease(Math.max(0, (dur - t) / pad)) : 1;
       for (const p of act.params ?? []) {
         const i = paramIndex.get(p.id);
         if (i !== undefined) model._model.setParameterValueByIndex(i, p.to * w);
