@@ -100,9 +100,28 @@ export default {
     // Movement1/2/3 不是骨骼，是"切换哪只手显示"的开关：
     // 1=狗尾草、2=抚胸、3=竖食指。参数一开，对应手臂就替换掉默认手。
     // 必须把另外两个显式归零，否则切回来时会叠在一起。
-    'finger-point': { dur: 4, hold: true, exitClip: 'exit-finger-point', params: [{ id: 'Movement1', to: 0 }, { id: 'Movement2', to: 0 }, { id: 'Movement3', to: 1 }] },
-    'chest-hand':   { dur: 4, hold: true, exitClip: 'exit-chest-hand', params: [{ id: 'Movement1', to: 0 }, { id: 'Movement2', to: 1 }, { id: 'Movement3', to: 0 }] },
-    'grass-hand':   { dur: 4, hold: true, exitClip: 'exit-grass-hand', params: [{ id: 'Movement1', to: 1 }, { id: 'Movement2', to: 0 }, { id: 'Movement3', to: 0 }] },
+    // 这三个动作原本靠播原生 motion，但那几段动画的轨迹是"举起→放下"，
+    // 播完手已经落回身侧，看起来像没做。改成直接写 motion 峰值那一帧的参数，
+    // 参数层自己保持 → 手会一直举着，退出段再平滑放回。
+    'finger-point': { dur: 4, params: [
+      { id: 'Movement1', to: 0 }, { id: 'Movement3', to: 1 },
+      { id: 'Param40', to: 0.94 }, { id: 'Param36', to: 0.003 },
+      { id: 'Param39', to: 0.241 }, { id: 'Param41', to: 0.504 },
+      { id: 'Param42', to: -0.039 }, { id: 'Param43', to: -0.106 },
+      { id: 'Param56', to: 1 },
+    ] },
+    'chest-hand': { dur: 4, params: [
+      { id: 'Movement2', to: 1 },
+      { id: 'Param62', to: 0.024 }, { id: 'Param59', to: 0.348 },
+      { id: 'Param60', to: 0.555 }, { id: 'Param61', to: 0.122 },
+      { id: 'Param56', to: 1 },
+    ] },
+    'grass-hand': { dur: 4, params: [
+      { id: 'Movement1', to: 1 }, { id: 'Movement3', to: 0 },
+      { id: 'Param36', to: 0.062 }, { id: 'Param39', to: 0.144 },
+      { id: 'Param41', to: -0.391 }, { id: 'Param42', to: -0.199 },
+      { id: 'Param56', to: 1 },
+    ] },
 
     // —— 脸部小动作（参数直驱，实测鼓腮最明显）——
     'puff-cheek': { dur: 3, params: [{ id: 'CheeckPuff', to: 1 }] },

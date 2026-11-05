@@ -15,9 +15,6 @@ export const models = {
     ],
     "motions": [
       {"id": "idle", "file": "motions/idle.js", "duration": 5.98, "loop": true},
-      {"id": "finger-point", "file": "motions/pointIn.js", "duration": 1.3},
-      {"id": "chest-hand", "file": "motions/raise.js", "duration": 1.1},
-      {"id": "grass-hand", "file": "motions/grassIn.js", "duration": 1.2},
       {"id": "exit-finger-point", "file": "motions/pointOut.js", "duration": 1.3},
       {"id": "exit-chest-hand", "file": "motions/lower.js", "duration": 1.0},
       {"id": "exit-grass-hand", "file": "motions/grassOut.js", "duration": 1.1}

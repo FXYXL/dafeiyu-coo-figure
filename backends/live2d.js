@@ -336,6 +336,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
   }
 
   let currentId = null;
+  let heldGesture = null;   // 正在"保持末帧"的动作（换手类）
   let idlePlaying = false;
   let idleTurn = 0;
   let lastGesture = null;
@@ -690,6 +691,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 只播"打开"的话收手那一下是硬切，看起来动作只做了一半。
     if (act.exitClip && k > 0.72 && !act._exited) {
       act._exited = true;
+      heldGesture = null;   // 解除保持，让收手动画接管
       if (clips.has(act.exitClip)) { try { startClip(act.exitClip, 3, false); } catch { /* 忽略 */ } }
     }
     activeAct = g.kind;
@@ -714,13 +716,18 @@ export async function createLive2DBody(base, opts, entry, kit) {
     if (currentId && model._motionManager.isFinished()) {
       currentId = null;
       idlePlaying = false;
-      // 标了 hold 的动作（换手类）：原生 motion 只负责"把手抬到位"，
-      // 播完必须停在最后一帧，否则下一帧就回默认姿势，看起来就是"只做了一半"。
-      if (g?.kind && paramActs[g.kind]?.hold) return;
+      // 标了 hold 的动作（换手类）：原生 motion 只负责"把手抬到位"。
+      // 播完要一直停在最后一帧 —— 只在结束当帧 return 是不够的，
+      // 下一帧会落到下面的 easeRestToDefault，手被一点点拉回去（抬到一半就掉）。
+      if (g?.kind && paramActs[g.kind]?.hold) { heldGesture = g.kind; return; }
       model._motionManager.stopAllMotions();
+      heldGesture = null;
     }
 
     if (!currentId) {
+      // hold 期间一直保持 motion 末帧，直到这个手势结束
+      if (heldGesture && g?.kind === heldGesture) return;
+      heldGesture = null;
       // 有原生 Idle 组就让模型自己待机（比程序微动更自然），没有再回默认姿势
       if (idleIds.length && startIdle()) return;
       easeRestToDefault(dt);
