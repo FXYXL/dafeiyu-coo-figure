@@ -123,25 +123,23 @@ export default {
     ] },
 
     // 甩草：真的把手挥起来。
-    // 之前这版是照"脱捕"抄的手臂范围（Param41 -0.91~0.01）—— 但脱捕本身是 13 秒
-    // 循环待机，整段里 Param41 只在 -0.9~-0.7 之间微动，人家靠身体和头在动，
-    // 所以抄出来跟"举着草站着"没区别。
-    // 实测：Param42 才是手腕俯仰（草指向）—— -0.58 斜指上方、0.27 横向右侧；
-    //       Param41 是手臂抬起高度（-0.9 胸口 / -0.55 举到脸前 / 0.19 垂在身侧）。
-    // 甩动 = Param42 在 -0.58~0.26 之间来回，Param41 跟着抬落一点，草就会真的扫起来。
-    'swing': { dur: 3.6,
+    // 关键不是"参数对不对"，是"时间轴对不对"：桌宠给的 gesture 进度 k 会卡在中途
+    // （实测一直停在 0.314），以前按 k 换算秒数，动作只做了开头一小段就定格，
+    // 所以看起来跟"举着草站着"一模一样。现在时间轴改由 clockT 自己算（见 backends）。
+    // 参数实测：Param41 手臂抬起高度（-0.9 胸口 / -0.55 脸前），
+    //           Param42 手腕俯仰即草的指向（0.28 横向 / -0.2 斜上）。
+    'swing': { dur: 3.4,
       params: [
         { id: 'Movement1', to: 1 }, { id: 'Movement3', to: 0 },
         { id: 'Param36', to: 0.062 }, { id: 'Param43', to: 0 }, { id: 'Param56', to: 1 },
       ],
       waves: [
-        { id: 'Param42', amp: 0.40, freq: 0.9, base: -0.14 },              // 草本来回扫：-0.54 ~ 0.26
-        { id: 'Param41', amp: 0.06, freq: 0.9, base: -0.87, phase: 0.22 },  // 手臂只轻微抬落；抬太高草会糊脸
-        { id: 'Param39', amp: 0.10, freq: 0.9, base: -0.16, phase: 0.12 },
-        // 身体跟着一起摇：PositionX 是物理输入，会带动裙摆/头发
-        { id: 'PositionX', amp: 6, freq: 0.45, phase: 0.1 },
-        { id: 'AngleZ', amp: 4, freq: 0.9, phase: 0.3 },
-        { id: 'AngleX', amp: 3, freq: 0.45, phase: 0.4 },
+        { id: 'Param41', amp: 0.18, freq: 1.05, base: -0.74 },          // 手臂在胸口↔脸侧之间
+        { id: 'Param42', amp: 0.18, freq: 1.05, base: 0.10, phase: 0.25 }, // 草跟着翻，稍滞后
+        { id: 'Param39', amp: 0.12, freq: 1.05, base: -0.16, phase: 0.12 },
+        { id: 'PositionX', amp: 8, freq: 0.53, phase: 0.1 },             // 重心跟着摆，带动物理
+        { id: 'AngleZ', amp: 5, freq: 1.05, phase: 0.3 },
+        { id: 'AngleX', amp: 3, freq: 0.53, phase: 0.4 },
       ] },
 
     // —— 脸部小动作（参数直驱，实测鼓腮最明显）——

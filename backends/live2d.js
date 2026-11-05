@@ -697,12 +697,29 @@ export async function createLive2DBody(base, opts, entry, kit) {
     }
     const k = clamp(g.k ?? 0, 0, 1);
     act._k = k;
-    if (act._lastKind !== g.kind) { act._lastKind = g.kind; act._exited = false; }
+    // 自己计时，不跟 kit 的 k 走。
+    // 实测 k 会卡在中途（甩草永远停在 0.314），按 k 换算秒数的话动作只做了开头一小段，
+    // 看起来就是"手抬了一下就没下文"。用累计时钟驱动，时长由 act.dur 说了算。
+    if (act._lastKind !== g.kind || k < 0.02) { act._lastKind = g.kind; act._t0 = clockT; act._exited = false; }
+    const dur = act.dur ?? 2.4;
+    const t = clockT - act._t0;
+    if (t > dur) {
+      // 播完：参数交还给默认姿势（上一帧的淡出已经把值收到 0 附近，这里不会跳）
+      if (activeAct === g.kind) {
+        for (const id of actParamIds(act)) {
+          const i = paramIndex.get(id);
+          if (i !== undefined) model._model.setParameterValueByIndex(i, 0);
+        }
+        activeAct = null;
+        activePost = null;
+      }
+      return;
+    }
+    const FADE = 0.22;
+    const env = t < FADE ? t / FADE : t > dur - FADE ? Math.max(0, (dur - t) / FADE) : 1;
 
     if (act.waves?.length) {
       // 连续动作：按时间走正弦，两端做淡入淡出，避免动作起止生硬
-      const t = k * (act.dur ?? 2.4);
-      const env = k < 0.12 ? k / 0.12 : k > 0.88 ? (1 - k) / 0.12 : 1;
       // 先落静态参数：换手开关（Movement*）和手型必须一起写，
       // 否则只有 waves 在动、手根本没换成"拿草"的那只，看起来就跟没做一样。
       for (const p of act.params ?? []) {
@@ -718,15 +735,15 @@ export async function createLive2DBody(base, opts, entry, kit) {
       // 静态姿态：进入 / 保持 / 退出。过渡段用 smoothstep 而不是线性，
       // 起步和收尾都是缓的 —— 换手臂这类"部件切换"才不会显得一下子跳出来。
       const ease = (x) => x * x * (3 - 2 * x);
-      const w = k < 0.3 ? ease(k / 0.3) : k > 0.7 ? ease((1 - k) / 0.3) : 1;
+      const w = t < 0.3 ? ease(t / 0.3) : t > dur - 0.4 ? ease(Math.max(0, (dur - t) / 0.4)) : 1;
       for (const p of act.params ?? []) {
         const i = paramIndex.get(p.id);
         if (i !== undefined) model._model.setParameterValueByIndex(i, p.to * w);
       }
     }
-    // 退出段（k > 0.72）播一次"关闭"动画：VTS 里开/关是两个独立热键，
+    // 退出段播一次"关闭"动画：VTS 里开/关是两个独立热键，
     // 只播"打开"的话收手那一下是硬切，看起来动作只做了一半。
-    if (act.exitClip && k > 0.72 && !act._exited) {
+    if (act.exitClip && t > dur * 0.72 && !act._exited) {
       act._exited = true;
       heldGesture = null;   // 解除保持，让收手动画接管
       if (clips.has(act.exitClip)) { try { startClip(act.exitClip, 3, false); } catch { /* 忽略 */ } }
@@ -1248,6 +1265,13 @@ export async function createLive2DBody(base, opts, entry, kit) {
         idleCount: idleIds.length,
         expr: currentExpr,
         exprCount: expressions.size,
+        // 手势进度：调试"动作只做一半/没动"时最关键的就是这个数
+        g: frame.gesture ? `${frame.gesture.kind}@${(+frame.gesture.k).toFixed(3)}` : null,
+        clips: [...clips.keys()],
+        act: activeAct,
+        actT: activeAct && paramActs[activeAct]?._t0 !== undefined
+          ? +(clockT - paramActs[activeAct]._t0).toFixed(2) : null,
+        clock: +clockT.toFixed(2),
       };
 
       // 贴图就绪后的第 3 帧量一次可见范围（等姿势稳定，别量到眨眼/动作的瞬间）
