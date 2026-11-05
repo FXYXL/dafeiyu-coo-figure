@@ -100,9 +100,9 @@ export default {
     // Movement1/2/3 不是骨骼，是"切换哪只手显示"的开关：
     // 1=狗尾草、2=抚胸、3=竖食指。参数一开，对应手臂就替换掉默认手。
     // 必须把另外两个显式归零，否则切回来时会叠在一起。
-    'finger-point': { dur: 4, hold: true, params: [{ id: 'Movement1', to: 0 }, { id: 'Movement2', to: 0 }, { id: 'Movement3', to: 1 }] },
-    'chest-hand':   { dur: 4, hold: true, params: [{ id: 'Movement1', to: 0 }, { id: 'Movement2', to: 1 }, { id: 'Movement3', to: 0 }] },
-    'grass-hand':   { dur: 4, hold: true, params: [{ id: 'Movement1', to: 1 }, { id: 'Movement2', to: 0 }, { id: 'Movement3', to: 0 }] },
+    'finger-point': { dur: 4, hold: true, exitClip: 'exit-finger-point', params: [{ id: 'Movement1', to: 0 }, { id: 'Movement2', to: 0 }, { id: 'Movement3', to: 1 }] },
+    'chest-hand':   { dur: 4, hold: true, exitClip: 'exit-chest-hand', params: [{ id: 'Movement1', to: 0 }, { id: 'Movement2', to: 1 }, { id: 'Movement3', to: 0 }] },
+    'grass-hand':   { dur: 4, hold: true, exitClip: 'exit-grass-hand', params: [{ id: 'Movement1', to: 1 }, { id: 'Movement2', to: 0 }, { id: 'Movement3', to: 0 }] },
 
     // —— 脸部小动作（参数直驱，实测鼓腮最明显）——
     'puff-cheek': { dur: 3, params: [{ id: 'CheeckPuff', to: 1 }] },

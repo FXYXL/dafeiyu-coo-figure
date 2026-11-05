@@ -665,6 +665,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
     }
     const k = clamp(g.k ?? 0, 0, 1);
     act._k = k;
+    if (act._lastKind !== g.kind) { act._lastKind = g.kind; act._exited = false; }
 
     if (act.waves?.length) {
       // 连续动作：按时间走正弦，两端做淡入淡出，避免动作起止生硬
@@ -684,6 +685,12 @@ export async function createLive2DBody(base, opts, entry, kit) {
         const i = paramIndex.get(p.id);
         if (i !== undefined) model._model.setParameterValueByIndex(i, p.to * w);
       }
+    }
+    // 退出段（k > 0.72）播一次"关闭"动画：VTS 里开/关是两个独立热键，
+    // 只播"打开"的话收手那一下是硬切，看起来动作只做了一半。
+    if (act.exitClip && k > 0.72 && !act._exited) {
+      act._exited = true;
+      if (clips.has(act.exitClip)) { try { startClip(act.exitClip, 3, false); } catch { /* 忽略 */ } }
     }
     activeAct = g.kind;
     activePost = act.postWaves ?? null;
@@ -1228,7 +1235,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
   // 只有动作词交给 kit；表情走 profile.expression，kit 自己的 KIT_EXPRESSIONS 仍然可用
   const words = {};
   for (const m of entry.motions ?? []) {
-    if (m.id === 'idle') continue;   // 待机是常驻循环，不该被当成一次性动作词
+    // idle 是常驻循环；exit-* 是动作的"收手"片段，由 exitClip 触发，不该变成可调用的词
+    if (m.id === 'idle' || m.id.startsWith('exit-')) continue;
     // 与 paramActs 同名的动作：手势时长要跟参数层一致（参数要"保持"住），
     // 原生 motion 只负责开头那段过渡，播完就停、参数继续生效。
     const act = profile.paramActs?.[m.id];
