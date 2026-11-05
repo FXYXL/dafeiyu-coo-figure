@@ -637,6 +637,25 @@ export async function createLive2DBody(base, opts, entry, kit) {
     }
   }
 
+  /** 动作的「进 → 停 → 退」包络（0~1）。
+   *  过渡按时长的 20%（最短 0.32 秒、最长 1.1 秒）—— 4 秒的动作 = 0.8 秒抬起、
+   *  2.4 秒保持、0.8 秒放下。之前写死 0.22 秒，动作像"一下子做完然后干等着"。
+   *  主动触发（applyParamActs）和待机随机换手（applyIdlePose）共用这一份，
+   *  否则两边各写一套，改一处忘另一处，手感就会莫名其妙对不上。 */
+  const actWeight = (t, dur) => {
+    const pad = Math.min(1.1, Math.max(0.32, dur * 0.2));
+    const ease = (x) => x * x * (3 - 2 * x);
+    return t < pad ? ease(t / pad) : t > dur - pad ? ease(Math.max(0, (dur - t) / pad)) : 1;
+  };
+
+  /** 按权重把一套动作的静态参数写到模型上（waves / postWaves 由调用方另外叠）。 */
+  const writeActParams = (act, w) => {
+    for (const p of act?.params ?? []) {
+      const i = paramIndex.get(p.id);
+      if (i !== undefined) model._model.setParameterValueByIndex(i, p.to * w);
+    }
+  };
+
   function applyIdlePose(t, busy) {
     const poses = profile.idlePoses ?? [];
     if (!poses.length) return;
@@ -644,9 +663,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       if (idlePoseOn || idlePoseWord) clearIdlePose();
       return;
     }
-    // 待机换手走参数过渡（和 paramActs 同一套参数表）：
-    // 进 / 停 / 退 的比例跟主动触发完全一致，否则"自己冒出来"和"被叫出来"的手感对不上。
-    // 时长取 paramActs[word].dur（这三个都是 4 秒），过渡占 20%（约 0.8 秒）。
+    // 待机换手和主动触发走同一套动作定义、同一份节奏包络，只是"谁叫的"不同。
     if (idlePoseWord) {
       const act = paramActs[idlePoseWord];
       const dur = act?.dur ?? 4;
@@ -656,15 +673,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
         idlePoseNext = t + 25 + Math.random() * 25;
         return;
       }
-      const ease = (x) => x * x * (3 - 2 * x);
-      const pad = Math.min(1.1, Math.max(0.32, dur * 0.2));
-      const w = tt < pad ? ease(tt / pad) : tt > dur - pad ? ease(Math.max(0, (dur - tt) / pad)) : 1;
-      if (act) {
-        for (const p of act.params ?? []) {
-          const i = paramIndex.get(p.id);
-          if (i !== undefined) model._model.setParameterValueByIndex(i, p.to * w);
-        }
-      }
+      writeActParams(act, actWeight(tt, dur));
       return;
     }
     if (t > idlePoseNext) {
@@ -719,34 +728,21 @@ export async function createLive2DBody(base, opts, entry, kit) {
       }
       return;
     }
-    // 过渡时长按动作总时长取比例，别写死秒数。
-    // 之前写死 0.22 秒，3~4 秒的动作 0.2 秒就抬到位、然后干等着，显得"一下子就做完了"；
-    // 待机换手用的是 4 秒里 15% 的过渡（0.6 秒），那个节奏才是舒服的。
-    const pad = Math.min(1.1, Math.max(0.32, dur * 0.2));
-    const env = t < pad ? t / pad : t > dur - pad ? Math.max(0, (dur - t) / pad) : 1;
+    const env = actWeight(t, dur);
 
     if (act.waves?.length) {
-      // 连续动作：按时间走正弦，两端做淡入淡出，避免动作起止生硬
-      // 先落静态参数：换手开关（Movement*）和手型必须一起写，
-      // 否则只有 waves 在动、手根本没换成"拿草"的那只，看起来就跟没做一样。
-      for (const p of act.params ?? []) {
-        const i = paramIndex.get(p.id);
-        if (i !== undefined) model._model.setParameterValueByIndex(i, p.to);
-      }
+      // 连续动作：按时间走正弦，两端做淡入淡出，避免动作起止生硬。
+      // 静态部分（换手开关 Movement*、手型）写满值 —— 它们是"现在用哪只手"的
+      // 开关，跟着淡入淡出会在半开状态停留，手型会变成两套叠着。
+      writeActParams(act, 1);
       for (const w of act.waves) {
         const v = Math.sin((t * w.freq + (w.phase ?? 0)) * Math.PI * 2) * w.amp * env;
         const i = paramIndex.get(w.id);
         if (i !== undefined) model._model.setParameterValueByIndex(i, (w.base ?? 0) + v);
       }
     } else {
-      // 静态姿态：进入 / 保持 / 退出。过渡段用 smoothstep 而不是线性，
-      // 起步和收尾都是缓的 —— 换手臂这类"部件切换"才不会显得一下子跳出来。
-      const ease = (x) => x * x * (3 - 2 * x);
-      const w = t < pad ? ease(t / pad) : t > dur - pad ? ease(Math.max(0, (dur - t) / pad)) : 1;
-      for (const p of act.params ?? []) {
-        const i = paramIndex.get(p.id);
-        if (i !== undefined) model._model.setParameterValueByIndex(i, p.to * w);
-      }
+      // 静态姿态：进入 / 保持 / 退出都走同一个包络（见 actWeight）
+      writeActParams(act, env);
     }
     // 退出段播一次"关闭"动画：VTS 里开/关是两个独立热键，
     // 只播"打开"的话收手那一下是硬切，看起来动作只做了一半。
