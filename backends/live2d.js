@@ -612,6 +612,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
   let idlePoseUntil = 0;
   let idlePoseNext = 20 + Math.random() * 20;
   let idlePoseOn = 0;
+  let idlePoseWord = null;
+  let idlePoseStart = 0;
 
   function setMovement(n) {
     for (const k of [1, 2, 3]) {
@@ -628,17 +630,33 @@ export async function createLive2DBody(base, opts, entry, kit) {
       if (idlePoseOn) setMovement(0);
       return;
     }
-    if (idlePoseOn && t > idlePoseUntil) {
-      setMovement(0);
-      idlePoseNext = t + 25 + Math.random() * 25;
-    } else if (!idlePoseOn && t > idlePoseNext) {
+    // 待机换手走参数过渡（和 paramActs 同一套参数表）：
+    // 0~15% 抬起、15~85% 保持、85~100% 放下，和手动触发的手势看着一致。
+    if (idlePoseWord) {
+      const k = (t - idlePoseStart) / 4;
+      if (k >= 1) {
+        idlePoseWord = null;
+        setMovement(0);
+        idlePoseNext = t + 25 + Math.random() * 25;
+        return;
+      }
+      const w = k < 0.15 ? k / 0.15 : k > 0.85 ? (1 - k) / 0.15 : 1;
+      const act = paramActs[idlePoseWord];
+      if (act) {
+        for (const p of act.params ?? []) {
+          const i = paramIndex.get(p.id);
+          if (i !== undefined) model._model.setParameterValueByIndex(i, p.to * w);
+        }
+      }
+      return;
+    }
+    if (t > idlePoseNext) {
       const pick = poses[Math.floor(Math.random() * poses.length)];
-      const n = typeof pick === 'number' ? pick : pick.movement;
-      setMovement(n);
-      // 有对应的原生 motion 就顺便播一次，待机换手也有抬手过程
       const word = typeof pick === 'object' ? pick.word : null;
-      if (word && clips.has(word)) { try { startClip(word, 3, false); } catch { /* 忽略 */ } }
-      idlePoseUntil = t + 4;
+      if (!word || !paramActs[word]) { idlePoseNext = t + 25 + Math.random() * 25; return; }
+      idlePoseWord = word;
+      idlePoseStart = t;
+      idlePoseOn = typeof pick === 'object' ? pick.movement : pick;
     }
   }
 

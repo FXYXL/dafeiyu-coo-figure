@@ -105,21 +105,20 @@ export default {
     // 参数层自己保持 → 手会一直举着，退出段再平滑放回。
     'finger-point': { dur: 4, params: [
       { id: 'Movement1', to: 0 }, { id: 'Movement3', to: 1 },
-      { id: 'Param40', to: 0.94 }, { id: 'Param36', to: 0.003 },
-      { id: 'Param39', to: 0.241 }, { id: 'Param41', to: 0.504 },
-      { id: 'Param42', to: -0.039 }, { id: 'Param43', to: -0.106 },
-      { id: 'Param56', to: 1 },
+      { id: 'Param40', to: 1 }, { id: 'Param39', to: 0.322 },
+      { id: 'Param41', to: 0.705 }, { id: 'Param42', to: -0.05 },
+      { id: 'Param43', to: -0.164 }, { id: 'Param56', to: 1 },
     ] },
     'chest-hand': { dur: 4, params: [
       { id: 'Movement2', to: 1 },
-      { id: 'Param62', to: 0.024 }, { id: 'Param59', to: 0.348 },
-      { id: 'Param60', to: 0.555 }, { id: 'Param61', to: 0.122 },
+      { id: 'Param62', to: 0.034 }, { id: 'Param59', to: 0.509 },
+      { id: 'Param60', to: 0.879 }, { id: 'Param61', to: 0.2 },
       { id: 'Param56', to: 1 },
     ] },
     'grass-hand': { dur: 4, params: [
       { id: 'Movement1', to: 1 }, { id: 'Movement3', to: 0 },
-      { id: 'Param36', to: 0.062 }, { id: 'Param39', to: 0.144 },
-      { id: 'Param41', to: -0.391 }, { id: 'Param42', to: -0.199 },
+      { id: 'Param36', to: 0.062 }, { id: 'Param39', to: 0.2 },
+      { id: 'Param41', to: -0.762 }, { id: 'Param42', to: 0.266 },
       { id: 'Param56', to: 1 },
     ] },
 
