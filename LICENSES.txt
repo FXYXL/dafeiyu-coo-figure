@@ -1,0 +1,32 @@
+本形象包 / This figure pack
+========================================
+
+包里运行着三块代码，各自许可如下。
+The files in this pack come from three sources, each under its own license.
+
+1. figure.js、backends/
+   Live2D 简易工作台 / Live2D Simple Workbench
+   GNU Affero General Public License v3.0 or later
+   完整文本：同目录 LICENSE
+   源码：https://github.com/as124da1231/live2d-simple-workbench
+   Copyright (C) 2026 as124da1231
+
+2. sdk/
+   Live2D Cubism SDK for Web（framework.js、shaders.js）
+     Live2D Open Software License
+     完整文本：sdk/LICENSE-live2d-components.txt
+   Live2D Cubism Core（live2dcubismcore.min.js）
+     Live2D Proprietary Software License
+     完整文本：sdk/LICENSE-live2d-core.txt
+   Copyright (C) Live2D Inc.
+   Core 属于该许可第 5 条的 Redistributable Code，原样分发，未做修改。
+
+3. vendor/soullink/
+   SoulLink Emotion Engine 0.2.0-beta.1
+   Apache License 2.0
+   完整文本：vendor/soullink/LICENSE
+   Copyright 2026 Soullink Emotion contributors
+
+模型、贴图、moc3 由使用者自行提供，不在上述许可范围内，版权归原作者所有。
+Models, textures and moc3 files are supplied by the user and are not covered
+by these licenses.

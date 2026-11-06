@@ -1,0 +1,10 @@
+# 文本统一 LF，二进制与生成的大文件保持字节原样
+* text=auto eol=lf
+
+*.png binary
+*.moc3 binary
+*.jpg binary
+*.webp binary
+
+# base64 资源 / 着色器 / 模型数据：不做行尾转换
+*.js -text

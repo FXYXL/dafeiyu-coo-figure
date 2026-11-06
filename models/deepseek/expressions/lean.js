@@ -1,0 +1,2 @@
+// 前倾
+export default {"Type": "Live2D Expression", "IsModelCustomizationExpression": false, "Parameters": [{"Id": "LeanInput", "Value": -30.0, "Blend": "Add"}]};

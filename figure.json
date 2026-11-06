@@ -1,0 +1,900 @@
+{
+  "manifest": 2,
+  "api": 2,
+  "id": "deepseek-shenggong-hd",
+  "version": "1.0.0",
+  "name": {
+    "zh": "大肥鱼 HD",
+    "en": "DaFeiYu HD"
+  },
+  "about": {
+    "zh": "大肥鱼的原画版：贴图用原始 4096/8192，画布 2048。其余内容与 1.6.4 相同。",
+    "en": "DaFeiYu at native texture resolution (4096/8192) on a 2048 canvas."
+  },
+  "license": "仅供个人测试，请遵守模型自身的授权",
+  "entry": "figure.js",
+  "export": "createFigureBody",
+  "thumb": "thumb/cover.png",
+  "axes": [
+    {
+      "id": "body",
+      "name": {
+        "zh": "大小",
+        "en": "Size"
+      },
+      "options": [
+        {
+          "id": "default",
+          "name": {
+            "zh": "默认",
+            "en": "Default"
+          },
+          "thumb": "thumb/body-default.png"
+        },
+        {
+          "id": "type1",
+          "name": {
+            "zh": "稍小",
+            "en": "Smaller"
+          },
+          "thumb": "thumb/body-type1.png"
+        },
+        {
+          "id": "type2",
+          "name": {
+            "zh": "Q 版",
+            "en": "Chibi"
+          },
+          "thumb": "thumb/body-type2.png"
+        }
+      ]
+    },
+    {
+      "id": "outfit",
+      "name": {
+        "zh": "服装",
+        "en": "Outfit"
+      },
+      "options": [
+        {
+          "id": "long",
+          "name": {
+            "zh": "长裙装",
+            "en": "Long dress"
+          },
+          "thumb": "thumb/outfit-long.png"
+        },
+        {
+          "id": "short",
+          "name": {
+            "zh": "短裙装",
+            "en": "Short skirt"
+          },
+          "thumb": "thumb/outfit-short.png"
+        },
+        {
+          "id": "goofy",
+          "name": {
+            "zh": "搞怪装",
+            "en": "Goofy"
+          },
+          "thumb": "thumb/outfit-goofy.png"
+        }
+      ]
+    }
+  ],
+  "presets": [],
+  "vocab": [
+    {
+      "id": "happy",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "开心"
+        ],
+        "en": [
+          "Happy"
+        ]
+      },
+      "about": {
+        "zh": "开心的表情",
+        "en": "Happy expression"
+      },
+      "seconds": 0.9
+    },
+    {
+      "id": "wink",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "眨眼"
+        ],
+        "en": [
+          "Wink"
+        ]
+      },
+      "about": {
+        "zh": "眨眼的表情",
+        "en": "Wink expression"
+      },
+      "seconds": 0.9
+    },
+    {
+      "id": "love",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "喜欢"
+        ],
+        "en": [
+          "Love"
+        ]
+      },
+      "about": {
+        "zh": "喜欢的表情",
+        "en": "Love expression"
+      },
+      "seconds": 0.9
+    },
+    {
+      "id": "shy",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "害羞"
+        ],
+        "en": [
+          "Shy"
+        ]
+      },
+      "about": {
+        "zh": "害羞的表情",
+        "en": "Shy expression"
+      },
+      "seconds": 0.9
+    },
+    {
+      "id": "surprised",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "惊讶"
+        ],
+        "en": [
+          "Surprised"
+        ]
+      },
+      "about": {
+        "zh": "惊讶的表情",
+        "en": "Surprised expression"
+      },
+      "seconds": 0.9
+    },
+    {
+      "id": "angry",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "生气"
+        ],
+        "en": [
+          "Angry"
+        ]
+      },
+      "about": {
+        "zh": "生气的表情",
+        "en": "Angry expression"
+      },
+      "seconds": 0.9
+    },
+    {
+      "id": "sad",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "难过"
+        ],
+        "en": [
+          "Sad"
+        ]
+      },
+      "about": {
+        "zh": "难过的表情",
+        "en": "Sad expression"
+      },
+      "seconds": 0.9
+    },
+    {
+      "id": "sleepy",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "困倦"
+        ],
+        "en": [
+          "Sleepy"
+        ]
+      },
+      "about": {
+        "zh": "困倦的表情",
+        "en": "Sleepy expression"
+      },
+      "seconds": 0.9
+    },
+    {
+      "id": "thinking",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "思考"
+        ],
+        "en": [
+          "Thinking"
+        ]
+      },
+      "about": {
+        "zh": "思考的表情",
+        "en": "Thinking expression"
+      },
+      "seconds": 0.9
+    },
+    {
+      "id": "smug",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "得意"
+        ],
+        "en": [
+          "Smug"
+        ]
+      },
+      "about": {
+        "zh": "得意的表情",
+        "en": "Smug expression"
+      },
+      "seconds": 0.9
+    },
+    {
+      "id": "pout",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "嘟嘴"
+        ],
+        "en": [
+          "Pout"
+        ]
+      },
+      "about": {
+        "zh": "嘟嘴的表情",
+        "en": "Pout expression"
+      },
+      "seconds": 0.9
+    },
+    {
+      "id": "worried",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "担心"
+        ],
+        "en": [
+          "Worried"
+        ]
+      },
+      "about": {
+        "zh": "担心的表情",
+        "en": "Worried expression"
+      },
+      "seconds": 0.9
+    },
+    {
+      "id": "determined",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "坚定"
+        ],
+        "en": [
+          "Determined"
+        ]
+      },
+      "about": {
+        "zh": "坚定的表情",
+        "en": "Determined expression"
+      },
+      "seconds": 0.9
+    },
+    {
+      "id": "flustered",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "慌张"
+        ],
+        "en": [
+          "Flustered"
+        ]
+      },
+      "about": {
+        "zh": "慌张的表情",
+        "en": "Flustered expression"
+      },
+      "seconds": 0.9
+    },
+    {
+      "id": "scared",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "害怕"
+        ],
+        "en": [
+          "Scared"
+        ]
+      },
+      "about": {
+        "zh": "害怕的表情",
+        "en": "Scared expression"
+      },
+      "seconds": 0.9
+    },
+    {
+      "id": "excited",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "兴奋"
+        ],
+        "en": [
+          "Excited"
+        ]
+      },
+      "about": {
+        "zh": "兴奋的表情",
+        "en": "Excited expression"
+      },
+      "seconds": 0.9
+    },
+    {
+      "id": "cry",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "哭"
+        ],
+        "en": [
+          "Cry"
+        ]
+      },
+      "about": {
+        "zh": "哭的表情",
+        "en": "Cry expression"
+      },
+      "seconds": 0.9
+    },
+    {
+      "id": "confused",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "困惑"
+        ],
+        "en": [
+          "Confused"
+        ]
+      },
+      "about": {
+        "zh": "困惑的表情",
+        "en": "Confused expression"
+      },
+      "seconds": 0.9
+    },
+    {
+      "id": "circle-eyes",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "圈圈眼",
+          "蚊香眼"
+        ],
+        "en": [
+          "circles"
+        ]
+      },
+      "about": {
+        "zh": "眼睛变成一圈圈的白圈，表示晕头转向",
+        "en": "Eyes become white rings, dizzy"
+      },
+      "seconds": 3.5
+    },
+    {
+      "id": "dark-face",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "黑脸",
+          "阴沉"
+        ],
+        "en": [
+          "gloomy"
+        ]
+      },
+      "about": {
+        "zh": "整张脸暗下来，表示无语或生气",
+        "en": "Face darkens, speechless or angry"
+      },
+      "seconds": 3.5
+    },
+    {
+      "id": "wry-face",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "屑屑眼",
+          "嫌弃"
+        ],
+        "en": [
+          "wry"
+        ]
+      },
+      "about": {
+        "zh": "半眯着眼一脸嫌弃",
+        "en": "Half-lidded, disdainful look"
+      },
+      "seconds": 3.5
+    },
+    {
+      "id": "glasses-face",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "黑框眼镜"
+        ],
+        "en": [
+          "spectacles"
+        ]
+      },
+      "about": {
+        "zh": "戴上黑框眼镜",
+        "en": "Puts on black-framed glasses"
+      },
+      "seconds": 3.5
+    },
+    {
+      "id": "monocle-face",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "单片眼镜"
+        ],
+        "en": [
+          "monocle"
+        ]
+      },
+      "about": {
+        "zh": "戴上一只单片眼镜",
+        "en": "Puts on a monocle"
+      },
+      "seconds": 3.5
+    },
+    {
+      "id": "pan-face",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "钢盆",
+          "扣盆"
+        ],
+        "en": [
+          "basin"
+        ]
+      },
+      "about": {
+        "zh": "头顶扣一个钢盆",
+        "en": "A steel basin on the head"
+      },
+      "seconds": 3.5
+    },
+    {
+      "id": "wave",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "挥手",
+          "招手"
+        ]
+      },
+      "about": {
+        "zh": "抬起手挥一挥，打招呼",
+        "en": "抬起手挥一挥，打招呼"
+      },
+      "seconds": 1.6
+    },
+    {
+      "id": "nod",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "点头"
+        ]
+      },
+      "about": {
+        "zh": "上下点头，表示同意",
+        "en": "上下点头，表示同意"
+      },
+      "seconds": 0.7
+    },
+    {
+      "id": "shake",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "摇头"
+        ]
+      },
+      "about": {
+        "zh": "左右摇头，表示不同意",
+        "en": "左右摇头，表示不同意"
+      },
+      "seconds": 0.7
+    },
+    {
+      "id": "bow",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "鞠躬"
+        ]
+      },
+      "about": {
+        "zh": "欠身鞠躬",
+        "en": "欠身鞠躬"
+      },
+      "seconds": 1.6
+    },
+    {
+      "id": "spin",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "转圈"
+        ]
+      },
+      "about": {
+        "zh": "原地转一圈",
+        "en": "原地转一圈"
+      },
+      "seconds": 0.6
+    },
+    {
+      "id": "dance",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "跳舞"
+        ]
+      },
+      "about": {
+        "zh": "扭动身体跳一段",
+        "en": "扭动身体跳一段"
+      },
+      "seconds": 3.2
+    },
+    {
+      "id": "jump",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "跳一下",
+          "蹦"
+        ]
+      },
+      "about": {
+        "zh": "原地跳一下",
+        "en": "原地跳一下"
+      },
+      "seconds": 0.9
+    },
+    {
+      "id": "shiver",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "发抖",
+          "哆嗦"
+        ]
+      },
+      "about": {
+        "zh": "整个人抖一下",
+        "en": "整个人抖一下"
+      },
+      "seconds": 1.8
+    },
+    {
+      "id": "look",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "张望"
+        ]
+      },
+      "about": {
+        "zh": "左右看看",
+        "en": "左右看看"
+      },
+      "seconds": 1.2
+    },
+    {
+      "id": "lean-in",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "凑近",
+          "探身"
+        ]
+      },
+      "about": {
+        "zh": "上半身往前靠，贴近镜头",
+        "en": "上半身往前靠，贴近镜头"
+      },
+      "seconds": 2.4
+    },
+    {
+      "id": "lean-back",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "后仰",
+          "后退"
+        ]
+      },
+      "about": {
+        "zh": "上半身往后仰，拉开距离",
+        "en": "上半身往后仰，拉开距离"
+      },
+      "seconds": 2.4
+    },
+    {
+      "id": "side",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "侧身"
+        ]
+      },
+      "about": {
+        "zh": "身体侧向一边",
+        "en": "身体侧向一边"
+      },
+      "seconds": 2.4
+    },
+    {
+      "id": "peek",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "斜凑",
+          "歪着凑近"
+        ]
+      },
+      "about": {
+        "zh": "斜着探身凑近镜头",
+        "en": "斜着探身凑近镜头"
+      },
+      "seconds": 2.4
+    },
+    {
+      "id": "tilt",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "歪头"
+        ]
+      },
+      "about": {
+        "zh": "把头歪向一边",
+        "en": "Tilt head"
+      },
+      "seconds": 2.4
+    },
+    {
+      "id": "wiggle",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "扭腰",
+          "扭一扭"
+        ]
+      },
+      "about": {
+        "zh": "腰和头一起扭动，像在跳舞",
+        "en": "Wiggle the waist and head"
+      },
+      "seconds": 3.6
+    },
+    {
+      "id": "finger-point",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "竖食指"
+        ]
+      },
+      "about": {
+        "zh": "伸出一只手指向下点",
+        "en": "伸出一只手指向下点"
+      },
+      "seconds": 4
+    },
+    {
+      "id": "chest-hand",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "抚胸"
+        ]
+      },
+      "about": {
+        "zh": "一只手抚在胸口",
+        "en": "一只手抚在胸口"
+      },
+      "seconds": 4
+    },
+    {
+      "id": "grass-hand",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "狗尾草"
+        ]
+      },
+      "about": {
+        "zh": "手里拿着一根狗尾巴草",
+        "en": "手里拿着一根狗尾巴草"
+      },
+      "seconds": 4
+    },
+    {
+      "id": "loading-face",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "加载中",
+          "转圈圈"
+        ],
+        "en": [
+          "loading"
+        ]
+      },
+      "about": {
+        "zh": "头上出现加载中的标记",
+        "en": "A loading indicator appears"
+      },
+      "seconds": 3.5
+    },
+    {
+      "id": "aggrieved",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "委屈"
+        ]
+      },
+      "about": {
+        "zh": "眼泪汪汪还脸红，像快要哭出来",
+        "en": "眼泪汪汪还脸红，像快要哭出来"
+      },
+      "seconds": 3.5
+    },
+    {
+      "id": "speechless",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "无语"
+        ]
+      },
+      "about": {
+        "zh": "黑着脸、眼睛转圈，彻底无话可说",
+        "en": "黑着脸、眼睛转圈，彻底无话可说"
+      },
+      "seconds": 3.5
+    },
+    {
+      "id": "mad",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "阴险"
+        ],
+        "en": [
+          "sinister"
+        ]
+      },
+      "about": {
+        "zh": "黑着脸半眯眼，一脸算计",
+        "en": "Dark face with a sly look"
+      },
+      "seconds": 3.5
+    },
+    {
+      "id": "guilty",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "心虚"
+        ]
+      },
+      "about": {
+        "zh": "冒冷汗又脸红，像被抓住了",
+        "en": "冒冷汗又脸红，像被抓住了"
+      },
+      "seconds": 3.5
+    },
+    {
+      "id": "puff-cheek",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "鼓腮",
+          "鼓脸"
+        ]
+      },
+      "about": {
+        "zh": "把腮帮子鼓起来",
+        "en": "把腮帮子鼓起来"
+      },
+      "seconds": 3
+    },
+    {
+      "id": "pout-lips",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "撅嘴"
+        ]
+      },
+      "about": {
+        "zh": "嘟起嘴巴",
+        "en": "嘟起嘴巴"
+      },
+      "seconds": 3
+    },
+    {
+      "id": "dazed",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "发呆",
+          "放空"
+        ]
+      },
+      "about": {
+        "zh": "眼神呆滞地放空",
+        "en": "眼神呆滞地放空"
+      },
+      "seconds": 4
+    },
+    {
+      "id": "swing",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "甩草",
+          "甩狗尾草"
+        ]
+      },
+      "about": {
+        "zh": "拿着狗尾草来回挥",
+        "en": "Swinging a foxtail grass"
+      },
+      "seconds": 3.4
+    }
+  ],
+  "sounds": {},
+  "can": {
+    "walk": true
+  }
+}
