@@ -610,7 +610,12 @@ export async function createLive2DBody(base, opts, entry, kit) {
   // 泪花/冒汗这类特效参数，不含手臂。所以"待机换手"要自己做：
   // 隔 25~50 秒随机把 Movement2/3（抚胸 / 竖食指）打开 4 秒，再收回。
   let idlePoseUntil = 0;
-  let idlePoseNext = 20 + Math.random() * 20;
+  // 待机换手的节奏（秒）：默认首次 20~40 秒，之后每次间隔 25~50 秒。
+  // 想让它更活跃/更安静，调 profile.idlePoseTiming 就行，代码不用动：
+  //   idlePoseTiming: { first: 8, firstJitter: 6, gap: 15, gapJitter: 10 }
+  const idleTiming = profile.idlePoseTiming ?? {};
+  const idleGap = () => (idleTiming.gap ?? 25) + Math.random() * (idleTiming.gapJitter ?? 25);
+  let idlePoseNext = (idleTiming.first ?? 20) + Math.random() * (idleTiming.firstJitter ?? 20);
   let idlePoseOn = 0;
   let idlePoseWord = null;
   let idlePoseStart = 0;
@@ -631,8 +636,10 @@ export async function createLive2DBody(base, opts, entry, kit) {
     idlePoseWord = null;
     setMovement(0);
     const act = word ? paramActs[word] : null;
-    for (const p of act?.params ?? []) {
-      const i = paramIndex.get(p.id);
+    // 用 actParamIds（含 waves）而不是只看 params：甩草这类波形动作收尾时
+    // 手臂角度参数也要一起归零，否则手会停在半空
+    for (const id of actParamIds(act)) {
+      const i = paramIndex.get(id);
       if (i !== undefined) model._model.setParameterValueByIndex(i, 0);
     }
   }
@@ -656,6 +663,25 @@ export async function createLive2DBody(base, opts, entry, kit) {
     }
   };
 
+  /** 把一套动作在「动作开始后 t 秒」的状态写到模型上。
+   *  静态参数按包络淡入淡出；有 waves 的再叠正弦（静态部分写满值 ——
+   *  换手开关跟着淡入淡出会在半开状态停留，手型会变成两套叠着）。
+   *  主动触发和待机随机换手共用这一份，所以甩草在待机里也会真的甩。 */
+  function applyActAt(act, t) {
+    const dur = act.dur ?? 4;
+    const env = actWeight(t, dur);
+    if (act.waves?.length) {
+      writeActParams(act, 1);
+      for (const w of act.waves) {
+        const v = Math.sin((t * w.freq + (w.phase ?? 0)) * Math.PI * 2) * w.amp * env;
+        const i = paramIndex.get(w.id);
+        if (i !== undefined) model._model.setParameterValueByIndex(i, (w.base ?? 0) + v);
+      }
+    } else {
+      writeActParams(act, env);
+    }
+  }
+
   function applyIdlePose(t, busy) {
     const poses = profile.idlePoses ?? [];
     if (!poses.length) return;
@@ -670,16 +696,16 @@ export async function createLive2DBody(base, opts, entry, kit) {
       const tt = t - idlePoseStart;
       if (tt >= dur) {
         clearIdlePose();
-        idlePoseNext = t + 25 + Math.random() * 25;
+        idlePoseNext = t + idleGap();
         return;
       }
-      writeActParams(act, actWeight(tt, dur));
+      applyActAt(act, tt);
       return;
     }
     if (t > idlePoseNext) {
       const pick = poses[Math.floor(Math.random() * poses.length)];
       const word = typeof pick === 'object' ? pick.word : null;
-      if (!word || !paramActs[word]) { idlePoseNext = t + 25 + Math.random() * 25; return; }
+      if (!word || !paramActs[word]) { idlePoseNext = t + idleGap(); return; }
       idlePoseWord = word;
       idlePoseStart = t;
       idlePoseOn = typeof pick === 'object' ? pick.movement : pick;
@@ -728,22 +754,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       }
       return;
     }
-    const env = actWeight(t, dur);
-
-    if (act.waves?.length) {
-      // 连续动作：按时间走正弦，两端做淡入淡出，避免动作起止生硬。
-      // 静态部分（换手开关 Movement*、手型）写满值 —— 它们是"现在用哪只手"的
-      // 开关，跟着淡入淡出会在半开状态停留，手型会变成两套叠着。
-      writeActParams(act, 1);
-      for (const w of act.waves) {
-        const v = Math.sin((t * w.freq + (w.phase ?? 0)) * Math.PI * 2) * w.amp * env;
-        const i = paramIndex.get(w.id);
-        if (i !== undefined) model._model.setParameterValueByIndex(i, (w.base ?? 0) + v);
-      }
-    } else {
-      // 静态姿态：进入 / 保持 / 退出都走同一个包络（见 actWeight）
-      writeActParams(act, env);
-    }
+    applyActAt(act, t);
     // 退出段播一次"关闭"动画：VTS 里开/关是两个独立热键，
     // 只播"打开"的话收手那一下是硬切，看起来动作只做了一半。
     if (act.exitClip && t > dur * 0.72 && !act._exited) {

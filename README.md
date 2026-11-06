@@ -154,8 +154,16 @@ exp3 本质是"一张参数设置表"，所以组合＝把两张表的参数并�
 
 `IDLE.motion3` 只驱动泪花/冒汗/闪光这类特效参数，**不含手臂**。VTS 里看到"待机自己换手"
 其实是它的 Auto Idle（空闲时随机播热键动作）。这里用 `idlePoses` 模拟：
-隔 25~50 秒随机把 `Movement2/3`（抚胸 / 竖食指）打开，时长取该手势的 `dur`（4 秒），
-过渡同样占 20% —— 和主动触发走的是同一份 `actWeight` / `writeActParams`，有正式动作时自动让位。
+隔 25~50 秒从**抚胸 / 竖食指 / 狗尾草 / 甩草**里随机抽一个播一遍，时长取该手势的 `dur`，
+过渡同样占 20% —— 和主动触发走的是同一份 `applyActAt`，所以待机抽到甩草时也会真的甩。
+有正式动作时自动让位。
+
+节奏可以在 `profile.idlePoseTiming` 里调（不写就是默认值）：
+
+```js
+idlePoseTiming: { first: 20, firstJitter: 20, gap: 25, gapJitter: 25 }
+// first=首次触发秒数，firstJitter=随机浮动；gap/gapJitter 是之后每次的间隔
+```
 
 ## 物理：头发 / 尾巴 / 裙摆 / 胸
 

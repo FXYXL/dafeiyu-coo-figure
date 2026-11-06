@@ -68,11 +68,14 @@ export default {
     { prefix: 'ShortPonytailY', amp: 0.09, hz: 0.19, phase: 0.55, spread: 0.07 },
   ],
 
-  // 待机时会随机切到这些手臂姿势（1=狗尾草 2=抚胸 3=竖食指），每次 4 秒。
-  // 对应 VTS 的 Auto Idle：闲置久了就自己换个手势，不然一直一个姿势很死。
+  // 待机时会随机切到这些手势（1=狗尾草 2=抚胸 3=竖食指），每个按自己的 dur 播一遍。
+  // 对应 VTS 的 Auto Idle：闲置久了就自己换个姿势，不然一直一个姿势很死。
+  // 甩草是波形动作，走的是同一套 applyActAt —— 待机里也会真的甩起来。
   idlePoses: [
     { word: 'chest-hand', movement: 2 },
     { word: 'finger-point', movement: 3 },
+    { word: 'grass-hand', movement: 1 },
+    { word: 'swing', movement: 1 },
   ],
 
   idlePhysics: {
