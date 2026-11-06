@@ -608,14 +608,15 @@ export async function createLive2DBody(base, opts, entry, kit) {
   // ---------- 待机小动作（模拟 VTS 的 Auto Idle）----------
   // VTS 空闲一段时间会随机播一个热键动作；模型的 IDLE.motion3 本身只驱动
   // 泪花/冒汗这类特效参数，不含手臂。所以"待机换手"要自己做：
-  // 隔 25~50 秒随机把 Movement2/3（抚胸 / 竖食指）打开 4 秒，再收回。
+  // 隔 25~50 秒从 profile.idlePoses 里随机抽一个手势播一遍。
   let idlePoseUntil = 0;
-  // 待机换手的节奏（秒）：默认首次 20~40 秒，之后每次间隔 25~50 秒。
-  // 想让它更活跃/更安静，调 profile.idlePoseTiming 就行，代码不用动：
-  //   idlePoseTiming: { first: 8, firstJitter: 6, gap: 15, gapJitter: 10 }
-  const idleTiming = profile.idlePoseTiming ?? {};
-  const idleGap = () => (idleTiming.gap ?? 25) + Math.random() * (idleTiming.gapJitter ?? 25);
-  let idlePoseNext = (idleTiming.first ?? 20) + Math.random() * (idleTiming.firstJitter ?? 20);
+  // 待机换手的节奏（秒）。想调频率就改这四个数：
+  //   IDLE_FIRST  = 首次触发的起点，+ JITTER 是随机浮动 → 20~40 秒
+  //   IDLE_GAP    = 之后每次的间隔，+ JITTER → 25~50 秒
+  const IDLE_FIRST = 20, IDLE_FIRST_JITTER = 20;
+  const IDLE_GAP = 25, IDLE_GAP_JITTER = 25;
+  const idleGap = () => IDLE_GAP + Math.random() * IDLE_GAP_JITTER;
+  let idlePoseNext = IDLE_FIRST + Math.random() * IDLE_FIRST_JITTER;
   let idlePoseOn = 0;
   let idlePoseWord = null;
   let idlePoseStart = 0;

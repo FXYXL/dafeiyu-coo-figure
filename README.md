@@ -1,6 +1,6 @@
 # 大肥鱼 · Coo 桌宠形象包
 
-> 当前版本 **1.6.3** ｜ 更新内容见 [Releases](https://github.com/FXYXL/dafeiyu-coo-figure/releases)
+> 当前版本 **1.6.4** ｜ 更新内容见 [Releases](https://github.com/FXYXL/dafeiyu-coo-figure/releases)
 
 把「DeepSeek 免费公皮」（原本是 VTube Studio 生态的 Live2D 模型）改造成 [Coopanion](https://coopanion.com) 桌面宠物可用的形象包。
 
@@ -158,12 +158,7 @@ exp3 本质是"一张参数设置表"，所以组合＝把两张表的参数并�
 过渡同样占 20% —— 和主动触发走的是同一份 `applyActAt`，所以待机抽到甩草时也会真的甩。
 有正式动作时自动让位。
 
-节奏可以在 `profile.idlePoseTiming` 里调（不写就是默认值）：
-
-```js
-idlePoseTiming: { first: 20, firstJitter: 20, gap: 25, gapJitter: 25 }
-// first=首次触发秒数，firstJitter=随机浮动；gap/gapJitter 是之后每次的间隔
-```
+节奏写在 `backends/live2d.js` 的 `IDLE_FIRST` / `IDLE_GAP` 那几个常量里，想更活跃就调小。
 
 ## 物理：头发 / 尾巴 / 裙摆 / 胸
 
