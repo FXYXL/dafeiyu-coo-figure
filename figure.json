@@ -2,14 +2,14 @@
   "manifest": 2,
   "api": 2,
   "id": "deepseek-shenggong-hd",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "name": {
     "zh": "大肥鱼 HD",
     "en": "DaFeiYu HD"
   },
   "about": {
-    "zh": "大肥鱼的原画版：贴图用原始 4096/8192，画布 2048。其余内容与 1.6.4 相同。",
-    "en": "DaFeiYu at native texture resolution (4096/8192) on a 2048 canvas."
+    "zh": "大肥鱼的原画版：贴图用原始 4096/8192，画布 2048。服装开关、动作、表情与普通版完全一致。",
+    "en": "Native-resolution textures (4096/8192) on a 2048 canvas, same wardrobe toggles and gestures as the standard build."
   },
   "license": "仅供个人测试，请遵守模型自身的授权",
   "entry": "figure.js",
@@ -71,14 +71,128 @@
             "en": "Short skirt"
           },
           "thumb": "thumb/outfit-short.png"
+        }
+      ]
+    },
+    {
+      "id": "shoe",
+      "name": {
+        "zh": "鞋",
+        "en": "Shoes"
+      },
+      "options": [
+        {
+          "id": "default",
+          "name": {
+            "zh": "穿鞋",
+            "en": "Shoes on"
+          }
         },
         {
-          "id": "goofy",
+          "id": "off",
           "name": {
-            "zh": "搞怪装",
-            "en": "Goofy"
-          },
-          "thumb": "thumb/outfit-goofy.png"
+            "zh": "脱鞋",
+            "en": "Shoes off"
+          }
+        }
+      ]
+    },
+    {
+      "id": "pan",
+      "name": {
+        "zh": "头顶",
+        "en": "Headwear"
+      },
+      "options": [
+        {
+          "id": "default",
+          "name": {
+            "zh": "不戴",
+            "en": "None"
+          }
+        },
+        {
+          "id": "on",
+          "name": {
+            "zh": "扣钢盆",
+            "en": "Steel bowl"
+          }
+        }
+      ]
+    },
+    {
+      "id": "chest",
+      "name": {
+        "zh": "胸口",
+        "en": "Chest"
+      },
+      "options": [
+        {
+          "id": "default",
+          "name": {
+            "zh": "默认",
+            "en": "Default"
+          }
+        },
+        {
+          "id": "up",
+          "name": {
+            "zh": "胸口上拉",
+            "en": "Pulled up"
+          }
+        }
+      ]
+    },
+    {
+      "id": "tail",
+      "name": {
+        "zh": "尾巴",
+        "en": "Tail"
+      },
+      "options": [
+        {
+          "id": "default",
+          "name": {
+            "zh": "有",
+            "en": "On"
+          }
+        },
+        {
+          "id": "off",
+          "name": {
+            "zh": "关",
+            "en": "Off"
+          }
+        }
+      ]
+    },
+    {
+      "id": "glasses",
+      "name": {
+        "zh": "眼镜",
+        "en": "Glasses"
+      },
+      "options": [
+        {
+          "id": "default",
+          "name": {
+            "zh": "不戴",
+            "en": "None"
+          }
+        },
+        {
+          "id": "black",
+          "name": {
+            "zh": "黑框眼镜",
+            "en": "Black frame"
+          }
+        },
+        {
+          "id": "monocle",
+          "name": {
+            "zh": "单片眼镜",
+            "en": "Monocle"
+          }
         }
       ]
     }

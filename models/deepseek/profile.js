@@ -203,19 +203,44 @@ export default {
   // 多轴方案：figure.json 的 axes 选中项会拼成 scheme，这里声明每个选项要写死的参数。
   // 关闭态也要显式写 0，否则从"打开"切回"默认"时旧值会留在参数里。
   schemes: {
-    // 每个选项都要把受控参数写全：切回不带配件的选项时，旧值必须显式归零，
-    // 否则参数会停留在上一次的状态（模型不会自己复位）。
+    // 每个选项只写"自己这根轴"控制的参数，绝不能交叉写别的轴 ——
+    // resolveScheme 是多轴 Object.assign 合并，写了别人的参数就会把别人的选择覆盖掉。
+    // 顺序必须和 figure.json 的 axes 顺序一致（按位置取 token）。
     body: {
       default: { params: { Clothes2: 0 } },
       type1: { fit: { zoom: 1.449, offset: [0, -0.992], autoFit: false }, params: { Clothes2: 0.4 } },
       type2: { fit: { zoom: 3.97, offset: [0, -5.0], autoFit: false }, params: { Clothes2: 1 } },
     },
     outfit: {
-      // 旧版 scheme 只有两段（deepseek-default），落到这里当作长裙，避免沿用模型自带的短裙默认值
-      default: { params: { Clothes1: 0, Clothes3: 0, Clothes4: 0, key9: 0, key10: 0, key11: 0, key12: 0 } },
-      long:  { params: { Clothes1: 0, Clothes3: 0, Clothes4: 0, key9: 0, key10: 0, key11: 0, key12: 0 } },
-      short: { params: { Clothes1: 1, Clothes3: 0, Clothes4: 0, key9: 0, key10: 0, key11: 0, key12: 0 } },
-      goofy: { params: { Clothes1: 1, Clothes3: 0, Clothes4: 0, key9: 0, key10: 1, key11: 1, key12: 0 } },
+      // Clothes1：0=长裙 1=短裙（模型自带默认是 1，所以默认项要显式写 0）
+      default: { params: { Clothes1: 0 } },
+      long:    { params: { Clothes1: 0 } },
+      short:   { params: { Clothes1: 1 } },
+    },
+    // 下面这些轴的参数对应关系是从插件生成的包（native-library.json）里读出来的：
+    //   脱鞋 Clothes4=1 / 钢盆 key10=1 / 胸口上拉 Clothes3=1 /
+    //   尾巴关 Clothes5=0（默认 1 是有尾巴）/ 黑框 key11=1 / 单片 key12=1
+    shoe: {
+      default: { params: { Clothes4: 0 } },
+      off:     { params: { Clothes4: 1 } },
+    },
+    pan: {
+      default: { params: { key10: 0 } },
+      on:      { params: { key10: 1 } },
+    },
+    chest: {
+      default: { params: { Clothes3: 0 } },
+      up:      { params: { Clothes3: 1 } },
+    },
+    tail: {
+      default: { params: { Clothes5: 1 } },
+      off:     { params: { Clothes5: 0 } },
+    },
+    // 眼镜合成一根轴：黑框和单片互斥，避免同一只眼睛叠两副
+    glasses: {
+      default: { params: { key11: 0, key12: 0 } },
+      black:   { params: { key11: 1, key12: 0 } },
+      monocle: { params: { key11: 0, key12: 1 } },
     },
   },
   roles: {
