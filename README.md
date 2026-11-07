@@ -1,6 +1,6 @@
 # 大肥鱼 · Coo 桌宠形象包
 
-> 当前版本 **1.6.4** ｜ 更新内容见 [Releases](https://github.com/FXYXL/dafeiyu-coo-figure/releases)
+> 当前版本 **1.7.0** ｜ 更新内容见 [Releases](https://github.com/FXYXL/dafeiyu-coo-figure/releases)
 
 把「DeepSeek 免费公皮」（原本是 VTube Studio 生态的 Live2D 模型）改造成 [Coopanion](https://coopanion.com) 桌面宠物可用的形象包。
 
@@ -31,7 +31,7 @@ C:\Users\<你>\AppData\Roaming\Coopanion\data\home\companion\data\figures\
 
 | 能力 | 说明 |
 |---|---|
-| 服装 | 长裙装 / 短裙装 / 搞怪装（短裙 + 钢盆 + 黑框眼镜） |
+| 服装 | 长裙 / 短裙 + 五个独立开关：鞋（穿 / 脱）、头顶（空 / 钢盆）、胸口（默认 / 上拉）、尾巴（有 / 无）、眼镜（无 / 黑框 / 单片），任意搭配 |
 | 大小 | 默认 / 稍小 / Q 版，三档各自对齐地面（Q 版是独立身形，取景单独算过） |
 | 表情 | 模型自带的 exp3 已接入：常规情绪自动用，夸张表情做成独立词 |
 | 待机 | 模型的 `IDLE` 动作在循环（泪花、闪光等微特效）；闲置 25~50 秒会自己换个手势 |
@@ -63,6 +63,27 @@ C:\Users\<你>\AppData\Roaming\Coopanion\data\home\companion\data\figures\
 | `<钢盆>` / `<pan-face>` | 头顶扣钢盆 |
 
 词表定义在 `figure.json` 的 `vocab` 里。Coo 的校验规则：id 只能是小写字母 / 数字 / 连字符（`/^[a-z0-9][a-z0-9-]{0,31}$/`），`id` 与任一别名不能重复，`names` 里不能有空格、逗号、`<>`、`【】`。
+
+## 装扮开关
+
+服装不是三套写死的套餐，而是七根独立的轴，在 Coo 装扮页里逐项选、任意搭配：
+
+| 轴 | 选项 | 写的参数 |
+|---|---|---|
+| 大小 | 默认 / 稍小 / Q 版 | `Clothes2`（0 / 0.4 / 1）+ 写死的取景 `fit` |
+| 服装 | 长裙装 / 短裙装 | `Clothes1`（0 / 1） |
+| 鞋 | 穿鞋 / 脱鞋 | `Clothes4`（0 / 1） |
+| 头顶 | 不戴 / 扣钢盆 | `key10`（0 / 1） |
+| 胸口 | 默认 / 胸口上拉 | `Clothes3`（0 / 1） |
+| 尾巴 | 有 / 关 | `Clothes5`（1 / 0） |
+| 眼镜 | 不戴 / 黑框 / 单片 | `key11` / `key12`（互斥，避免一只眼睛叠两副） |
+
+**两条硬规矩**（踩过坑）：
+
+- 每个选项**只写自己这根轴**的参数。`resolveScheme` 是多轴 `Object.assign` 合并，写了别人的参数就会把别人的选择覆盖掉。
+- 每根轴**必须显式写关闭态**（比如"不戴"也要写 `key10: 0`），否则从"打开"切回"默认"时旧值会留在参数里，模型不会自己复位。
+
+这套参数对应关系是从 Live2D 一键导入插件生成的包（`native-library.json`）里读出来的，比模型自带的 exp3 更省事 —— 直接写参数，不用挂表情。
 
 ## 动作
 

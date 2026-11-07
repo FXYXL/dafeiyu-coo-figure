@@ -2,14 +2,14 @@
   "manifest": 2,
   "api": 2,
   "id": "deepseek-shenggong",
-  "version": "1.6.4",
+  "version": "1.7.0",
   "name": {
     "zh": "大肥鱼",
     "en": "DaFeiYu"
   },
   "about": {
-    "zh": "深海女仆。三套服装 + 三档大小；表情与动作；头发/尾巴/裙摆/胸随动作与呼吸摆动；身体随行走倾斜。",
-    "en": "Deep-sea maid: 3 outfits, 3 sizes, expressions, gestures, physics and body lean."
+    "zh": "深海女仆。服装与配件可自由搭配（裙长/鞋/钢盆/胸口/尾巴/眼镜）+ 三档大小；表情与动作；头发/尾巴/裙摆/胸随动作与呼吸摆动；身体随行走倾斜。",
+    "en": "Deep-sea maid with mix-and-match outfit toggles, 3 sizes, expressions, gestures, physics and body lean."
   },
   "license": "仅供个人测试，请遵守模型自身的授权",
   "entry": "figure.js",
@@ -71,14 +71,128 @@
             "en": "Short skirt"
           },
           "thumb": "thumb/outfit-short.png"
+        }
+      ]
+    },
+    {
+      "id": "shoe",
+      "name": {
+        "zh": "鞋",
+        "en": "Shoes"
+      },
+      "options": [
+        {
+          "id": "default",
+          "name": {
+            "zh": "穿鞋",
+            "en": "Shoes on"
+          }
         },
         {
-          "id": "goofy",
+          "id": "off",
           "name": {
-            "zh": "搞怪装",
-            "en": "Goofy"
-          },
-          "thumb": "thumb/outfit-goofy.png"
+            "zh": "脱鞋",
+            "en": "Shoes off"
+          }
+        }
+      ]
+    },
+    {
+      "id": "pan",
+      "name": {
+        "zh": "头顶",
+        "en": "Headwear"
+      },
+      "options": [
+        {
+          "id": "default",
+          "name": {
+            "zh": "不戴",
+            "en": "None"
+          }
+        },
+        {
+          "id": "on",
+          "name": {
+            "zh": "扣钢盆",
+            "en": "Steel bowl"
+          }
+        }
+      ]
+    },
+    {
+      "id": "chest",
+      "name": {
+        "zh": "胸口",
+        "en": "Chest"
+      },
+      "options": [
+        {
+          "id": "default",
+          "name": {
+            "zh": "默认",
+            "en": "Default"
+          }
+        },
+        {
+          "id": "up",
+          "name": {
+            "zh": "胸口上拉",
+            "en": "Pulled up"
+          }
+        }
+      ]
+    },
+    {
+      "id": "tail",
+      "name": {
+        "zh": "尾巴",
+        "en": "Tail"
+      },
+      "options": [
+        {
+          "id": "default",
+          "name": {
+            "zh": "有",
+            "en": "On"
+          }
+        },
+        {
+          "id": "off",
+          "name": {
+            "zh": "关",
+            "en": "Off"
+          }
+        }
+      ]
+    },
+    {
+      "id": "glasses",
+      "name": {
+        "zh": "眼镜",
+        "en": "Glasses"
+      },
+      "options": [
+        {
+          "id": "default",
+          "name": {
+            "zh": "不戴",
+            "en": "None"
+          }
+        },
+        {
+          "id": "black",
+          "name": {
+            "zh": "黑框眼镜",
+            "en": "Black frame"
+          }
+        },
+        {
+          "id": "monocle",
+          "name": {
+            "zh": "单片眼镜",
+            "en": "Monocle"
+          }
         }
       ]
     }
