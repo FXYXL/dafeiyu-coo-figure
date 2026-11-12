@@ -543,11 +543,24 @@ export async function createLive2DBody(base, opts, entry, kit) {
   let gazePrev = [0, 0], gazeMoveAt = 0, gazeAwayAt = 0, gazeInited = false;
   let gazeSway = 0;   // 走神程度 0~1，用来给头部叠一点自然游移（不然头会钉在正前方）
   let gazeWantSince = 0;   // 走神条件满足的时刻，用来做"延迟发作"
+  let gazeSleepAt = 0;     // 这次走神的结束时刻（走神有保质期，到点自己回神）
   function updateGazeInterest(look, now, dt, idleLike = true) {
     if (!gazeCfg) return 1;
-    // 走路 / 跑步 / 睡觉 / 被拖着走：一律不参与走神，跟随量回到满值交给原本的逻辑，
-    // 否则头会被按在正前方 —— 走路时一直盯着前面就是这么来的。
-    if (!idleLike) { gazeK = 1; gazePrev = [look[0], look[1]]; gazeWantSince = 0; return 1; }
+    // 动作期间（走路 / 跑步 / 坐着 / 被拖着走）：头用满跟随交给原本逻辑，
+    // 但**不改走神状态** —— 不然她随机走两步、换个姿势，刚攒起来的走神就白攒了，
+    // 表现就是"刚要飘走，她自己一动，又清醒了"。
+    if (!idleLike) {
+      const mdx = Math.abs(look[0] - gazePrev[0]);
+      const mdy = Math.abs(look[1] - gazePrev[1]);
+      gazePrev = [look[0], look[1]];
+      // 动作期间人动了鼠标，照样算"被叫醒"
+      if (mdx > (gazeCfg.movePx ?? 0.02) || mdy > (gazeCfg.movePx ?? 0.02)) {
+        gazeMoveAt = now;
+        gazeWantSince = 0;
+        gazeK = 1;
+      }
+      return 1;
+    }
     const dx = Math.abs(look[0] - gazePrev[0]);
     const dy = Math.abs(look[1] - gazePrev[1]);
     const moving = dx > (gazeCfg.movePx ?? 0.02) || dy > (gazeCfg.movePx ?? 0.02);
@@ -570,6 +583,17 @@ export async function createLive2DBody(base, opts, entry, kit) {
     if (!over) gazeWantSince = 0;
     else if (!gazeWantSince) gazeWantSince = now;
     const want = over && now - gazeWantSince >= (gazeCfg.onset ?? 1.5) ? 0 : 1;
+    // 走神有"保质期"：真发呆 span 秒（带随机浮动）就自己回神，不会一直僵在那儿。
+    // 到点后把"光标停住"的计时重置，否则下一秒又满足条件、立刻又飘走，变成一直发呆。
+    if (want === 1) gazeSleepAt = 0;
+    else if (!gazeSleepAt) gazeSleepAt = now + (gazeCfg.span ?? 6) + Math.random() * (gazeCfg.spanJitter ?? 3);
+    if (gazeSleepAt && now > gazeSleepAt) {
+      gazeSleepAt = 0;
+      gazeWantSince = 0;
+      gazeMoveAt = now;   // 自然回神后重新攒，别立刻又走神
+      gazeK += (1 - gazeK) * Math.min(1, dt * (gazeCfg.wake ?? 1.2));
+      return gazeK;
+    }
     // 收的时候用指数趋近：开头快、越接近中间越慢，落地不硬
     gazeK += (want - gazeK) * Math.min(1, dt * (want > gazeK ? 40 : (gazeCfg.fade ?? 0.5)));
     return gazeK;
