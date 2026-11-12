@@ -537,6 +537,27 @@ export async function createLive2DBody(base, opts, entry, kit) {
   let activeAct = null;
   let activePost = null;   // 当前动作里"必须在物理之后写"的波形（腰/胯这类物理输出参数）
   let bodyLook = [0, 0];   // 本帧的指针跟随量，applyBodyFollow 在物理之后用它推身体
+  // 注意力衰减：光标停住一阵、或者盯着看了一段时间，就慢慢收回中位（不是硬切回）。
+  let gazeK = 1;
+  const gazeCfg = profile.gazeFollow ?? null;
+  let gazePrev = [0, 0], gazeMoveAt = 0, gazeAwayAt = 0, gazeInited = false;
+  function updateGazeInterest(look, now, dt) {
+    if (!gazeCfg) return 1;
+    const dx = Math.abs(look[0] - gazePrev[0]);
+    const dy = Math.abs(look[1] - gazePrev[1]);
+    const moving = dx > 0.04 || dy > 0.04;
+    const away = Math.hypot(look[0], look[1]) > 0.4;   // 明显偏离中位
+    if (!gazeInited) { gazeInited = true; gazeMoveAt = gazeAwayAt = now; }
+    if (moving) gazeMoveAt = now;                       // 光标一动手就重新"注意到"
+    if (!away) gazeAwayAt = now;                        // 光标回到中间，重新计时
+    const idleFor = now - gazeMoveAt;                   // 光标没动多久
+    const heldFor = now - gazeAwayAt;                   // 已经盯着看了多久
+    const want = (idleFor > (gazeCfg.idleSec ?? 2.2) || heldFor > (gazeCfg.holdSec ?? 4.5)) ? 0 : 1;
+    // 用指数趋近而不是 lerp 常数：回位一开始快、越接近越慢，落地不硬
+    gazeK += (want - gazeK) * Math.min(1, dt * (want > gazeK ? 2.2 : (gazeCfg.fade ?? 1.1)));
+    gazePrev = [look[0], look[1]];
+    return gazeK;
+  }
 
   /** 动作涉及的所有参数 id（静态 params + 波形 waves），用于结束时归零。 */
   function actParamIds(act) {
@@ -611,8 +632,13 @@ export async function createLive2DBody(base, opts, entry, kit) {
   // （PhysicsSetting4 ← PositionX，PhysicsSetting9 ← PositionZ），
   // 写在 physics.evaluate 之前一定会被算回去 —— 之前实测"写进去读回 0"就是这个原因。
   // 所以这一步必须压在物理之后。开关和幅度在 profile.bodyFollow。
+  //
+  // 关键：不能硬贴。头是 kit 用弹簧+阻尼平滑过的（tk=160 / tc=12），
+  // 身体要是直接 = 目标值，就会"上半身整块跟着头平移"，看着很僵。
+  // 这里给身体和胯各挂一套弹簧，并且比头慢：头先转 → 肩跟上 → 胯最后摆。
   const bodyFollow = profile.bodyFollow ?? null;
-  function applyBodyFollow() {
+  const bfState = { left: 0, leftV: 0, up: 0, upV: 0, hip: 0, hipV: 0 };
+  function applyBodyFollow(dt) {
     if (!bodyFollow) return;
     const lx = bodyLook[0] ?? 0;
     const ly = bodyLook[1] ?? 0;
@@ -621,16 +647,27 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 而头因为 early-clamp 早就满幅了 —— 看起来就是"只有头动、身体不动"。
     const nx = clamp(lx * 0.73, -1, 1);
     const ny = clamp(ly * 0.6, -1, 1);
+    dt = Math.min(dt, 1 / 30);   // 掉帧时别让弹簧炸
+    // 弹簧-阻尼积分（和 kit 走路时的 swing 同一套形式，只是把刚度调软）
+    const ease = (v, vel, target, k, c) => {
+      const nv = vel + ((target - v) * k - vel * c) * dt;
+      return [v + nv * dt, nv];
+    };
+    // 左右 → 侧倾（BodyAngleZ），上下 → 前后倾（BodyAngleX）。
+    // 之前把左右错写成 BodyAngleX（那是前后倾），身体只会"整块往前趴"，看着就像被头拖着走。
+    [bfState.left, bfState.leftV] = ease(bfState.left, bfState.leftV, nx * (bodyFollow.x ?? 30), bodyFollow.k ?? 42, bodyFollow.c ?? 9.5);
+    [bfState.up, bfState.upV] = ease(bfState.up, bfState.upV, ny * (bodyFollow.z ?? 15), bodyFollow.k ?? 42, bodyFollow.c ?? 9.5);
+    [bfState.hip, bfState.hipV] = ease(bfState.hip, bfState.hipV, nx * (bodyFollow.hip ?? 25), bodyFollow.hipK ?? 20, bodyFollow.hipC ?? 7);
     const setP = (name, v) => {
       const i = paramIndex.get(name);
       if (i !== undefined) model._model.setParameterValueByIndex(i, v);
     };
-    setP('ParamBodyAngleX', nx * (bodyFollow.x ?? 30));
-    setP('ParamBodyAngleZ', ny * (bodyFollow.z ?? 15));
+    setP('ParamBodyAngleZ', bfState.left);   // 侧倾：跟着光标左右
+    setP('ParamBodyAngleX', bfState.up);     // 前后倾：跟着光标上下
     // 胯：走路时那种左右摆是 kit 用移动速度算出来的 swing，静止时没有。
     // HipAngleZ 是胯的左右摆，也是物理输出，同样只能写在物理之后。
-    setP('HipAngleZ', nx * (bodyFollow.hip ?? 25));
-    setP('HipAngleX', nx * (bodyFollow.hipX ?? 10));
+    setP('HipAngleZ', bfState.hip);
+    setP('HipAngleX', bfState.left * ((bodyFollow.hipX ?? 10) / (bodyFollow.x ?? 30)));
   }
 
   // ---------- 待机小动作（模拟 VTS 的 Auto Idle）----------
@@ -888,7 +925,13 @@ export async function createLive2DBody(base, opts, entry, kit) {
 
     // 5) 视线 + 头身跟随（表演层的待机动作叠在宿主跟随之上）
     const rawLook = globalThis.__lookOverride !== undefined ? [globalThis.__lookOverride, 0] : frame.look;
-    const look = neutralPose ? [0, 0] : (Array.isArray(rawLook) ? rawLook : [0, 0]);
+    let look = neutralPose ? [0, 0] : (Array.isArray(rawLook) ? rawLook : [0, 0]);
+    // 追一会儿会"走神"：光标停住不动、或者盯着超过几秒，跟随量慢慢收回中位。
+    // 衰减乘在 look 上，头和身体一起收，不会出现"头回正了身体还歪着"。
+    if (!neutralPose && gazeCfg) {
+      const k = updateGazeInterest(look, clockT, frame.dt ?? 0.016);
+      look = [look[0] * k, look[1] * k];
+    }
     bodyLook = look;   // 留给 applyBodyFollow 用（身体跟随要在物理之后写）
     const tilt = neutralPose ? 0 : (frame.tilt ?? 0);
     const lean = neutralPose ? 0 : (frame.lean ?? 0);
@@ -1298,7 +1341,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       stepExpression(frame.face, dt);
       applyPartOpacity(currentId);
       try { model._physics?.evaluate(model._model, dt); } catch { /* 物理失败不致命 */ }
-      applyBodyFollow();   // 必须在物理之后：BodyAngle* 是物理的输出参数
+      applyBodyFollow(dt);   // 必须在物理之后：BodyAngle* 是物理的输出参数
       applyPhysicsWaves(clockT);
       applyActPostWaves(clockT);
       try { model._pose?.updateParameters(model._model, dt); } catch { /* 姿势失败不致命 */ }

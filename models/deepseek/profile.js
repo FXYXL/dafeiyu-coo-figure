@@ -81,7 +81,11 @@ export default {
   // 指针跟随身体：光标左右 → 躯干跟着倾。
   // ParamBodyAngleX/Z 是物理的输出参数，后端 applyBodyFollow 会在 physics.evaluate 之后写，
   // 否则会被物理算回 0。x 对应左右，z 对应上下（look 的原始范围约 ±5）。
-  bodyFollow: { x: 30, z: 15, hip: 25, hipX: 10 },
+  bodyFollow: { x: 30, z: 15, hip: 25, hipX: 10, k: 42, c: 9.5, hipK: 20, hipC: 7 },
+
+  // 追一会儿就走神：光标停住 2.2 秒、或已经盯着看了 4.5 秒，跟随量就慢慢收回中位。
+  // fade 是回收速度（越大越快），回到中位后光标一动又会重新追上来。
+  gazeFollow: { idleSec: 2.2, holdSec: 4.5, fade: 1.1 },
 
   idlePhysics: {
     // 只写"源头参数"。ParamBodyAngleX / HipAngleX / ParamBodyAngleZ 本身是物理的
