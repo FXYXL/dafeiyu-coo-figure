@@ -554,7 +554,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
     const heldFor = now - gazeAwayAt;                   // 已经盯着看了多久
     const want = (idleFor > (gazeCfg.idleSec ?? 2.2) || heldFor > (gazeCfg.holdSec ?? 4.5)) ? 0 : 1;
     // 用指数趋近而不是 lerp 常数：回位一开始快、越接近越慢，落地不硬
-    gazeK += (want - gazeK) * Math.min(1, dt * (want > gazeK ? 2.2 : (gazeCfg.fade ?? 1.1)));
+    gazeK += (want - gazeK) * Math.min(1, dt * (want > gazeK ? (gazeCfg.resume ?? 0.9) : (gazeCfg.fade ?? 0.65)));
     gazePrev = [look[0], look[1]];
     return gazeK;
   }
@@ -637,37 +637,34 @@ export async function createLive2DBody(base, opts, entry, kit) {
   // 身体要是直接 = 目标值，就会"上半身整块跟着头平移"，看着很僵。
   // 这里给身体和胯各挂一套弹簧，并且比头慢：头先转 → 肩跟上 → 胯最后摆。
   const bodyFollow = profile.bodyFollow ?? null;
-  const bfState = { left: 0, leftV: 0, up: 0, upV: 0, hip: 0, hipV: 0 };
+  const bfState = { left: 0, leftV: 0, up: 0, upV: 0 };
+  /** 把指针跟随量写进**物理的输入**（PositionX / PositionZ），不碰物理输出。
+   *  之前直接写 ParamBodyAngleZ / HipAngleZ，那两条是 PhysicsSetting4/9 的输出，
+   *  物理每帧算出来的走路摆胯全被盖掉 —— 表现就是"走路腿不动、跟随也腿不动"。
+   *  写 PositionX/Z 则是往链头上叠，物理会照常推出身体倾斜 + 胯摆，
+   *  静止和走路走同一条链，不会互相打架。 */
   function applyBodyFollow(dt) {
     if (!bodyFollow) return;
     const lx = bodyLook[0] ?? 0;
     const ly = bodyLook[1] ?? 0;
     // 用和头部同一套归一化（头是 look*0.73 进 -1..1），这样"头转到极限"时身体也到极限。
-    // 直接乘 look 会出问题：鼠标贴近桌宠时 kit 会把 k 压到 0，look 很小，身体几乎不动，
-    // 而头因为 early-clamp 早就满幅了 —— 看起来就是"只有头动、身体不动"。
     const nx = clamp(lx * 0.73, -1, 1);
     const ny = clamp(ly * 0.6, -1, 1);
     dt = Math.min(dt, 1 / 30);   // 掉帧时别让弹簧炸
-    // 弹簧-阻尼积分（和 kit 走路时的 swing 同一套形式，只是把刚度调软）
+    // 弹簧-阻尼：起步慢、中途加速、到位有一点回弹，比线性跟手更像"反应"
     const ease = (v, vel, target, k, c) => {
       const nv = vel + ((target - v) * k - vel * c) * dt;
       return [v + nv * dt, nv];
     };
-    // 左右 → 侧倾（BodyAngleZ），上下 → 前后倾（BodyAngleX）。
-    // 之前把左右错写成 BodyAngleX（那是前后倾），身体只会"整块往前趴"，看着就像被头拖着走。
-    [bfState.left, bfState.leftV] = ease(bfState.left, bfState.leftV, nx * (bodyFollow.x ?? 30), bodyFollow.k ?? 42, bodyFollow.c ?? 9.5);
-    [bfState.up, bfState.upV] = ease(bfState.up, bfState.upV, ny * (bodyFollow.z ?? 15), bodyFollow.k ?? 42, bodyFollow.c ?? 9.5);
-    [bfState.hip, bfState.hipV] = ease(bfState.hip, bfState.hipV, nx * (bodyFollow.hip ?? 25), bodyFollow.hipK ?? 20, bodyFollow.hipC ?? 7);
-    const setP = (name, v) => {
+    [bfState.left, bfState.leftV] = ease(bfState.left, bfState.leftV, nx * (bodyFollow.x ?? 18), bodyFollow.k ?? 42, bodyFollow.c ?? 9.5);
+    [bfState.up, bfState.upV] = ease(bfState.up, bfState.upV, ny * (bodyFollow.z ?? 12), bodyFollow.k ?? 42, bodyFollow.c ?? 9.5);
+    const addP = (name, dv) => {
       const i = paramIndex.get(name);
-      if (i !== undefined) model._model.setParameterValueByIndex(i, v);
+      if (i === undefined) return;
+      model._model.setParameterValueByIndex(i, model._model.getParameterValueByIndex(i) + dv);
     };
-    setP('ParamBodyAngleZ', bfState.left);   // 侧倾：跟着光标左右
-    setP('ParamBodyAngleX', bfState.up);     // 前后倾：跟着光标上下
-    // 胯：走路时那种左右摆是 kit 用移动速度算出来的 swing，静止时没有。
-    // HipAngleZ 是胯的左右摆，也是物理输出，同样只能写在物理之后。
-    setP('HipAngleZ', bfState.hip);
-    setP('HipAngleX', bfState.left * ((bodyFollow.hipX ?? 10) / (bodyFollow.x ?? 30)));
+    addP('PositionX', bfState.left);   // → ParamBodyAngleX + HipAngleX（物理推）
+    addP('PositionZ', bfState.up);     // → ParamBodyAngleZ + HipAngleZ（物理推）
   }
 
   // ---------- 待机小动作（模拟 VTS 的 Auto Idle）----------
@@ -1330,6 +1327,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       // 否则表情刚把 key11 抬起来就被这里按回 0，眼镜永远出不来。
       applyCleanParams();
       applyIdlePhysics(clockT);
+      applyBodyFollow(dt);   // 必须在物理之前：写的是 PositionX/Z 这类物理输入
       applyIdlePose(clockT, !!frame.gesture);
       applyParamActs(frame);
       applySchemeParams();
@@ -1341,7 +1339,6 @@ export async function createLive2DBody(base, opts, entry, kit) {
       stepExpression(frame.face, dt);
       applyPartOpacity(currentId);
       try { model._physics?.evaluate(model._model, dt); } catch { /* 物理失败不致命 */ }
-      applyBodyFollow(dt);   // 必须在物理之后：BodyAngle* 是物理的输出参数
       applyPhysicsWaves(clockT);
       applyActPostWaves(clockT);
       try { model._pose?.updateParameters(model._model, dt); } catch { /* 姿势失败不致命 */ }
