@@ -541,21 +541,37 @@ export async function createLive2DBody(base, opts, entry, kit) {
   let gazeK = 1;
   const gazeCfg = profile.gazeFollow ?? null;
   let gazePrev = [0, 0], gazeMoveAt = 0, gazeAwayAt = 0, gazeInited = false;
-  function updateGazeInterest(look, now, dt) {
+  let gazeSway = 0;   // 走神程度 0~1，用来给头部叠一点自然游移（不然头会钉在正前方）
+  let gazeWantSince = 0;   // 走神条件满足的时刻，用来做"延迟发作"
+  function updateGazeInterest(look, now, dt, idleLike = true) {
     if (!gazeCfg) return 1;
+    // 走路 / 跑步 / 睡觉 / 被拖着走：一律不参与走神，跟随量回到满值交给原本的逻辑，
+    // 否则头会被按在正前方 —— 走路时一直盯着前面就是这么来的。
+    if (!idleLike) { gazeK = 1; gazePrev = [look[0], look[1]]; gazeWantSince = 0; return 1; }
     const dx = Math.abs(look[0] - gazePrev[0]);
     const dy = Math.abs(look[1] - gazePrev[1]);
-    const moving = dx > 0.04 || dy > 0.04;
+    const moving = dx > (gazeCfg.movePx ?? 0.02) || dy > (gazeCfg.movePx ?? 0.02);
     const away = Math.hypot(look[0], look[1]) > 0.4;   // 明显偏离中位
     if (!gazeInited) { gazeInited = true; gazeMoveAt = gazeAwayAt = now; }
-    if (moving) gazeMoveAt = now;                       // 光标一动手就重新"注意到"
-    if (!away) gazeAwayAt = now;                        // 光标回到中间，重新计时
-    const idleFor = now - gazeMoveAt;                   // 光标没动多久
-    const heldFor = now - gazeAwayAt;                   // 已经盯着看了多久
-    const want = (idleFor > (gazeCfg.idleSec ?? 2.2) || heldFor > (gazeCfg.holdSec ?? 4.5)) ? 0 : 1;
-    // 用指数趋近而不是 lerp 常数：回位一开始快、越接近越慢，落地不硬
-    gazeK += (want - gazeK) * Math.min(1, dt * (want > gazeK ? (gazeCfg.resume ?? 0.9) : (gazeCfg.fade ?? 0.65)));
     gazePrev = [look[0], look[1]];
+    if (moving) {
+      // 光标一挪动就抢回来：几十毫秒（resume=40 → 约 33ms）回到满值，不等指数慢慢爬
+      gazeMoveAt = now;
+      gazeWantSince = 0;
+      gazeK = Math.min(1, gazeK + dt * (gazeCfg.resume ?? 40));
+      return gazeK;
+    }
+    if (!away) gazeAwayAt = now;   // 光标回到中间，重新计时
+    const idleFor = now - gazeMoveAt;   // 光标没动多久
+    const heldFor = now - gazeAwayAt;   // 已经盯着看了多久
+    const over = idleFor > (gazeCfg.idleSec ?? 3.6) || heldFor > (gazeCfg.holdSec ?? 8);
+    // 走神要"延迟发作"：条件满足后再等 onset 秒才真的开始收，
+    // 不然光标刚停下两秒人就飘走，看着像没注意你。
+    if (!over) gazeWantSince = 0;
+    else if (!gazeWantSince) gazeWantSince = now;
+    const want = over && now - gazeWantSince >= (gazeCfg.onset ?? 1.5) ? 0 : 1;
+    // 收的时候用指数趋近：开头快、越接近中间越慢，落地不硬
+    gazeK += (want - gazeK) * Math.min(1, dt * (want > gazeK ? 40 : (gazeCfg.fade ?? 0.5)));
     return gazeK;
   }
 
@@ -926,9 +942,12 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 追一会儿会"走神"：光标停住不动、或者盯着超过几秒，跟随量慢慢收回中位。
     // 衰减乘在 look 上，头和身体一起收，不会出现"头回正了身体还歪着"。
     if (!neutralPose && gazeCfg) {
-      const k = updateGazeInterest(look, clockT, frame.dt ?? 0.016);
+      const mode = frame.mode ?? 'idle';
+      const idleLike = mode === 'idle' || mode === 'look' || mode === 'sit';
+      const k = updateGazeInterest(look, clockT, frame.dt ?? 0.016, idleLike);
       look = [look[0] * k, look[1] * k];
-    }
+      gazeSway = 1 - k;   // 走神越多，头自己游移得越明显
+    } else gazeSway = 0;
     bodyLook = look;   // 留给 applyBodyFollow 用（身体跟随要在物理之后写）
     const tilt = neutralPose ? 0 : (frame.tilt ?? 0);
     const lean = neutralPose ? 0 : (frame.lean ?? 0);
@@ -938,12 +957,16 @@ export async function createLive2DBody(base, opts, entry, kit) {
     const bx = engine?.bodyX ?? 0;
     const ex = engine?.eyeBallX ?? 0;
     const ey = engine?.eyeBallY ?? 0;
+    // 走神时头不是钉在正前方，而是自己很慢地东看西看。
+    // 用两个不同频率的正弦叠起来，才不像机器在扫描。
+    const swayX = Math.sin(clockT * 0.21) * gazeSway * 0.30;
+    const swayZ = Math.sin(clockT * 0.13 + 1.1) * gazeSway * 0.22;
     if (engine) {
       writeRole('eyeBallX', clamp(ex * 0.6 + (look[0] ?? 0) * 0.55, -1, 1));
       writeRole('eyeBallY', clamp(ey * 0.6 - (look[1] ?? 0) * 0.45, -1, 1));
-      writeRole('angleX', clamp(ax * 0.75 + (look[0] ?? 0) * 0.4, -1, 1));
+      writeRole('angleX', clamp(ax * 0.75 + (look[0] ?? 0) * 0.4 + swayX, -1, 1));
       writeRole('angleY', clamp(ay * 0.75 - (look[1] ?? 0) * 0.35, -1, 1));
-      writeRole('angleZ', clamp(az + tilt * 0.4, -1, 1));
+      writeRole('angleZ', clamp(az + tilt * 0.4 + swayZ, -1, 1));
       writeRole('bodyX', clamp(bx + lean * 0.35, -1, 1));
       // 表情通道：引擎/配方已经算好，之前漏写，导致只有眼/嘴/头在动
       for (const k of ['eyeSmile', 'mouthForm', 'browY', 'browAngle', 'cheek']) {
@@ -953,9 +976,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
     } else {
       writeRole('eyeBallX', clamp(look[0] ?? 0, -1, 1));
       writeRole('eyeBallY', clamp(-(look[1] ?? 0), -1, 1));
-      writeRole('angleX', clamp((look[0] ?? 0) * 0.73, -1, 1));
+      writeRole('angleX', clamp((look[0] ?? 0) * 0.73 + swayX, -1, 1));
       writeRole('angleY', clamp(-(look[1] ?? 0) * 0.6, -1, 1));
-      writeRole('angleZ', clamp(tilt * 0.67, -1, 1));
+      writeRole('angleZ', clamp(tilt * 0.67 + swayZ, -1, 1));
       writeRole('bodyX', clamp(lean * 0.6, -1, 1));
       writeRole('breath', neutralPose ? 0.5 : 0.5 + 0.5 * Math.sin(t * 1.6));
     }
