@@ -538,6 +538,68 @@ export async function createLive2DBody(base, opts, entry, kit) {
   const paramActs = profile.paramActs ?? {};
   let activeAct = null;
   let activePost = null;   // 当前动作里"必须在物理之后写"的波形（腰/胯这类物理输出参数）
+  let bodyLook = [0, 0];   // 本帧的指针跟随量，applyBodyFollow 在物理之后用它推身体
+  // 注意力衰减：光标停住一阵、或者盯着看了一段时间，就慢慢收回中位（不是硬切回）。
+  let gazeK = 1;
+  const gazeCfg = profile.gazeFollow ?? null;
+  let gazePrev = [0, 0], gazeMoveAt = 0, gazeAwayAt = 0, gazeInited = false;
+  let gazeSway = 0;   // 走神程度 0~1，用来给头部叠一点自然游移（不然头会钉在正前方）
+  let gazeWantSince = 0;   // 走神条件满足的时刻，用来做"延迟发作"
+  let gazeSleepAt = 0;     // 这次走神的结束时刻（走神有保质期，到点自己回神）
+  function updateGazeInterest(look, now, dt, idleLike = true) {
+    if (!gazeCfg) return 1;
+    // 动作期间（走路 / 跑步 / 坐着 / 被拖着走）：头用满跟随交给原本逻辑，
+    // 但**不改走神状态** —— 不然她随机走两步、换个姿势，刚攒起来的走神就白攒了，
+    // 表现就是"刚要飘走，她自己一动，又清醒了"。
+    if (!idleLike) {
+      const mdx = Math.abs(look[0] - gazePrev[0]);
+      const mdy = Math.abs(look[1] - gazePrev[1]);
+      gazePrev = [look[0], look[1]];
+      // 动作期间人动了鼠标，照样算"被叫醒"
+      if (mdx > (gazeCfg.movePx ?? 0.02) || mdy > (gazeCfg.movePx ?? 0.02)) {
+        gazeMoveAt = now;
+        gazeWantSince = 0;
+        gazeK = 1;
+      }
+      return 1;
+    }
+    const dx = Math.abs(look[0] - gazePrev[0]);
+    const dy = Math.abs(look[1] - gazePrev[1]);
+    const moving = dx > (gazeCfg.movePx ?? 0.02) || dy > (gazeCfg.movePx ?? 0.02);
+    const away = Math.hypot(look[0], look[1]) > 0.4;   // 明显偏离中位
+    if (!gazeInited) { gazeInited = true; gazeMoveAt = gazeAwayAt = now; }
+    gazePrev = [look[0], look[1]];
+    if (moving) {
+      // 光标一挪动就抢回来：几十毫秒（resume=40 → 约 33ms）回到满值，不等指数慢慢爬
+      gazeMoveAt = now;
+      gazeWantSince = 0;
+      gazeK = Math.min(1, gazeK + dt * (gazeCfg.resume ?? 40));
+      return gazeK;
+    }
+    if (!away) gazeAwayAt = now;   // 光标回到中间，重新计时
+    const idleFor = now - gazeMoveAt;   // 光标没动多久
+    const heldFor = now - gazeAwayAt;   // 已经盯着看了多久
+    const over = idleFor > (gazeCfg.idleSec ?? 3.6) || heldFor > (gazeCfg.holdSec ?? 8);
+    // 走神要"延迟发作"：条件满足后再等 onset 秒才真的开始收，
+    // 不然光标刚停下两秒人就飘走，看着像没注意你。
+    if (!over) gazeWantSince = 0;
+    else if (!gazeWantSince) gazeWantSince = now;
+    const want = over && now - gazeWantSince >= (gazeCfg.onset ?? 1.5) ? 0 : 1;
+    // 走神默认**不过期**：只靠鼠标唤回。想加保质期就给 span 一个正数（秒），
+    // 到点后把"光标停住"的计时重置，否则下一秒又满足条件、立刻又飘走，变成一直发呆。
+    if (want === 1) gazeSleepAt = 0;
+    else if (!gazeSleepAt && (gazeCfg.span ?? 0) > 0) gazeSleepAt = now + (gazeCfg.span ?? 0) + Math.random() * (gazeCfg.spanJitter ?? 0);
+    if (gazeSleepAt && now > gazeSleepAt) {
+      gazeSleepAt = 0;
+      gazeWantSince = 0;
+      gazeMoveAt = now;   // 自然回神后重新攒，别立刻又走神
+      gazeK += (1 - gazeK) * Math.min(1, dt * (gazeCfg.wake ?? 1.2));
+      return gazeK;
+    }
+    // 收的时候用指数趋近：开头快、越接近中间越慢，落地不硬
+    gazeK += (want - gazeK) * Math.min(1, dt * (want > gazeK ? 40 : (gazeCfg.fade ?? 0.5)));
+    return gazeK;
+  }
 
   /** 动作涉及的所有参数 id（静态 params + 波形 waves），用于结束时归零。 */
   function actParamIds(act) {
@@ -605,6 +667,46 @@ export async function createLive2DBody(base, opts, entry, kit) {
       const cur = model._model.getParameterValueByIndex(p.idx);
       model._model.setParameterValueByIndex(p.idx, cur + Math.sin((t * p.hz + p.phase) * Math.PI * 2) * p.amp);
     }
+  }
+
+  // ---------- 身体跟随（指针左右/上下 → 躯干跟着倾）----------
+  // ParamBodyAngleX / ParamBodyAngleZ 是 physics3 的输出参数
+  // （PhysicsSetting4 ← PositionX，PhysicsSetting9 ← PositionZ），
+  // 写在 physics.evaluate 之前一定会被算回去 —— 之前实测"写进去读回 0"就是这个原因。
+  // 所以这一步必须压在物理之后。开关和幅度在 profile.bodyFollow。
+  //
+  // 关键：不能硬贴。头是 kit 用弹簧+阻尼平滑过的（tk=160 / tc=12），
+  // 身体要是直接 = 目标值，就会"上半身整块跟着头平移"，看着很僵。
+  // 这里给身体和胯各挂一套弹簧，并且比头慢：头先转 → 肩跟上 → 胯最后摆。
+  const bodyFollow = profile.bodyFollow ?? null;
+  const bfState = { left: 0, leftV: 0, up: 0, upV: 0 };
+  /** 把指针跟随量写进**物理的输入**（PositionX / PositionZ），不碰物理输出。
+   *  之前直接写 ParamBodyAngleZ / HipAngleZ，那两条是 PhysicsSetting4/9 的输出，
+   *  物理每帧算出来的走路摆胯全被盖掉 —— 表现就是"走路腿不动、跟随也腿不动"。
+   *  写 PositionX/Z 则是往链头上叠，物理会照常推出身体倾斜 + 胯摆，
+   *  静止和走路走同一条链，不会互相打架。 */
+  function applyBodyFollow(dt) {
+    if (!bodyFollow) return;
+    const lx = bodyLook[0] ?? 0;
+    const ly = bodyLook[1] ?? 0;
+    // 用和头部同一套归一化（头是 look*0.73 进 -1..1），这样"头转到极限"时身体也到极限。
+    const nx = clamp(lx * 0.73, -1, 1);
+    const ny = clamp(ly * 0.6, -1, 1);
+    dt = Math.min(dt, 1 / 30);   // 掉帧时别让弹簧炸
+    // 弹簧-阻尼：起步慢、中途加速、到位有一点回弹，比线性跟手更像"反应"
+    const ease = (v, vel, target, k, c) => {
+      const nv = vel + ((target - v) * k - vel * c) * dt;
+      return [v + nv * dt, nv];
+    };
+    [bfState.left, bfState.leftV] = ease(bfState.left, bfState.leftV, nx * (bodyFollow.x ?? 18), bodyFollow.k ?? 42, bodyFollow.c ?? 9.5);
+    [bfState.up, bfState.upV] = ease(bfState.up, bfState.upV, ny * (bodyFollow.z ?? 12), bodyFollow.k ?? 42, bodyFollow.c ?? 9.5);
+    const addP = (name, dv) => {
+      const i = paramIndex.get(name);
+      if (i === undefined) return;
+      model._model.setParameterValueByIndex(i, model._model.getParameterValueByIndex(i) + dv);
+    };
+    addP('PositionX', bfState.left);   // → ParamBodyAngleX + HipAngleX（物理推）
+    addP('PositionZ', bfState.up);     // → ParamBodyAngleZ + HipAngleZ（物理推）
   }
 
   // ---------- 待机小动作（模拟 VTS 的 Auto Idle）----------
@@ -861,7 +963,18 @@ export async function createLive2DBody(base, opts, entry, kit) {
     writeRole('mouthOpen', neutralPose ? 0 : clamp(Math.max(talkOpen, (engine?.mouthOpen ?? 0) * 0.85), 0, 1));
 
     // 5) 视线 + 头身跟随（表演层的待机动作叠在宿主跟随之上）
-    const look = neutralPose ? [0, 0] : (Array.isArray(frame.look) ? frame.look : [0, 0]);
+    const rawLook = globalThis.__lookOverride !== undefined ? [globalThis.__lookOverride, 0] : frame.look;
+    let look = neutralPose ? [0, 0] : (Array.isArray(rawLook) ? rawLook : [0, 0]);
+    // 追一会儿会"走神"：光标停住不动、或者盯着超过几秒，跟随量慢慢收回中位。
+    // 衰减乘在 look 上，头和身体一起收，不会出现"头回正了身体还歪着"。
+    if (!neutralPose && gazeCfg) {
+      const mode = frame.mode ?? 'idle';
+      const idleLike = mode === 'idle' || mode === 'look' || mode === 'sit';
+      const k = updateGazeInterest(look, clockT, frame.dt ?? 0.016, idleLike);
+      look = [look[0] * k, look[1] * k];
+      gazeSway = 1 - k;   // 走神越多，头自己游移得越明显
+    } else gazeSway = 0;
+    bodyLook = look;   // 留给 applyBodyFollow 用（身体跟随要在物理之后写）
     const tilt = neutralPose ? 0 : (frame.tilt ?? 0);
     const lean = neutralPose ? 0 : (frame.lean ?? 0);
     const ax = engine?.angleX ?? 0;
@@ -870,12 +983,16 @@ export async function createLive2DBody(base, opts, entry, kit) {
     const bx = engine?.bodyX ?? 0;
     const ex = engine?.eyeBallX ?? 0;
     const ey = engine?.eyeBallY ?? 0;
+    // 走神时头不是钉在正前方，而是自己很慢地东看西看。
+    // 用两个不同频率的正弦叠起来，才不像机器在扫描。
+    const swayX = Math.sin(clockT * 0.21) * gazeSway * 0.30;
+    const swayZ = Math.sin(clockT * 0.13 + 1.1) * gazeSway * 0.22;
     if (engine) {
       writeRole('eyeBallX', clamp(ex * 0.6 + (look[0] ?? 0) * 0.55, -1, 1));
       writeRole('eyeBallY', clamp(ey * 0.6 - (look[1] ?? 0) * 0.45, -1, 1));
-      writeRole('angleX', clamp(ax * 0.75 + (look[0] ?? 0) * 0.4, -1, 1));
+      writeRole('angleX', clamp(ax * 0.75 + (look[0] ?? 0) * 0.4 + swayX, -1, 1));
       writeRole('angleY', clamp(ay * 0.75 - (look[1] ?? 0) * 0.35, -1, 1));
-      writeRole('angleZ', clamp(az + tilt * 0.4, -1, 1));
+      writeRole('angleZ', clamp(az + tilt * 0.4 + swayZ, -1, 1));
       writeRole('bodyX', clamp(bx + lean * 0.35, -1, 1));
       // 表情通道：引擎/配方已经算好，之前漏写，导致只有眼/嘴/头在动
       for (const k of ['eyeSmile', 'mouthForm', 'browY', 'browAngle', 'cheek']) {
@@ -885,9 +1002,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
     } else {
       writeRole('eyeBallX', clamp(look[0] ?? 0, -1, 1));
       writeRole('eyeBallY', clamp(-(look[1] ?? 0), -1, 1));
-      writeRole('angleX', clamp((look[0] ?? 0) * 0.73, -1, 1));
+      writeRole('angleX', clamp((look[0] ?? 0) * 0.73 + swayX, -1, 1));
       writeRole('angleY', clamp(-(look[1] ?? 0) * 0.6, -1, 1));
-      writeRole('angleZ', clamp(tilt * 0.67, -1, 1));
+      writeRole('angleZ', clamp(tilt * 0.67 + swayZ, -1, 1));
       writeRole('bodyX', clamp(lean * 0.6, -1, 1));
       writeRole('breath', neutralPose ? 0.5 : 0.5 + 0.5 * Math.sin(t * 1.6));
     }
@@ -1259,6 +1376,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       // 否则表情刚把 key11 抬起来就被这里按回 0，眼镜永远出不来。
       applyCleanParams();
       applyIdlePhysics(clockT);
+      applyBodyFollow(dt);   // 必须在物理之前：写的是 PositionX/Z 这类物理输入
       applyIdlePose(clockT, !!frame.gesture);
       applyParamActs(frame);
       applySchemeParams();

@@ -2,14 +2,14 @@
   "manifest": 2,
   "api": 2,
   "id": "deepseek-shenggong-hd",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "name": {
     "zh": "大肥鱼 HD",
     "en": "DaFeiYu HD"
   },
   "about": {
-    "zh": "大肥鱼的原画版：贴图用原始 4096/8192，画布 2048。服装开关、动作、表情与普通版完全一致。",
-    "en": "Native-resolution textures (4096/8192) on a 2048 canvas, same wardrobe toggles and gestures as the standard build."
+    "zh": "大肥鱼的原画版：贴图用原始 4096/8192，画布 2048。服装开关、动作、表情、指针跟随与普通版一致。",
+    "en": "Native-resolution textures (4096/8192) on a 2048 canvas, same wardrobe toggles, gestures and pointer follow as the standard build."
   },
   "license": "仅供个人测试，请遵守模型自身的授权",
   "entry": "figure.js",
