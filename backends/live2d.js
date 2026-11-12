@@ -625,8 +625,12 @@ export async function createLive2DBody(base, opts, entry, kit) {
       const i = paramIndex.get(name);
       if (i !== undefined) model._model.setParameterValueByIndex(i, v);
     };
-    setP('ParamBodyAngleX', nx * (bodyFollow.x ?? 18));
-    setP('ParamBodyAngleZ', ny * (bodyFollow.z ?? 8));
+    setP('ParamBodyAngleX', nx * (bodyFollow.x ?? 30));
+    setP('ParamBodyAngleZ', ny * (bodyFollow.z ?? 15));
+    // 胯：走路时那种左右摆是 kit 用移动速度算出来的 swing，静止时没有。
+    // HipAngleZ 是胯的左右摆，也是物理输出，同样只能写在物理之后。
+    setP('HipAngleZ', nx * (bodyFollow.hip ?? 25));
+    setP('HipAngleX', nx * (bodyFollow.hipX ?? 10));
   }
 
   // ---------- 待机小动作（模拟 VTS 的 Auto Idle）----------
