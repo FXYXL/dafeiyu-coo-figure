@@ -215,7 +215,22 @@ idlePhysics: {
 **只写源头参数**。`ParamBodyAngleX/Z`、`HipAngleX/Z` 本身是物理的**输出**，写进去会被
 下一次 `evaluate()` 覆盖（这也是它们一直读回 0 的原因）。
 
-**3. 裙摆 / 胸的幅度补强（`physicsWaves`）**
+**3. 指针跟随：整个躯干跟着光标倾（`bodyFollow`）**
+
+只转头的跟随很单薄。加上这一步，光标往左/右，肩膀、躯干、裙子会跟着一起倾：
+
+```js
+bodyFollow: { x: 4, z: 2 },   // x: 左右（look 原始范围约 ±5，×4 ≈ ±20°）
+```
+
+**必须写在 `physics.evaluate()` 之后**。`ParamBodyAngleX/Z` 是 physics3 的输出参数
+（PhysicsSetting4 ← PositionX，PhysicsSetting9 ← PositionZ），写在物理之前一定会被算回去 ——
+这就是为什么之前「写身体角度读回却是 0」。`applyBodyFollow()` 因此排在物理后面。
+
+> 参考的另一种实现（pixijs-live2d）是把指针直接映射到 `ParamBodyAngle*`，因为在那套渲染里
+> 这些参数不算物理输出。同一份模型放到 Cubism 原生物理下，就只能绕到物理之后写。
+
+**4. 裙摆 / 胸的幅度补强（`physicsWaves`）**
 
 这两组的物理链很"硬"：输入拉满也只输出 3~4%（参数范围 ±1），桌宠尺寸下看不见。
 所以在 `physics.evaluate()` **之后**再叠一层同频正弦，把幅度提到 8~14%：

@@ -78,6 +78,11 @@ export default {
     { word: 'swing', movement: 1 },
   ],
 
+  // 指针跟随身体：光标左右 → 躯干跟着倾。
+  // ParamBodyAngleX/Z 是物理的输出参数，后端 applyBodyFollow 会在 physics.evaluate 之后写，
+  // 否则会被物理算回 0。x 对应左右，z 对应上下（look 的原始范围约 ±5）。
+  bodyFollow: { x: 4, z: 2 },
+
   idlePhysics: {
     // 只写"源头参数"。ParamBodyAngleX / HipAngleX / ParamBodyAngleZ 本身是物理的
     // 输出，写进去会被下一步覆盖（这也是它们一直读回 0 的原因）。

@@ -536,6 +536,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
   const paramActs = profile.paramActs ?? {};
   let activeAct = null;
   let activePost = null;   // 当前动作里"必须在物理之后写"的波形（腰/胯这类物理输出参数）
+  let bodyLook = [0, 0];   // 本帧的指针跟随量，applyBodyFollow 在物理之后用它推身体
 
   /** 动作涉及的所有参数 id（静态 params + 波形 waves），用于结束时归零。 */
   function actParamIds(act) {
@@ -603,6 +604,24 @@ export async function createLive2DBody(base, opts, entry, kit) {
       const cur = model._model.getParameterValueByIndex(p.idx);
       model._model.setParameterValueByIndex(p.idx, cur + Math.sin((t * p.hz + p.phase) * Math.PI * 2) * p.amp);
     }
+  }
+
+  // ---------- 身体跟随（指针左右/上下 → 躯干跟着倾）----------
+  // ParamBodyAngleX / ParamBodyAngleZ 是 physics3 的输出参数
+  // （PhysicsSetting4 ← PositionX，PhysicsSetting9 ← PositionZ），
+  // 写在 physics.evaluate 之前一定会被算回去 —— 之前实测"写进去读回 0"就是这个原因。
+  // 所以这一步必须压在物理之后。开关和幅度在 profile.bodyFollow。
+  const bodyFollow = profile.bodyFollow ?? null;
+  function applyBodyFollow() {
+    if (!bodyFollow) return;
+    const lx = bodyLook[0] ?? 0;
+    const ly = bodyLook[1] ?? 0;
+    const setP = (name, v) => {
+      const i = paramIndex.get(name);
+      if (i !== undefined) model._model.setParameterValueByIndex(i, v);
+    };
+    setP('ParamBodyAngleX', clamp(lx * (bodyFollow.x ?? 6), -30, 30));
+    setP('ParamBodyAngleZ', clamp(ly * (bodyFollow.z ?? 3), -30, 30));
   }
 
   // ---------- 待机小动作（模拟 VTS 的 Auto Idle）----------
@@ -859,7 +878,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
     writeRole('mouthOpen', neutralPose ? 0 : clamp(Math.max(talkOpen, (engine?.mouthOpen ?? 0) * 0.85), 0, 1));
 
     // 5) 视线 + 头身跟随（表演层的待机动作叠在宿主跟随之上）
-    const look = neutralPose ? [0, 0] : (Array.isArray(frame.look) ? frame.look : [0, 0]);
+    const rawLook = globalThis.__lookOverride !== undefined ? [globalThis.__lookOverride, 0] : frame.look;
+    const look = neutralPose ? [0, 0] : (Array.isArray(rawLook) ? rawLook : [0, 0]);
+    bodyLook = look;   // 留给 applyBodyFollow 用（身体跟随要在物理之后写）
     const tilt = neutralPose ? 0 : (frame.tilt ?? 0);
     const lean = neutralPose ? 0 : (frame.lean ?? 0);
     const ax = engine?.angleX ?? 0;
@@ -1268,6 +1289,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       stepExpression(frame.face, dt);
       applyPartOpacity(currentId);
       try { model._physics?.evaluate(model._model, dt); } catch { /* 物理失败不致命 */ }
+      applyBodyFollow();   // 必须在物理之后：BodyAngle* 是物理的输出参数
       applyPhysicsWaves(clockT);
       applyActPostWaves(clockT);
       try { model._pose?.updateParameters(model._model, dt); } catch { /* 姿势失败不致命 */ }
