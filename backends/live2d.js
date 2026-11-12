@@ -616,12 +616,17 @@ export async function createLive2DBody(base, opts, entry, kit) {
     if (!bodyFollow) return;
     const lx = bodyLook[0] ?? 0;
     const ly = bodyLook[1] ?? 0;
+    // 用和头部同一套归一化（头是 look*0.73 进 -1..1），这样"头转到极限"时身体也到极限。
+    // 直接乘 look 会出问题：鼠标贴近桌宠时 kit 会把 k 压到 0，look 很小，身体几乎不动，
+    // 而头因为 early-clamp 早就满幅了 —— 看起来就是"只有头动、身体不动"。
+    const nx = clamp(lx * 0.73, -1, 1);
+    const ny = clamp(ly * 0.6, -1, 1);
     const setP = (name, v) => {
       const i = paramIndex.get(name);
       if (i !== undefined) model._model.setParameterValueByIndex(i, v);
     };
-    setP('ParamBodyAngleX', clamp(lx * (bodyFollow.x ?? 6), -30, 30));
-    setP('ParamBodyAngleZ', clamp(ly * (bodyFollow.z ?? 3), -30, 30));
+    setP('ParamBodyAngleX', nx * (bodyFollow.x ?? 18));
+    setP('ParamBodyAngleZ', ny * (bodyFollow.z ?? 8));
   }
 
   // ---------- 待机小动作（模拟 VTS 的 Auto Idle）----------
