@@ -544,27 +544,26 @@ export async function createLive2DBody(base, opts, entry, kit) {
   let gazeSway = 0;   // 走神程度 0~1，用来给头部叠一点自然游移（不然头会钉在正前方）
   let gazeWantSince = 0;   // 走神条件满足的时刻，用来做"延迟发作"
   let gazeSleepAt = 0;     // 这次走神的结束时刻（走神有保质期，到点自己回神）
-  function updateGazeInterest(look, now, dt, idleLike = true) {
+  let gazePtr = null;      // 上一帧的真实指针坐标（不在窗口内是 null）
+  function updateGazeInterest(look, ptr, now, dt, idleLike = true) {
     if (!gazeCfg) return 1;
+    // 判断「人有没有动鼠标」必须用**真实指针坐标**，不能用 look。
+    // 鼠标不在窗口内时 kit 的 look 是每 1.2~3 秒刷新的随机 glance（随机瞟一眼），
+    // 拿 look 的变化判移动，等于每次瞥视都被当成「有人动我」——
+    // 表现就是一走神就被打回来（阈值小），或者干脆走不了神（阈值大）。
+    let moving = false;
+    if (ptr) {
+      const pd = gazePtr ? Math.hypot(ptr[0] - gazePtr[0], ptr[1] - gazePtr[1]) : 0;
+      moving = pd > (gazeCfg.movePx ?? 3);   // movePx 现在是像素
+    }
+    gazePtr = ptr;
     // 动作期间（走路 / 跑步 / 坐着 / 被拖着走）：头用满跟随交给原本逻辑，
-    // 但**不改走神状态** —— 不然她随机走两步、换个姿势，刚攒起来的走神就白攒了，
-    // 表现就是"刚要飘走，她自己一动，又清醒了"。
+    // 但**不改走神状态** —— 不然她随机走两步、换个姿势，刚攒起来的走神就白攒了。
     if (!idleLike) {
-      const mdx = Math.abs(look[0] - gazePrev[0]);
-      const mdy = Math.abs(look[1] - gazePrev[1]);
-      gazePrev = [look[0], look[1]];
-      // 动作期间人动了鼠标，照样算"被叫醒"
-      if (mdx > (gazeCfg.movePx ?? 0.02) || mdy > (gazeCfg.movePx ?? 0.02)) {
-        gazeMoveAt = now;
-        gazeWantSince = 0;
-        gazeK = 1;
-      }
+      if (moving) { gazeMoveAt = now; gazeWantSince = 0; gazeK = 1; }
       return 1;
     }
-    const dx = Math.abs(look[0] - gazePrev[0]);
-    const dy = Math.abs(look[1] - gazePrev[1]);
-    const moving = dx > (gazeCfg.movePx ?? 0.02) || dy > (gazeCfg.movePx ?? 0.02);
-    const away = Math.hypot(look[0], look[1]) > 0.4;   // 明显偏离中位
+    const away = !!ptr;   // 指针在窗口内才算"她在看着你"
     if (!gazeInited) { gazeInited = true; gazeMoveAt = gazeAwayAt = now; }
     gazePrev = [look[0], look[1]];
     if (moving) {
@@ -572,6 +571,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       gazeMoveAt = now;
       gazeWantSince = 0;
       gazeK = Math.min(1, gazeK + dt * (gazeCfg.resume ?? 40));
+      globalThis.__gaze = { k: +gazeK.toFixed(3), idle: +(now - gazeMoveAt).toFixed(1), held: +(now - gazeAwayAt).toFixed(1), moving, over: false, want: 1, look };
       return gazeK;
     }
     if (!away) gazeAwayAt = now;   // 光标回到中间，重新计时
@@ -594,6 +594,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
       gazeK += (1 - gazeK) * Math.min(1, dt * (gazeCfg.wake ?? 1.2));
       return gazeK;
     }
+    // 诊断用：把走神的内部状态摊开，harness 的 ?diag 能直接读
+    globalThis.__gaze = { k: +gazeK.toFixed(3), idle: +idleFor.toFixed(1), held: +heldFor.toFixed(1), moving, over, want, look: [+(look[0]).toFixed(2), +(look[1]).toFixed(2)] };
     // 收的时候用指数趋近：开头快、越接近中间越慢，落地不硬
     gazeK += (want - gazeK) * Math.min(1, dt * (want > gazeK ? 40 : (gazeCfg.fade ?? 0.5)));
     return gazeK;
@@ -968,7 +970,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
     if (!neutralPose && gazeCfg) {
       const mode = frame.mode ?? 'idle';
       const idleLike = mode === 'idle' || mode === 'look' || mode === 'sit';
-      const k = updateGazeInterest(look, clockT, frame.dt ?? 0.016, idleLike);
+      const k = updateGazeInterest(look, Array.isArray(frame.pointer) ? frame.pointer : null, clockT, frame.dt ?? 0.016, idleLike);
       look = [look[0] * k, look[1] * k];
       gazeSway = 1 - k;   // 走神越多，头自己游移得越明显
     } else gazeSway = 0;
