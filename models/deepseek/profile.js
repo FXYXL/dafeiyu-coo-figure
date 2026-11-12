@@ -83,9 +83,10 @@ export default {
   // 否则会被物理算回 0。x 对应左右，z 对应上下（look 的原始范围约 ±5）。
   bodyFollow: { x: 16, z: 11, k: 42, c: 9.5 },
 
-  // 追一会儿就走神：光标停住 3.6 秒、或已经盯着看了 8 秒，跟随量才慢慢收回中位。
+  // 走神只靠鼠标唤回：光标停住 3.6 秒（或盯 8 秒）后再酝酿 1.5 秒开始飘，
+  // 一直飘到鼠标动为止（span: 0 = 不过期；想加保质期就写秒数，比如 120~180）。
   // fade = 收回速度（越大越快，0.6 大约两秒收干净）；resume = 回神速度（0.9 比收回稍快，像人反应过来）
-  gazeFollow: { idleSec: 3.6, holdSec: 8, onset: 1.5, fade: 0.5, resume: 40, movePx: 0.02, span: 6, spanJitter: 3, wake: 1.2 },
+  gazeFollow: { idleSec: 3.6, holdSec: 8, onset: 1.5, fade: 0.5, resume: 40, movePx: 0.02, span: 0, spanJitter: 0, wake: 1.2 },
 
   idlePhysics: {
     // 只写"源头参数"。ParamBodyAngleX / HipAngleX / ParamBodyAngleZ 本身是物理的

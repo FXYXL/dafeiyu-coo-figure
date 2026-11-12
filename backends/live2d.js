@@ -583,10 +583,10 @@ export async function createLive2DBody(base, opts, entry, kit) {
     if (!over) gazeWantSince = 0;
     else if (!gazeWantSince) gazeWantSince = now;
     const want = over && now - gazeWantSince >= (gazeCfg.onset ?? 1.5) ? 0 : 1;
-    // 走神有"保质期"：真发呆 span 秒（带随机浮动）就自己回神，不会一直僵在那儿。
+    // 走神默认**不过期**：只靠鼠标唤回。想加保质期就给 span 一个正数（秒），
     // 到点后把"光标停住"的计时重置，否则下一秒又满足条件、立刻又飘走，变成一直发呆。
     if (want === 1) gazeSleepAt = 0;
-    else if (!gazeSleepAt) gazeSleepAt = now + (gazeCfg.span ?? 6) + Math.random() * (gazeCfg.spanJitter ?? 3);
+    else if (!gazeSleepAt && (gazeCfg.span ?? 0) > 0) gazeSleepAt = now + (gazeCfg.span ?? 0) + Math.random() * (gazeCfg.spanJitter ?? 0);
     if (gazeSleepAt && now > gazeSleepAt) {
       gazeSleepAt = 0;
       gazeWantSince = 0;
