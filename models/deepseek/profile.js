@@ -80,10 +80,11 @@ export default {
     { word: 'swing', movement: 1 },
   ],
 
-  // 指针跟随身体：光标左右 → 躯干跟着倾。
+  // 指针跟随身体：光标左右 → 躯干跟着倾。walk 是走路时的倾斜方向（负号=朝行进方向倒，
+  // 因为这个模型 PositionX 为正时身体是往左倾的，物理链是反向平衡）。
   // ParamBodyAngleX/Z 是物理的输出参数，后端 applyBodyFollow 会在 physics.evaluate 之后写，
   // 否则会被物理算回 0。x 对应左右，z 对应上下（look 的原始范围约 ±5）。
-  bodyFollow: { x: 16, z: 11, k: 42, c: 9.5 },
+  bodyFollow: { x: 16, z: 11, walk: -14, k: 42, c: 9.5 },
 
   // 走神只靠鼠标唤回：光标停住 3.6 秒（或盯 8 秒）后再酝酿 1.5 秒开始飘，
   // 一直飘到鼠标动为止（span: 0 = 不过期；想加保质期就写秒数，比如 120~180）。
@@ -262,10 +263,15 @@ export default {
     mouthForm: {"targets":["ParamMouthForm"],"space":[-1,1],"default":0},
     eyeBallX: {"targets":["ParamEyeBallX"],"space":[-1,1],"default":0},
     eyeBallY: {"targets":["ParamEyeBallY"],"space":[-1,1],"default":0},
-    angleX: {"targets":["AngleX","ParamAngleX"],"space":[-1,1],"default":0},
-    angleY: {"targets":["AngleY","ParamAngleY"],"space":[-1,1],"default":0},
-    angleZ: {"targets":["AngleZ","ParamAngleZ"],"space":[-1,1],"default":0},
+    // 只写模型自己的 AngleX。ParamAngleX 是物理的输入，写了物理会拿头部角度去推身体，
+    // 和我们用 PositionX 做的身体倾斜抢方向 —— 插件生成的包也是只写 AngleX。
+    angleX: {"targets":["AngleX"],"space":[-1,1],"default":0},
+    angleY: {"targets":["AngleY"],"space":[-1,1],"default":0},
+    angleZ: {"targets":["AngleZ"],"space":[-1,1],"default":0},
+    // bodyX 是横向重心（物理输入）。lean 是前倾，单独走 LeanInput —— 两者别混用，
+    // 混用会让"往左走"和"前倾"挤在同一个参数上，身体被推错方向。
     bodyX: {"targets":["PositionX"],"space":[-1,1],"default":0},
+    lean:  {"targets":["LeanInput"],"space":[-1,1],"default":0},
     breath: {"targets":["ParamBreath"],"space":[0,1],"default":0},
   },
   expression: {
