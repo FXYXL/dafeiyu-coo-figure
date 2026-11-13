@@ -1,6 +1,6 @@
 # 大肥鱼 · Coo 桌宠形象包
 
-> 当前版本 **1.10.0** ｜ 更新内容见 [Releases](https://github.com/FXYXL/dafeiyu-coo-figure/releases)
+> 当前版本 **1.11.0** ｜ 更新内容见 [Releases](https://github.com/FXYXL/dafeiyu-coo-figure/releases)
 
 把「DeepSeek 免费公皮」（原本是 VTube Studio 生态的 Live2D 模型）改造成 [Coopanion](https://coopanion.com) 桌面宠物可用的形象包。
 

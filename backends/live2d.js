@@ -685,7 +685,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
    *  物理每帧算出来的走路摆胯全被盖掉 —— 表现就是"走路腿不动、跟随也腿不动"。
    *  写 PositionX/Z 则是往链头上叠，物理会照常推出身体倾斜 + 胯摆，
    *  静止和走路走同一条链，不会互相打架。 */
-  function applyBodyFollow(dt) {
+  function applyBodyFollow(dt, mode, facing) {
     if (!bodyFollow) return;
     const lx = bodyLook[0] ?? 0;
     const ly = bodyLook[1] ?? 0;
@@ -698,15 +698,20 @@ export async function createLive2DBody(base, opts, entry, kit) {
       const nv = vel + ((target - v) * k - vel * c) * dt;
       return [v + nv * dt, nv];
     };
-    [bfState.left, bfState.leftV] = ease(bfState.left, bfState.leftV, nx * (bodyFollow.x ?? 18), bodyFollow.k ?? 42, bodyFollow.c ?? 9.5);
-    [bfState.up, bfState.upV] = ease(bfState.up, bfState.upV, ny * (bodyFollow.z ?? 12), bodyFollow.k ?? 42, bodyFollow.c ?? 9.5);
+    // 走路/跑步：把跟随目标平滑收回 0，身体交给物理（walk 的姿态由 kit 的位移驱动）。
+    const walking = mode === 'walk' || mode === 'run';
+    const gain = walking ? 0 : 1;
+    const tx = nx * (bodyFollow.x ?? 16) * gain;
+    const tz = ny * (bodyFollow.z ?? 11) * gain;
+    [bfState.left, bfState.leftV] = ease(bfState.left, bfState.leftV, tx, bodyFollow.k ?? 42, bodyFollow.c ?? 9.5);
+    [bfState.up, bfState.upV] = ease(bfState.up, bfState.upV, tz, bodyFollow.k ?? 42, bodyFollow.c ?? 9.5);
     const addP = (name, dv) => {
       const i = paramIndex.get(name);
       if (i === undefined) return;
       model._model.setParameterValueByIndex(i, model._model.getParameterValueByIndex(i) + dv);
     };
-    addP('PositionX', bfState.left);   // → ParamBodyAngleX + HipAngleX（物理推）
-    addP('PositionZ', bfState.up);     // → ParamBodyAngleZ + HipAngleZ（物理推）
+    addP('PositionX', bfState.left);   // 左右重心 → 物理推 ParamBodyAngleX + HipAngleX
+    addP('PositionZ', bfState.up);     // 前后 → ParamBodyAngleZ
   }
 
   // ---------- 待机小动作（模拟 VTS 的 Auto Idle）----------
@@ -974,6 +979,11 @@ export async function createLive2DBody(base, opts, entry, kit) {
       look = [look[0] * k, look[1] * k];
       gazeSway = 1 - k;   // 走神越多，头自己游移得越明显
     } else gazeSway = 0;
+    // noMirror 的形象不做水平翻转，但 kit 算 look 时乘了 pet.facing。
+    // 必须用**瞬时的 facingNow** 抵消，不能用平滑的 faceVis ——
+    // kit 那边是瞬时反号的，这边要是慢半拍，翻转那 0.2 秒 look 会短暂反号，
+    // 表现就是头猛地往回抽一下再转回来。
+    if (figure.noMirror && Number.isFinite(frame.facingNow)) look = [look[0] * frame.facingNow, look[1]];
     bodyLook = look;   // 留给 applyBodyFollow 用（身体跟随要在物理之后写）
     const tilt = neutralPose ? 0 : (frame.tilt ?? 0);
     const lean = neutralPose ? 0 : (frame.lean ?? 0);
@@ -993,6 +1003,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
       writeRole('angleX', clamp(ax * 0.75 + (look[0] ?? 0) * 0.4 + swayX, -1, 1));
       writeRole('angleY', clamp(ay * 0.75 - (look[1] ?? 0) * 0.35, -1, 1));
       writeRole('angleZ', clamp(az + tilt * 0.4 + swayZ, -1, 1));
+      // lean 是 kit 算好的身体倾倒量，已经乘过 faceVis（往左走为负、往右走为正），
+      // 写进 bodyX（PositionX）会由物理同时推出身体倾斜和胯摆 —— 这就是原版那种动感。
       writeRole('bodyX', clamp(bx + lean * 0.35, -1, 1));
       // 表情通道：引擎/配方已经算好，之前漏写，导致只有眼/嘴/头在动
       for (const k of ['eyeSmile', 'mouthForm', 'browY', 'browAngle', 'cheek']) {
@@ -1005,7 +1017,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       writeRole('angleX', clamp((look[0] ?? 0) * 0.73 + swayX, -1, 1));
       writeRole('angleY', clamp(-(look[1] ?? 0) * 0.6, -1, 1));
       writeRole('angleZ', clamp(tilt * 0.67 + swayZ, -1, 1));
-      writeRole('bodyX', clamp(lean * 0.6, -1, 1));
+      writeRole('bodyX', clamp(lean * 0.35, -1, 1));
       writeRole('breath', neutralPose ? 0.5 : 0.5 + 0.5 * Math.sin(t * 1.6));
     }
 
@@ -1262,6 +1274,10 @@ export async function createLive2DBody(base, opts, entry, kit) {
     get hits() { return currentHits(); },
     get anchors() { return currentAnchors(); },
     colors: { z: '#7fb0e8' },
+    // Live2D 只有一个正面，镜像会把左右手整体换边（手里的狗尾草从右手换到左手），
+    // 看起来就是"卡片翻面"。所以声明不镜像：转身改用头部转向表现。
+    // kit 会据此跳过整个容器的 scaleX 翻转（见 patch-pet-kit.mjs 的 noMirror 补丁）。
+    noMirror: profile.facing !== 'mirror',
     // 这几个动作由本图用模型参数实现，kit 不要再叠通用 pulse
     gestures: Object.keys(profile.paramActs ?? {}),
 
@@ -1376,7 +1392,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       // 否则表情刚把 key11 抬起来就被这里按回 0，眼镜永远出不来。
       applyCleanParams();
       applyIdlePhysics(clockT);
-      applyBodyFollow(dt);   // 必须在物理之前：写的是 PositionX/Z 这类物理输入
+      applyBodyFollow(dt, frame.mode, frame.facing);   // 必须在物理之前：写的是 PositionX/Z 这类物理输入
       applyIdlePose(clockT, !!frame.gesture);
       applyParamActs(frame);
       applySchemeParams();
