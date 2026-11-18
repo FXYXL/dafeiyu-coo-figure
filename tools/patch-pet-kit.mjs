@@ -6,6 +6,7 @@
  *   node patch-pet-kit.mjs          打补丁
  *   node patch-pet-kit.mjs --check  只检查状态，不写文件
  *   node patch-pet-kit.mjs --revert 从 .bak-* 还原
+   node patch-pet-kit.mjs --dir="C:/xxx/.../cortico-world-desktop-pet"   指定桌宠引擎位置（别人的机器）
  *
  * 补丁清单（file: id）：
  *   body.js  : pointer / noMirror / noTurn / drowse          （1.11 时代）
@@ -16,7 +17,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-const DIR = 'D:/Coopanion/resources/app/node_modules/cortico-world-desktop-pet';
+// 桌宠引擎位置：默认作者的机器，其他人用 --dir= 传自己的安装目录
+//   node patch-pet-kit.mjs --dir="C:/我的Coo路径/resources/app/node_modules/cortico-world-desktop-pet"
+const argDir = process.argv.find((a) => a.startsWith('--dir='));
+const DIR = (argDir ? argDir.slice(6).replace(/[\\/]+$/, '') : 'D:/Coopanion/resources/app/node_modules/cortico-world-desktop-pet');
 const FILES = {
   body: `${DIR}/web/kit/body.js`,
   petapp: `${DIR}/web/pet-app.js`,
@@ -116,12 +120,25 @@ const PATCHES = [
   // ===== pet-app.js =====
   {
     file: 'petapp', id: 'actBatch',
-    desc: '动作同帧下发（替换 acts 队列：一行里的动作一起发生，不排队不积压）',
-    detect: (s) => /body\?\.do\(a\); lead = \.45;/.test(s),
-    apply: (s) => s.replace(
-      '      for (const a of b.actions || []) acts.push(a);',
-      '      let lead = 0;\n      for (const a of b.actions || []) { body?.do(a); lead = .45; }',
-    ),
+    desc: '动作同帧下发（4 处 acts.push 全改 body.do：say 气泡/<词> inline/pet_act/d.actions）',
+    detect: (s) => !/acts.push/.test(s) && /body\?\.do\(a\)/.test(s),
+    apply: (s) => s
+      .replace(
+        "case 'act': acts.push(...m.actions); holdRoam(20); break;",
+        "case 'act': for (const a of m.actions) body?.do(a); holdRoam(20); break;",
+      )
+      .replace(
+        'for (const a of b.actions || []) { acts.push(a); lead = .45; }',
+        'for (const a of b.actions || []) { body?.do(a); lead = .45; }',
+      )
+      .replace(
+        'while (it.fired < anchors.length && anchors[it.fired].at <= it.shown) acts.push(...anchors[it.fired++].actions);',
+        'while (it.fired < anchors.length && anchors[it.fired].at <= it.shown) for (const a of anchors[it.fired++].actions) body?.do(a);',
+      )
+      .replace(
+        'for (const a of d.actions || []) acts.push(a);',
+        'for (const a of d.actions || []) body?.do(a);',
+      ),
   },
   {
     file: 'petapp', id: 'beatNotice',
