@@ -140,7 +140,7 @@ const PATCHES = [
       const face = KIT_EXPRESSIONS.includes(orig) ? orig : custom?.emotionFace?.(w);
       if (face) {
         const tone = FACE_TONES[face];
-        if (tone) host.sound(tone, 'face');
+        if (tone) sfx?.play?.(tone, 'face');   // doWord 实际在 createPet 内（createBody 只是包装），sfx 可见、host 不可见——用 host 会 ReferenceError 崩形象
         if (face === 'love') custom?.kitHearts?.();
         pet.sqv += face === 'surprised' ? -2.2 : .8;
       }
