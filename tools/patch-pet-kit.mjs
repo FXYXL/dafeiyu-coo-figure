@@ -119,7 +119,7 @@ const PATCHES = [
   },
   {
     file: 'body', id: 'wordExtras',
-    desc: 'actWord 接管的词补回 kit 表情附加动作：音效（FACE_TONES）/ 爱心粒子（love）/ 挤压脉冲（sqv）',
+    desc: 'actWord 接管的词补回 kit 表情附加动作：音效（host.sound 桥）/ 爱心粒子（kitHearts 挂载）/ 挤压脉冲（sqv）',
     detect: (s) => /wordExtras/.test(s),
     apply: (s) => s.replace(
       `  function doWord(w) {
@@ -131,16 +131,37 @@ const PATCHES = [
     const base = custom?.baseWord?.(w);
     if (base) w = base;
     if (custom?.actWord?.(w)) {
-      // wordExtras：词被 figure 通道接管后，kit 表情槽的"附加动作"照常发生
-      // （原 setExpr 的音效/爱心/挤压逻辑，只对 kit 认识的表情名生效）
+      // wordExtras：词被 figure 通道接管后，kit 表情槽的"附加动作"照常发生。
+      // 音效走 host.sound（body-host 桥 → 主页 sfx.play）——play 闭包在 createPet 里，
+      // doWord 作用域没有，之前用 play 直接 ReferenceError 被上层吞掉（静默无声的根因）。
       if (KIT_EXPRESSIONS.includes(orig)) {
         const tone = FACE_TONES[orig];
-        if (tone) play(tone, 'face');
-        if (orig === 'love') for (let i = 0; i < 4; i++) emitHeart();
+        if (tone) host.sound(tone, 'face');
+        if (orig === 'love') custom?.kitHearts?.();
         pet.sqv += orig === 'surprised' ? -2.2 : .8;
       }
       return true;
     }`,
+    ),
+  },
+  {
+    file: 'body', id: 'kitHeartsMount',
+    desc: 'createPet 把爱心粒子发射器挂到 figure 上（doWord/控制侧拿不到 emitHeart，借 figure 对象桥过去）',
+    detect: (s) => /kitHearts/.test(s),
+    apply: (s) => s.replace(
+      `  let custom = opts.figure;`,
+      `  let custom = opts.figure;
+  custom.kitHearts = () => { for (let i = 0; i < 4; i++) emitHeart(); };   // emitHeart 函数声明提升，此处可用`,
+    ),
+  },
+  {
+    file: 'body', id: 'faceShakeHook',
+    desc: '渲染组抖钩子：figure 的 faceShake()（情绪词的浑身抖动）叠加到整组 AX——对齐 fc.shake 的组级抖动',
+    detect: (s) => /faceShake/.test(s),
+    apply: (s) => s.replace(
+      `    else if (pet.pulse?.kind === 'shiver') AX += Math.sin(T * 75) * 1.1 * envelope((T - pet.pulse.t0) / pet.pulse.dur, .08, .85);`,
+      `    else if (pet.pulse?.kind === 'shiver') AX += Math.sin(T * 75) * 1.1 * envelope((T - pet.pulse.t0) / pet.pulse.dur, .08, .85);
+    AX += custom?.faceShake?.() ?? 0;   // 通道情绪词的组级抖动（生气/害怕）——figure 实现见形象包`,
     ),
   },
   // ===== pet-app.js =====
