@@ -1034,6 +1034,13 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 早先这里返回 true 把 doWord 整个截胡，结果 kit 的 act() 从没执行，
     // 连带丢了 busy 互斥、清表情、setMode('idle')、holdFace 配表情、play 音效。
     // 而 pulse 姿态本来就是跳过我们的词的（figure 声明了 gestures），交还不会有重复绘制。
+    //
+    // 例外：情绪词（emotionArc 覆盖的）返回 true **完整接管**——
+    //   交还的话 kit words 表把它们标成 motion（paramActs 词构建时统一标 motion），
+    //   doWord 会走 act 分支（把表情当动作播，setExpr/音效/粒子全跳过，2026-11-19 实测）；
+    //   走 setExpr 分支又会触发 face 清场把刚写的条目删掉。
+    //   接管后 extras（音效/爱心/挤压）由 kit wordExtras 提供，face 清场不再触发。
+    if (emo) return true;
     return false;
   }
 
