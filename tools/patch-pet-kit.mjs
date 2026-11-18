@@ -161,7 +161,7 @@ const PATCHES = [
     apply: (s) => s.replace(
       `    else if (pet.pulse?.kind === 'shiver') AX += Math.sin(T * 75) * 1.1 * envelope((T - pet.pulse.t0) / pet.pulse.dur, .08, .85);`,
       `    else if (pet.pulse?.kind === 'shiver') AX += Math.sin(T * 75) * 1.1 * envelope((T - pet.pulse.t0) / pet.pulse.dur, .08, .85);
-    AX += custom?.faceShake?.() ?? 0;   // 通道情绪词的组级抖动（生气/害怕）——figure 实现见形象包`,
+    AX += custom?.faceShake?.(T) ?? 0;   // 通道情绪词的组级抖动（生气/害怕）——figure 实现见形象包`,
     ),
   },
   // ===== pet-app.js =====

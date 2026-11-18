@@ -1597,8 +1597,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
     colors: { z: '#7fb0e8' },
     // 渲染组级抖动（kit 渲染循环每帧调用）：情绪词的"浑身抖动"——
     // 对齐 kit 脸配方 fc.shake 的组级语义（整组一起抖，身体+头），参数级 wave 只抖头不够。
-    faceShake() {
-      const t = performance.now() / 1000;
+    // 时间用 kit 传入的 T（秒）——iframe 沙箱里 performance.now 不可用（踩过）。
+    faceShake(t) {
       for (const c of channel.values()) {
         if (c.emo === 'angry') return Math.sin(t * 60) * 1.4;
         if (c.emo === 'scared') return Math.sin(t * 66) * 1.1;
