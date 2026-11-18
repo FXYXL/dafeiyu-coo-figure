@@ -318,40 +318,28 @@ export async function createLive2DBody(base, opts, entry, kit) {
   let currentExpr = null;
   let expressionOverride = null;
 
+  // ---------- 表情基调（face）→ 通道词（2026-11-18 双轨合并：exp3 机制退役）----------
+  // 【害羞】这类表情的 keyN 效果已全部翻译成通道词（profile.faceWords）。
+  // face 变化 = 触发对应词（全套机制：互斥/放松/beat）；face 不变 = 续命（保持语义）。
+  let prevFaceForWords = null;
   function stepExpression(face, dt) {
     if (SIMPLE) return;
-    const want = expressionOverride ?? exprTable[face ?? 'neutral'] ?? null;
-    if (want !== currentExpr) {
-      // 清旧 exp3 的参数残留：expressionManager 换表情后，旧表情写的 keyN
-      // 会停在模型里没人清（如 shy 的 key7 脸红残留到下下句）。
+    const fw = profile.faceWords?.[face];
+    if (face !== prevFaceForWords) {
+      prevFaceForWords = face;
+      // 基调切换：全部 state 通道条目让位（新情绪干净开始；face-big 的互斥让位在 actWord 里自然发生）
+      for (const [id, entry] of Object.entries(channel)) {
+        if (entry.keep) channel.delete(id);
+      }
+      // 旧 exp3 联动的参数清零（退役兼容：历史切换可能留下的 keyN 残留归零）
       const oldExpParams = currentExpr ? exp3Params.get(currentExpr) : null;
       if (oldExpParams) for (const qid of oldExpParams) {
-        channel.delete(qid);   // 通道条目（若该参数也被通道词写过）
+        channel.delete(qid);
         try { model._model.setParameterValueById(qid, 0); } catch { /* 参数不存在则跳过 */ }
       }
-      // 情绪基调切换：face-big 组的通道条目自动退场（2.6/互斥组的边界补丁）。
-      // 堵「黑脸挂着（通道），下一句【喜欢】→ exp3 联动 key4=1 → 叠加」的洞：
-      // exp3 的联动每帧推自己的 keyN，互斥组拦不到它，所以在基调切换时统一清场。
-      for (const members of Object.values(profile.exclusiveGroups ?? {})) {
-        for (const member of members) {
-          const md = paramActs[member];
-          if (!md) continue;
-          for (const q of md.params ?? []) channel.delete(q.id);
-          for (const kk of md.keys ?? []) channel.delete(kk.id);
-        }
-      }
-      try { model._expressionManager.stopAllMotions(); } catch { /* 忽略 */ }
-      currentExpr = null;
-      const clip = want ? expressions.get(want) : null;
-      if (clip) {
-        try {
-          model._expressionManager.startMotion(clip, false);
-          currentExpr = want;
-        } catch { /* 忽略 */ }
-      }
-    }
-    if (currentExpr) {
-      try { model._expressionManager.updateMotion(model._model, dt); } catch { /* 忽略 */ }
+      if (fw) actWord(fw);
+    } else if (fw) {
+      bornSentence = sentenceCount;   // face 不变：续命（保持语义，和原 exp3 联动一致）
     }
   }
 

@@ -22,13 +22,7 @@ export default {
   // AI 在回复里写 <circleEyes> / <darkFace> 才会用到，平时不会自动出现。
   // 组合表情：把两个 exp3 的参数并集合并成一个（加载时合成，不增加运行时开销）。
   // 键是组合后的词名，值是要合并的 exp3 id。
-  expressionCombos: {
-    // （2026-11-18 统一到通道：这 4 个组合已翻译成 paramActs 的通道词，见"原.expressionCombos 组合"）
-  },
 
-  extraExpressions: {
-    // （2026-11-18 统一到通道：这批词已全部翻译成 paramActs 的 keyN 通道词，映射删除）
-  },
   // 参数动作：用模型自己的参数做透视姿态，由 frame.gesture 的进度驱动。
   // LeanInput 是模型的"前倾输入"：负值往镜头靠（物理会据此联动身体），正值后退。
   // 待机物理微驱：头发/裙摆/胸/尾巴这四组都是 physics3 算出来的，
@@ -449,25 +443,13 @@ export default {
   },
 
 
-  expressions: {
-    happy: 'smile', excited: 'smile', love: 'love',
+  // face → 通道词（2026-11-18 双轨合并：exp3 机制退役，联动走通道，享受互斥/放松/beat 全套机制）
+  // happy/excited 不映射（开心 = 中性脸 + roles 配方，无部件效果）
+  faceWords: {
+    love: 'heart-eyes',
     shy: 'blush', flustered: 'blush',
-    sad: 'tears', cry: 'tears', worried: 'sweat',
-    nod:   { dur: 0.7, waves: [{ id: 'AngleY', amp: 9, freq: 2.5, base: -4 }] },   // kit 的 nod 只有 0.7 秒；base 偏低才像点头而非仰头
-    // 摇头：头左右摇
-    shake: { dur: 0.7, waves: [{ id: 'AngleX', amp: 15, freq: 2 }] },
-    // 跳舞：腰扭 + 头摆 + 歪头 + 身体前后，四条不同频率叠起来才像在跳
-    // 扭腰：腰 + 头 + 歪头 + 身体前后，四条不同频率叠起来才像在跳
-    // （不能叫 dance：kit 里 dance 走 setMode，不给 pulse，拿不到进度）
-    wiggle: {
-      dur: 3.6,
-      waves: [
-        { id: 'ParamBodyAngleZ', amp: 17, freq: 2 },
-        { id: 'AngleZ', amp: 11, freq: 2, phase: 0.12 },
-        { id: 'AngleX', amp: 9, freq: 1, phase: 0.35 },
-        { id: 'LeanInput', amp: -9, freq: 2, phase: 0.25 },
-      ],
-    },
+    sad: 'tears', cry: 'tears',
+    worried: 'sweat',
   },
 
 
@@ -597,11 +579,6 @@ export default {
 
   },
 
-  expressions: {
-    happy: 'smile', excited: 'smile', love: 'love',
-    shy: 'blush', flustered: 'blush',
-    sad: 'tears', cry: 'tears', worried: 'sweat',
-  },
 
 
   // 简易模式不播 motion，但 motion 里的 PartOpacity 是“中性姿势”的一部分：
