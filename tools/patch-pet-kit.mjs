@@ -151,7 +151,7 @@ const PATCHES = [
   {
     file: 'body', id: 'kitHeartsMount',
     desc: 'createPet 把爱心粒子发射器挂到 figure 上（doWord/控制侧拿不到 emitHeart，借 figure 对象桥过去）',
-    detect: (s) => /kitHearts/.test(s),
+    detect: (s) => /custom.kitHearts = /.test(s),   // 精确匹配挂载赋值——/kitHearts/ 会被 wordExtras 里的调用字样误判
     apply: (s) => s.replace(
       `  let custom = opts.figure;`,
       `  let custom = opts.figure;
