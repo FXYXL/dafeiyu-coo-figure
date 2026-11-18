@@ -320,6 +320,17 @@ export async function createLive2DBody(base, opts, entry, kit) {
     if (SIMPLE) return;
     const want = expressionOverride ?? exprTable[face ?? 'neutral'] ?? null;
     if (want !== currentExpr) {
+      // 情绪基调切换：face-big 组的通道条目自动退场（2.6/互斥组的边界补丁）。
+      // 堵「黑脸挂着（通道），下一句【喜欢】→ exp3 联动 key4=1 → 叠加」的洞：
+      // exp3 的联动每帧推自己的 keyN，互斥组拦不到它，所以在基调切换时统一清场。
+      for (const members of Object.values(profile.exclusiveGroups ?? {})) {
+        for (const member of members) {
+          const md = paramActs[member];
+          if (!md) continue;
+          for (const q of md.params ?? []) channel.delete(q.id);
+          for (const kk of md.keys ?? []) channel.delete(kk.id);
+        }
+      }
       try { model._expressionManager.stopAllMotions(); } catch { /* 忽略 */ }
       currentExpr = null;
       const clip = want ? expressions.get(want) : null;
