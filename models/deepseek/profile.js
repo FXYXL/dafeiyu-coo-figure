@@ -23,25 +23,11 @@ export default {
   // 组合表情：把两个 exp3 的参数并集合并成一个（加载时合成，不增加运行时开销）。
   // 键是组合后的词名，值是要合并的 exp3 id。
   expressionCombos: {
-    'aggrieved':  ['tears', 'blush'],    // 委屈：流泪 + 脸红
-    'speechless': ['dark', 'dizzy'],     // 无语：黑脸 + 圈圈眼
-    'mad':        ['dark', 'smug'],      // 生气：黑脸 + 屑屑眼
-    'guilty':     ['sweat', 'blush'],    // 心虚：流冷汗 + 脸红
+    // （2026-11-18 统一到通道：这 4 个组合已翻译成 paramActs 的通道词，见"原.expressionCombos 组合"）
   },
 
   extraExpressions: {
-    // 键名会被当作可写的词，必须符合 Coo 的 id 规则（小写字母/数字/连字符）
-    'circle-eyes': 'dizzy',    // 圈圈眼
-    'dark-face': 'dark',       // 黑脸
-    'wry-face': 'smug',        // 屑屑眼
-    'glasses-face': 'glasses', // 黑框眼镜
-    'monocle-face': 'monocle', // 单片眼镜
-    'pan-face': 'pan',         // 钢盆
-    'loading-face': 'loading', // 加载中（原皮 key8）
-    'aggrieved': 'aggrieved',   // 委屈（流泪+脸红）
-    'speechless': 'speechless', // 无语（黑脸+圈圈眼）
-    'mad': 'mad',               // 生气（黑脸+屑屑眼）
-    'guilty': 'guilty',         // 心虚（冷汗+脸红）
+    // （2026-11-18 统一到通道：这批词已全部翻译成 paramActs 的 keyN 通道词，映射删除）
   },
   // 参数动作：用模型自己的参数做透视姿态，由 frame.gesture 的进度驱动。
   // LeanInput 是模型的"前倾输入"：负值往镜头靠（物理会据此联动身体），正值后退。
@@ -92,7 +78,7 @@ export default {
     "bitter-smile", "holding-up", "guilty-look", "act-cute",
     "defiant", "holding-tears", "smug-face", "perfunctory",
     "head-down", "head-up", "face-front", "stand-straight", "squint", "smirk",
-    "press-lips", "tongue-out", "sweat",
+    "press-lips", "sweat", "shrug",
     "circle-eyes", "heart-eyes", "xx-eyes", "wry-face", "dark-face", "tears",
     "loading-face", "bunny-teeth", "pan-face", "glasses-face", "monocle-face",
   ],
@@ -181,6 +167,10 @@ export default {
     '脸红': 'blush',
     '脸红红': 'blush',
     '恢复': 'restore',
+    '委屈': 'aggrieved',
+    '无语': 'speechless',
+    '阴险': 'mad',
+    '心慌': 'guilty',
     '吐舌': 'tongue-out',
     '吐舌头': 'tongue-out',
     '苦笑': 'bitter-smile',
@@ -203,6 +193,8 @@ export default {
     '抿嘴': 'press-lips',
     '冷汗': 'sweat',
     '冒冷汗': 'sweat',
+    '耸肩': 'shrug',
+    '耸耸肩': 'shrug',
     '爱心眼': 'heart-eyes',
     '流泪': 'tears',
     '含泪': 'tears',
@@ -352,16 +344,16 @@ export default {
     'smirk':      { state: true, dur: 1.0, params: [
       { id: 'ParamMouthForm', to: 0.7 }, { id: 'MouthX', to: 0.5 },
     ] },
-    // 吐舌：照抄他们 Body.cs 的完整配方（TongueOut 1 + 嘴开 0.35）——VTS 里此模型有舌头效果
-    // 吐舌：照抄他们 Body.cs 配方（TongueOut 1 + 嘴开 0.35）。VTS 实测无吐出表现，
-    // 但用户要装 DeepFish 对比——若他们渲染器里有舌头，深挖渲染差异
-    'tongue-out': { state: true, dur: 1.0, params: [
-      { id: 'TongueOut', to: 1 }, { id: 'ParamMouthOpenY', to: 0.35 },
-    ] },
     'press-lips': { state: true, dur: 1.0, params: [
-      { id: 'MouthPressLipOpen', to: -1 }, { id: 'ParamMouthForm', to: -0.5 },   // 他们 Body.cs 的值：-1 才是抿紧（范围 -1~1）
+      { id: 'MouthPressLipOpen', to: 1 }, { id: 'ParamMouthForm', to: -0.2 },
     ] },
     'sweat':      { state: true, dur: 1.0, params: [{ id: 'key13', to: 1 }] },
+    'shrug':      { dur: 1.5, keys: [
+      { t: 0,    id: 'ShoulderYy', v: 0 },
+      { t: 0.25, id: 'ShoulderYy', v: 14 },
+      { t: 0.9,  id: 'ShoulderYy', v: 14 },
+      { t: 1.5,  id: 'ShoulderYy', v: 0 },
+    ] },
     // —— 组合词（通道组合，可继续叠）——
     'bitter-smile': { state: true, dur: 1.2, params: [
       { id: 'ParamMouthForm', to: 0.7 },
@@ -424,7 +416,29 @@ export default {
     'bunny-teeth': { state: true, dur: 1.0, params: [{ id: 'key9', to: 1 }] },
     'pan-face':    { state: true, dur: 1.0, params: [{ id: 'key10', to: 1 }] },
     'glasses-face':{ state: true, dur: 1.0, params: [{ id: 'key11', to: 1 }] },
+    'tongue-out': { state: true, dur: 1.0, params: [
+      { id: 'TongueOut', to: 1 }, { id: 'ParamMouthOpenY', to: 0.35 },
+    ] },
     'monocle-face':{ state: true, dur: 1.0, params: [{ id: 'key12', to: 1 }] },
+    // —— 原 expressionCombos 的组合，翻译成通道版（2026-11-18 统一，全部可叠+自动放松）——
+    // 无语 = 黑脸(key1) + 圈圈眼(key3)，其余眼睛关
+    'speechless': { state: true, dur: 1.0, params: [
+      { id: 'key1', to: 1 },
+      { id: 'key3', to: 1 }, { id: 'key4', to: 0 }, { id: 'key5', to: 0 }, { id: 'key6', to: 0 },
+    ] },
+    // 阴险 = 黑脸(key1) + 屑屑眼(key6)
+    'mad': { state: true, dur: 1.0, params: [
+      { id: 'key1', to: 1 },
+      { id: 'key3', to: 0 }, { id: 'key4', to: 0 }, { id: 'key5', to: 0 }, { id: 'key6', to: 1 },
+    ] },
+    // 委屈 = 流泪(key2) + 脸红(key7)
+    'aggrieved': { state: true, dur: 1.0, params: [
+      { id: 'key2', to: 1 }, { id: 'key7', to: 1 },
+    ] },
+    // 心慌 = 冷汗(key13) + 脸红(key7)（原 guilty 组合）
+    'guilty': { state: true, dur: 1.0, params: [
+      { id: 'key13', to: 1 }, { id: 'key7', to: 1 },
+    ] },
   },
 
   expressions: {

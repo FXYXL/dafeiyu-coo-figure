@@ -2,7 +2,7 @@
   "manifest": 2,
   "api": 2,
   "id": "deepseek-shenggong",
-  "version": "1.13.0",
+  "version": "1.13.1",
   "name": {
     "zh": "大肥鱼",
     "en": "DaFeiYu"
@@ -890,7 +890,7 @@
     },
     {
       "id": "aggrieved",
-      "kind": "expression",
+      "kind": "motion",
       "names": {
         "zh": [
           "委屈"
@@ -900,11 +900,12 @@
         "zh": "眼泪汪汪还脸红，像快要哭出来",
         "en": "眼泪汪汪还脸红，像快要哭出来"
       },
-      "seconds": 3.5
+      "seconds": 3.5,
+      "lasting": true
     },
     {
       "id": "speechless",
-      "kind": "expression",
+      "kind": "motion",
       "names": {
         "zh": [
           "无语"
@@ -914,11 +915,12 @@
         "zh": "黑着脸、眼睛转圈，彻底无话可说",
         "en": "黑着脸、眼睛转圈，彻底无话可说"
       },
-      "seconds": 3.5
+      "seconds": 3.5,
+      "lasting": true
     },
     {
       "id": "mad",
-      "kind": "expression",
+      "kind": "motion",
       "names": {
         "zh": [
           "阴险"
@@ -931,11 +933,12 @@
         "zh": "黑着脸半眯眼，一脸算计",
         "en": "Dark face with a sly look"
       },
-      "seconds": 3.5
+      "seconds": 3.5,
+      "lasting": true
     },
     {
       "id": "guilty",
-      "kind": "expression",
+      "kind": "motion",
       "names": {
         "zh": [
           "心慌"
@@ -945,7 +948,8 @@
         "zh": "冒冷汗又脸红，像被抓住了",
         "en": "冒冷汗又脸红，像被抓住了"
       },
-      "seconds": 3.5
+      "seconds": 3.5,
+      "lasting": true
     },
     {
       "id": "puff-cheek",
