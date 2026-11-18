@@ -1506,6 +1506,21 @@
       },
       "seconds": 1,
       "lasting": true
+    },
+    {
+      "id": "tongue-out",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "吐舌",
+          "吐舌头"
+        ]
+      },
+      "about": {
+        "zh": "伸出舌头，调皮"
+      },
+      "seconds": 1,
+      "lasting": true
     }
   ],
   "sounds": {},

@@ -92,7 +92,7 @@ export default {
     "bitter-smile", "holding-up", "guilty-look", "act-cute",
     "defiant", "holding-tears", "smug-face", "perfunctory",
     "head-down", "head-up", "face-front", "stand-straight", "squint", "smirk",
-    "press-lips", "sweat", "shrug",
+    "press-lips", "tongue-out", "sweat", "shrug",
     "circle-eyes", "heart-eyes", "xx-eyes", "wry-face", "dark-face", "tears",
     "loading-face", "bunny-teeth", "pan-face", "glasses-face", "monocle-face",
   ],
@@ -181,6 +181,8 @@ export default {
     '脸红': 'blush',
     '脸红红': 'blush',
     '恢复': 'restore',
+    '吐舌': 'tongue-out',
+    '吐舌头': 'tongue-out',
     '苦笑': 'bitter-smile',
     '强撑': 'holding-up',
     '嘴硬': 'holding-up',
@@ -352,8 +354,12 @@ export default {
     'smirk':      { state: true, dur: 1.0, params: [
       { id: 'ParamMouthForm', to: 0.7 }, { id: 'MouthX', to: 0.5 },
     ] },
+    // 吐舌：照抄他们 Body.cs 的完整配方（TongueOut 1 + 嘴开 0.35）——VTS 里此模型有舌头效果
+    'tongue-out': { state: true, dur: 1.0, params: [
+      { id: 'TongueOut', to: 1 }, { id: 'ParamMouthOpenY', to: 0.35 },
+    ] },
     'press-lips': { state: true, dur: 1.0, params: [
-      { id: 'MouthPressLipOpen', to: 1 }, { id: 'ParamMouthForm', to: -0.2 },
+      { id: 'MouthPressLipOpen', to: -1 }, { id: 'ParamMouthForm', to: -0.5 },   // 他们 Body.cs 的值：-1 才是抿紧（范围 -1~1）
     ] },
     'sweat':      { state: true, dur: 1.0, params: [{ id: 'key13', to: 1 }] },
     'shrug':      { dur: 1.5, keys: [
