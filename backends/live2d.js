@@ -1084,9 +1084,13 @@ export async function createLive2DBody(base, opts, entry, kit) {
         const sinceEnd = lastSpeechEnd >= 0 ? clockT - lastSpeechEnd : 0;   // 说完多久
         const bornAge = clockT - bornAt;                         // 出生多久
         const speakingCtx = lastSpeechEnd >= 0 && sinceEnd < 30; // 最近说过话 = 说话语境
-        // faceLinked 条目（face 联动的影子）不参与寿命——退场=下一个词触发时让位
+        // faceLinked 条目（face 联动的影子）：下一个词触发时让位（actWord 开头清），
+        // 说完话 2 秒后自己渐退（他们文档的「说完过一会儿自己松掉」）；
+        // 闲置语境（随机动作触发的影子）照旧限时 3 秒
         const expired = c.faceLinked
-          ? false
+          ? speakingCtx
+            ? sinceEnd > SPEECH_END_DELAY
+            : bornAge > IDLE_LIFE
           : speakingCtx
             ? (bornSentence >= 0 && lived >= SENT_LIFE) || sinceEnd > SPEECH_END_DELAY
             : bornAge > IDLE_LIFE;
