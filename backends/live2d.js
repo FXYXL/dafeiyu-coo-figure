@@ -933,11 +933,13 @@ export async function createLive2DBody(base, opts, entry, kit) {
   let lastWordAt = -99;   // 上次有新词的时刻：自动放松的计时基准（2.6）
   const RELAX_FADE = 1.5, SENT_LIFE = 2, SPEECH_END_DELAY = 2;
   let sentenceCount = 0, bornSentence = -1, lastSpeechEnd = -99;   // 跟句寿命（2.6 改造）
+  let bornAt = -99;   // 词出生时刻：闲置语境（随机动作）的限时基准
 
   /** kit 的 doWord 会先问这里。返回 true = 这个词我处理了，不要走 pulse。 */
   function actWord(w) {
     lastWordAt = clockT;
-    bornSentence = sentenceCount;   // 词出生时的句号（跟句寿命用）   // 任何新词都刷新放松计时（说话、表情都算交互）
+    bornSentence = sentenceCount;   // 词出生时的句号（跟句寿命用）
+    bornAt = clockT;                // 词出生的时刻（闲置语境的限时用）   // 任何新词都刷新放松计时（说话、表情都算交互）
     if (!useChannels || !channelWords.has(w)) return false;
     const def = paramActs[w];
     if (!def) return false;
@@ -1072,10 +1074,16 @@ export async function createLive2DBody(base, opts, entry, kit) {
       if (c.keep) {
         // 表情层：只有淡入；淡出靠被同参数覆盖、「恢复」、或 2.6 自动放松
         k = clamp(age / Math.max(1e-3, c.in), 0, 1);
-        // 自动放松（2.6 改造）：跟句 2 句 或 说完话 2 秒，任一先到 → 1.5 秒淡出
+        // 自动放松（2.6 改造）：寿命按语境分——
+        //   说话语境（最近 30 秒说过话）：跟句 2 句 或 说完话 2 秒，先到先退
+        //   闲置语境（30 秒没说话，随机动作触发的）：限时 3 秒（对齐他们 mood.Seconds）
         const lived = sentenceCount - bornSentence;              // 活了几句
         const sinceEnd = lastSpeechEnd >= 0 ? clockT - lastSpeechEnd : 0;   // 说完多久
-        const expired = (bornSentence >= 0 && lived >= SENT_LIFE) || (lastSpeechEnd >= 0 && sinceEnd > SPEECH_END_DELAY);
+        const bornAge = clockT - bornAt;                         // 出生多久
+        const speakingCtx = lastSpeechEnd >= 0 && sinceEnd < 30; // 最近说过话 = 说话语境
+        const expired = speakingCtx
+          ? (bornSentence >= 0 && lived >= SENT_LIFE) || sinceEnd > SPEECH_END_DELAY
+          : bornAge > IDLE_LIFE;
         if (expired) {
           if (!c.relaxStart) c.relaxStart = clockT;
           const fade = clamp((clockT - c.relaxStart) / RELAX_FADE, 0, 1);
