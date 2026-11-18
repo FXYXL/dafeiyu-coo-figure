@@ -132,13 +132,17 @@ const PATCHES = [
     if (base) w = base;
     if (custom?.actWord?.(w)) {
       // wordExtras：词被 figure 通道接管后，kit 表情槽的"附加动作"照常发生。
+      // 表情名的确定：orig 是 kit 表情名（script.ts 已解析的【】词）直接用；
+      // 否则问 figure 的 emotionFace（pet_act 传中文原词，baseWord 还原成
+      // 配方 id 如 blush/heart-eyes，用 emotionArc 换算回 kit 表情名 shy/love）。
       // 音效走 host.sound（body-host 桥 → 主页 sfx.play）——play 闭包在 createPet 里，
       // doWord 作用域没有，之前用 play 直接 ReferenceError 被上层吞掉（静默无声的根因）。
-      if (KIT_EXPRESSIONS.includes(orig)) {
-        const tone = FACE_TONES[orig];
+      const face = KIT_EXPRESSIONS.includes(orig) ? orig : custom?.emotionFace?.(w);
+      if (face) {
+        const tone = FACE_TONES[face];
         if (tone) host.sound(tone, 'face');
-        if (orig === 'love') custom?.kitHearts?.();
-        pet.sqv += orig === 'surprised' ? -2.2 : .8;
+        if (face === 'love') custom?.kitHearts?.();
+        pet.sqv += face === 'surprised' ? -2.2 : .8;
       }
       return true;
     }`,

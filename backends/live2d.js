@@ -1605,6 +1605,12 @@ export async function createLive2DBody(base, opts, entry, kit) {
       }
       return 0;
     },
+    // 情绪词的 kit 表情名（wordExtras 用）：pet_act 传中文原词、baseWord 还原成配方 id
+    // （blush/tears/heart-eyes…），kit 的 FACE_TONES/爱心/挤压按 kit 表情名（shy/sad/love…）——
+    // 用 emotionArc 换算回去，主动触发的音效/粒子才和随机表情一致
+    emotionFace(w) {
+      return (profile.emotionArc ?? {})[w] ?? (profile.expression?.[w] ? w : null);
+    },
     // kit 的 doWord 会先问这里：返回 true 表示这个词形象自己处理（通道叠加），
     // 不走 kit 的单槽 pulse。白名单外的词返回 false，保持旧行为。
     actWord,
