@@ -948,6 +948,18 @@ export async function createLive2DBody(base, opts, entry, kit) {
       if (i === undefined) return 0;
       try { const d = model._model.getParameterDefaultValueByIndex?.(i); return Number.isFinite(d) ? d : 0; } catch { return 0; }
     };
+    // 互斥组：新词属于某组时，同组其他词的参数先撤掉（换脸级表达自动让位）。
+    // 「黑脸→屑屑眼」这类连续换表情，旧的不再叠加挂着。
+    for (const members of Object.values(profile.exclusiveGroups ?? {})) {
+      if (!members.includes(w)) continue;
+      for (const other of members) {
+        if (other === w) continue;
+        const od = paramActs[other];
+        if (!od) continue;
+        for (const q of od.params ?? []) channel.delete(q.id);
+        for (const kk of od.keys ?? []) channel.delete(kk.id);
+      }
+    }
     // 手部词：先把上一只手的参数撤掉，再写这一只（三只手不能同时抬）
     if (def.hand) {
       if (idlePoseWord) clearIdlePose();
