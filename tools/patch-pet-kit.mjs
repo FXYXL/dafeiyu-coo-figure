@@ -117,6 +117,32 @@ const PATCHES = [
       if (s.beat !== undefined) opts.figure?.onBeat?.(s.beat);`,
     ),
   },
+  {
+    file: 'body', id: 'wordExtras',
+    desc: 'actWord 接管的词补回 kit 表情附加动作：音效（FACE_TONES）/ 爱心粒子（love）/ 挤压脉冲（sqv）',
+    detect: (s) => /wordExtras/.test(s),
+    apply: (s) => s.replace(
+      `  function doWord(w) {
+    const base = custom?.baseWord?.(w);
+    if (base) w = base;
+    if (custom?.actWord?.(w)) return true;`,
+      `  function doWord(w) {
+    const orig = w;
+    const base = custom?.baseWord?.(w);
+    if (base) w = base;
+    if (custom?.actWord?.(w)) {
+      // wordExtras：词被 figure 通道接管后，kit 表情槽的"附加动作"照常发生
+      // （原 setExpr 的音效/爱心/挤压逻辑，只对 kit 认识的表情名生效）
+      if (KIT_EXPRESSIONS.includes(orig)) {
+        const tone = FACE_TONES[orig];
+        if (tone) play(tone, 'face');
+        if (orig === 'love') for (let i = 0; i < 4; i++) emitHeart();
+        pet.sqv += orig === 'surprised' ? -2.2 : .8;
+      }
+      return true;
+    }`,
+    ),
+  },
   // ===== pet-app.js =====
   {
     file: 'petapp', id: 'actBatch',

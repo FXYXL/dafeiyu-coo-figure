@@ -994,6 +994,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
       base: wv.base ?? 0,
       phase: wv.phase ?? 0,
       post: !!post,
+      // state 词的波形和静态参数同寿命（持续抖到退场）——不补的话波形抖 dur 秒就静默消失
+      keep: !!(def.state || def.keep),
       t0: now,
       dur,
       in: inT,

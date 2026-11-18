@@ -172,7 +172,7 @@ export default {
     '慌张': 'guilty', 'flustered': 'guilty',
     '难过': 'tears', 'sad': 'tears',
     '哭': 'tears', 'cry': 'tears',
-    '生气': 'dark-face', 'angry': 'dark-face',
+    '生气': 'angry', 'angry': 'angry',
     '喜欢': 'heart-eyes', 'love': 'heart-eyes',
     '担心': 'sweat', 'worried': 'sweat',
     '惊讶': 'surprised', 'scared': 'scared',
@@ -466,12 +466,6 @@ export default {
       { id: 'ParamBrowLY', to: 0.7 }, { id: 'ParamBrowRY', to: 0.7 },
       { id: 'ParamMouthOpenY', to: 0.5 },
     ] },
-    'scared':    { state: true, dur: 1.2, params: [
-      { id: 'ParamEyeLOpen', to: 1 }, { id: 'ParamEyeROpen', to: 1 }, { id: 'EyeSmile', to: 0 },
-      { id: 'ParamBrowLY', to: 0.45 }, { id: 'ParamBrowRY', to: 0.45 },
-      { id: 'ParamBrowLAngle', to: -0.55 }, { id: 'ParamBrowRAngle', to: -0.55 },
-      { id: 'ParamMouthOpenY', to: 0.3 },
-    ] },
     'thinking':  { state: true, dur: 1.2, params: [
       { id: 'REyeSquint', to: 1 }, { id: 'LEyeSquint', to: 1 },
       { id: 'ParamEyeLOpen', to: 0.6 }, { id: 'ParamEyeROpen', to: 0.6 },
@@ -487,6 +481,25 @@ export default {
       { id: 'ParamBrowLAngle', to: -0.55 }, { id: 'ParamBrowRAngle', to: -0.55 },
       { id: 'ParamEyeLOpen', to: 0.45 }, { id: 'ParamEyeROpen', to: 0.45 }, { id: 'EyeSmile', to: 0 },
     ] },
+    // 生气：黑脸 + 浑身抖动（kit 旧脸配方 fc.shake 是 sin(T*60)*1.4 ≈ 9.5Hz，
+    // 通道化后 setExpr 不再触发，抖动在这里自绘。幅度太大像帕金森，先按 kit 原值）
+    'angry':     { state: true, dur: 1.2,
+      params: [{ id: 'key1', to: 1 }],
+      waves: [
+        { id: 'AngleX', amp: 1.4, freq: 9.5 },
+        { id: 'ParamBodyAngleX', amp: 1, freq: 8, phase: 0.15 },
+      ] },
+    'scared':    { state: true, dur: 1.2,
+      params: [
+        { id: 'ParamEyeLOpen', to: 1 }, { id: 'ParamEyeROpen', to: 1 }, { id: 'EyeSmile', to: 0 },
+        { id: 'ParamBrowLY', to: 0.45 }, { id: 'ParamBrowRY', to: 0.45 },
+        { id: 'ParamBrowLAngle', to: -0.55 }, { id: 'ParamBrowRAngle', to: -0.55 },
+        { id: 'ParamMouthOpenY', to: 0.3 },
+        { id: 'key13', to: 1 },   // 冷汗（kit 旧脸配方 sweat:true 的对应）
+      ],
+      waves: [
+        { id: 'AngleX', amp: 1.1, freq: 10.5 },
+      ] },
   },
 
   // 互斥组：组内一个词激活时，同组其他词自动让位（参数撤掉）。
