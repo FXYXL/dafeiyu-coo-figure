@@ -1714,6 +1714,21 @@ export async function createLive2DBody(base, opts, entry, kit) {
       model._model.saveParameters();            // ← 必须在 physics 之前
       stepMotion(frame, dt);
       stepExpression(frame.face, dt);
+      // exp3 联动的自动放松（2.6 补全）：说完话 2 秒后，当前表情写的 keyN 渐退。
+      // expressionManager 在 face 不变时每帧保持参数，我们在这里后写衰减值——
+      // 每帧拉锯但渲染归零；face 一变（新句新表情）就重置重来。
+      if (lastSpeechEnd >= 0 && currentExpr) {
+        const sinceEnd = clockT - lastSpeechEnd;
+        if (sinceEnd > SPEECH_END_DELAY) {
+          const fade = clamp((sinceEnd - SPEECH_END_DELAY) / RELAX_FADE, 0, 1);
+          for (const qid of exp3Params.get(currentExpr) ?? []) {
+            try {
+              const cur = model._model.getParameterValueById(qid);
+              model._model.setParameterValueById(qid, cur * (1 - fade));
+            } catch { /* 参数不存在则跳过 */ }
+          }
+        }
+      }
       applyPartOpacity(currentId);
       // 通道叠加必须写在 stepMotion 之后：Cubism 的 idle 动作每帧会改参数，
       // 写早了会被它盖掉（实测鞠躬的低头被 idle 吃掉，AngleY 读回是正值）。
