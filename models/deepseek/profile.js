@@ -165,6 +165,27 @@ export default {
     '无语': 'speechless',
     '阴险': 'mad',
     '心慌': 'guilty',
+    // —— 日常情绪词（2026-11-19 通道化）：zh 和 en id 双向映射，
+    // 【】里的词 script.ts 已解析成 en id（走 en 键），pet_act 的中文（走 zh 键）
+    '开心': 'happy', '兴奋': 'happy', 'happy': 'happy', 'excited': 'happy',
+    '害羞': 'blush', 'shy': 'blush',
+    '慌张': 'guilty', 'flustered': 'guilty',
+    '难过': 'tears', 'sad': 'tears',
+    '哭': 'tears', 'cry': 'tears',
+    '生气': 'dark-face', 'angry': 'dark-face',
+    '喜欢': 'heart-eyes', 'love': 'heart-eyes',
+    '担心': 'sweat', 'worried': 'sweat',
+    '惊讶': 'surprised', 'scared': 'scared',
+    '害怕': 'scared',
+    '困倦': 'eye-half', 'sleepy': 'eye-half',
+    '思考': 'thinking', 'thinking': 'thinking',
+    '神气': 'smug-face', 'smug': 'smug-face',
+    '嘟嘴': 'mouth-pout', 'pout': 'mouth-pout',
+    '坚定': 'determined', 'determined': 'determined',
+    '困惑': 'confused', 'confused': 'confused',
+    '发呆': 'dazed', '放空': 'dazed',
+    '鼓腮': 'puff-cheek', '鼓脸': 'puff-cheek',
+    '撅嘴': 'pout-lips',
     '吐舌': 'tongue-out',
     '吐舌头': 'tongue-out',
     '苦笑': 'bitter-smile',
@@ -339,7 +360,7 @@ export default {
       { id: 'ParamMouthForm', to: 0.7 }, { id: 'MouthX', to: 0.5 },
     ] },
     'press-lips': { state: true, dur: 1.0, params: [
-      { id: 'MouthPressLipOpen', to: 1 }, { id: 'ParamMouthForm', to: -0.2 },
+      { id: 'MouthPressLipOpen', to: -1 }, { id: 'ParamMouthForm', to: -0.5 },
     ] },
     'sweat':      { state: true, dur: 1.0, params: [{ id: 'key13', to: 1 }] },
     'shrug':      { dur: 1.5, keys: [
@@ -433,13 +454,48 @@ export default {
     'guilty': { state: true, dur: 1.0, params: [
       { id: 'key13', to: 1 }, { id: 'key7', to: 1 },
     ] },
+
+    // —— 日常情绪词通道化（2026-11-19 双轨合并第二步）：【开心】这类词原来走 kit 旧表情槽，
+    // 不受通道机制管。现在由源词参数合并成通道配方，actWord 直接接管。
+    // 参数全部抄自现有词（笑眼/微笑/睁大/挑眉/八字眉/皱眉/抿嘴/半睁/斜眼），值可直接调。
+    'happy':     { state: true, dur: 1.2, params: [
+      { id: 'EyeSmile', to: 1 }, { id: 'ParamMouthForm', to: 0.7 },
+    ] },
+    'surprised': { state: true, dur: 1.2, params: [
+      { id: 'ParamEyeLOpen', to: 1 }, { id: 'ParamEyeROpen', to: 1 }, { id: 'EyeSmile', to: 0 },
+      { id: 'ParamBrowLY', to: 0.7 }, { id: 'ParamBrowRY', to: 0.7 },
+      { id: 'ParamMouthOpenY', to: 0.5 },
+    ] },
+    'scared':    { state: true, dur: 1.2, params: [
+      { id: 'ParamEyeLOpen', to: 1 }, { id: 'ParamEyeROpen', to: 1 }, { id: 'EyeSmile', to: 0 },
+      { id: 'ParamBrowLY', to: 0.45 }, { id: 'ParamBrowRY', to: 0.45 },
+      { id: 'ParamBrowLAngle', to: -0.55 }, { id: 'ParamBrowRAngle', to: -0.55 },
+      { id: 'ParamMouthOpenY', to: 0.3 },
+    ] },
+    'thinking':  { state: true, dur: 1.2, params: [
+      { id: 'REyeSquint', to: 1 }, { id: 'LEyeSquint', to: 1 },
+      { id: 'ParamEyeLOpen', to: 0.6 }, { id: 'ParamEyeROpen', to: 0.6 },
+      { id: 'ParamBrowLY', to: 0.7 }, { id: 'ParamBrowRY', to: 0.7 },
+    ] },
+    'determined':{ state: true, dur: 1.2, params: [
+      { id: 'ParamBrowLY', to: -0.7 }, { id: 'ParamBrowRY', to: -0.7 },
+      { id: 'ParamBrowLAngle', to: -0.9 }, { id: 'ParamBrowRAngle', to: -0.9 },
+      { id: 'MouthPressLipOpen', to: -1 },
+    ] },
+    'confused':  { state: true, dur: 1.2, params: [
+      { id: 'ParamBrowLY', to: 0.45 }, { id: 'ParamBrowRY', to: 0.45 },
+      { id: 'ParamBrowLAngle', to: -0.55 }, { id: 'ParamBrowRAngle', to: -0.55 },
+      { id: 'ParamEyeLOpen', to: 0.45 }, { id: 'ParamEyeROpen', to: 0.45 }, { id: 'EyeSmile', to: 0 },
+    ] },
   },
 
   // 互斥组：组内一个词激活时，同组其他词自动让位（参数撤掉）。
   // 「整脸大件」互斥——黑脸/圈圈眼/爱心眼/紧闭眼/屑屑眼/加载/钢盆/无语/阴险都是
   // 换脸级的表达，叠加会怪；流泪/冷汗/脸红/兔牙是"附加层"，不进组（叠加合理）。
   exclusiveGroups: {
-    'face-big': ['dark-face', 'circle-eyes', 'heart-eyes', 'xx-eyes', 'wry-face', 'loading-face', 'pan-face', 'speechless', 'mad', 'aggrieved', 'guilty', 'bitter-smile', 'holding-up', 'guilty-look', 'act-cute', 'defiant', 'holding-tears', 'smug-face', 'perfunctory'],
+    'face-big': ['dark-face', 'circle-eyes', 'heart-eyes', 'xx-eyes', 'wry-face', 'loading-face', 'pan-face', 'speechless', 'mad', 'aggrieved', 'guilty', 'bitter-smile', 'holding-up', 'guilty-look', 'act-cute', 'defiant', 'holding-tears', 'smug-face', 'perfunctory',
+      // 日常情绪词通道化后进组：一个情绪一次一张脸（【开心】顶掉【害羞】从这里生效）
+      'blush', 'tears', 'sweat', 'happy', 'surprised', 'scared', 'thinking', 'determined', 'confused'],
   },
 
 
