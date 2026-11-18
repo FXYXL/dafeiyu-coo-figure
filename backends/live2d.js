@@ -931,7 +931,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
   /** paramId -> { from, to, t0, dur, in, out }：每个通道自己管生命周期，到期自动退出 */
   const channel = new Map();
   let lastWordAt = -99;   // 上次有新词的时刻：自动放松的计时基准（2.6）
-  const RELAX_FADE = 1.5, SENT_LIFE = 2, SPEECH_END_DELAY = 2;
+  const RELAX_FADE = 1.5, SENT_LIFE = 2, SPEECH_END_DELAY = 2, IDLE_LIFE = 3;
   let sentenceCount = 0, bornSentence = -1, lastSpeechEnd = -99;   // 跟句寿命（2.6 改造）
   let bornAt = -99;   // 词出生时刻：闲置语境（随机动作）的限时基准
 
