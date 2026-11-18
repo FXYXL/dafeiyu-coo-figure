@@ -1,29 +1,35 @@
 #!/usr/bin/env node
 /**
- * 给 Coo 桌宠引擎打补丁 —— Coo 每次更新都会覆盖 web/kit/body.js，跑一次这个重新打上。
+ * 给 Coo 桌宠引擎打补丁 —— Coo 每次更新都会覆盖 web/kit、web/pet-app、src/script，
+ * 跑一次这个重新打上全部。
  *
  *   node patch-pet-kit.mjs          打补丁
  *   node patch-pet-kit.mjs --check  只检查状态，不写文件
- *   node patch-pet-kit.mjs --revert 从 .bak 还原
+ *   node patch-pet-kit.mjs --revert 从 .bak-* 还原
  *
- * 两个补丁：
- *   1. pointer   —— 把真实指针坐标传给形象。没有它，形象只能用 look 判断"鼠标动没动"，
- *                   而鼠标不在窗口时 look 是每 1.2~3 秒刷新的随机 glance，走神会被误判。
- *   2. drowse    —— 把随机打瞌睡的频率降下来（原版 sit 权重 16、转睡 60%、睡 8~12 秒）。
+ * 补丁清单（file: id）：
+ *   body.js  : pointer / noMirror / noTurn / drowse          （1.11 时代）
+ *   body.js  : wordBase / actWord / setTrans                  （表演系统 1.12~1.13）
+ *   pet-app.js : actBatch（同帧下发）/ beatNotice（气泡通知）  （1.12~1.13）
+ *   script.ts  : actModifier（修饰词放行）                     （1.12）
  */
 import fs from 'node:fs';
 import path from 'node:path';
 
-const FILE = 'D:/Coopanion/resources/app/node_modules/cortico-world-desktop-pet/web/kit/body.js';
-const BAK = FILE + '.bak-petkit';
+const DIR = 'D:/Coopanion/resources/app/node_modules/cortico-world-desktop-pet';
+const FILES = {
+  body: `${DIR}/web/kit/body.js`,
+  petapp: `${DIR}/web/pet-app.js`,
+  script: `${DIR}/src/script.ts`,
+};
 
 const PATCHES = [
+  // ===== body.js：1.11 时代的四个 =====
   {
-    id: 'pointer',
+    file: 'body', id: 'pointer',
     desc: '把真实指针坐标和瞬时朝向传给形象（走神/跟随/防抽搐要靠它）',
     detect: (s) => /pointer:\s*pointer\.inside\s*\?/.test(s) && /facingNow:\s*pet\.facing/.test(s),
     apply: (s) => {
-      // 分两步：可能之前只打过 pointer，没有 facingNow
       let out = s;
       if (!/pointer:\s*pointer\.inside\s*\?/.test(out)) {
         const anchor = /(\n\s*look: pet\.look, legs, low: pet\.low, t: T, blink, eyeClose, acc: skin, swing: pet\.swing,)/;
@@ -45,18 +51,16 @@ const PATCHES = [
     },
   },
   {
-    id: 'noMirror',
+    file: 'body', id: 'noMirror',
     desc: '形象声明 noMirror 时不做整块镜像（Live2D 正面像翻面会左右手换边）',
     detect: (s) => /const faceK = custom\?\.noMirror/.test(s) && /lean = pet\.lean \* pet\.faceVis/.test(s),
     apply: (s) => s.replace(
       'const kx = S * pet.faceVis * sx, ky = S * sy, lean = pet.lean * pet.faceVis;',
-      // 只让水平缩放受 noMirror 影响；lean 继续乘 faceVis，
-      // 否则身体永远往同一边倒、胯的摆动也会变干。
       'const faceK = custom?.noMirror ? 1 : pet.faceVis;\n    const kx = S * faceK * sx, ky = S * sy, lean = pet.lean * pet.faceVis;',
     ),
   },
   {
-    id: 'noTurn',
+    file: 'body', id: 'noTurn',
     desc: 'noMirror 的形象不做 facing 翻转（待机转身 + 张望动作两处）',
     detect: (s) => /!custom\?\.noMirror && pointer\.inside && !press/.test(s) && /!pet\.turned && !custom\?\.noMirror/.test(s),
     apply: (s) => s
@@ -70,7 +74,7 @@ const PATCHES = [
       ),
   },
   {
-    id: 'drowse',
+    file: 'body', id: 'drowse',
     desc: '降低随机打瞌睡的权重 / 概率 / 时长',
     detect: (s) => /\['sit', 6\]/.test(s) && /willSleep: Math\.random\(\) < \.18/.test(s),
     apply: (s) => s
@@ -78,49 +82,114 @@ const PATCHES = [
       .replace('willSleep: Math.random() < .6', 'willSleep: Math.random() < .18')
       .replace("setMode('sleep', { dur: rnd(8, 12) })", "setMode('sleep', { dur: rnd(4, 6) })"),
   },
+  // ===== body.js：表演系统（1.12~1.13）=====
+  {
+    file: 'body', id: 'wordBase',
+    desc: 'doWord 词还原：修饰词（微/大/快/慢/×几）+ 中文别名由形象包解析',
+    detect: (s) => /custom\?\.baseWord\?\.\(w\)/.test(s),
+    apply: (s) => s.replace(
+      '  function doWord(w) {',
+      '  function doWord(w) {\n    const base = custom?.baseWord?.(w);\n    if (base) w = base;',
+    ),
+  },
+  {
+    file: 'body', id: 'actWord',
+    desc: '通道接管：动作交给形象包的 actWord（返回 true 则 kit 直接成功）',
+    detect: (s) => /custom\?\.actWord\?\.\(w\)/.test(s),
+    apply: (s) => s.replace(
+      '    const base = custom?.baseWord?.(w);\n    if (base) w = base;',
+      '    const base = custom?.baseWord?.(w);\n    if (base) w = base;\n    if (custom?.actWord?.(w)) return true;',
+    ),
+  },
+  {
+    file: 'body', id: 'setTrans',
+    desc: 'set 透传生命周期事件：speechStart / speechDone / beat（表情寿命跟句用）',
+    detect: (s) => /onSpeechStart/.test(s),
+    apply: (s) => s.replace(
+      "      if (typeof s.hold === 'number') ctl.holdRoam(s.hold);",
+      `      if (typeof s.hold === 'number') ctl.holdRoam(s.hold);
+      if (s.speechStart) custom?.onSpeechStart?.();
+      if (s.speechDone) custom?.onSpeechEnd?.();
+      if (s.beat !== undefined) custom?.onBeat?.(s.beat);`,
+    ),
+  },
+  // ===== pet-app.js =====
+  {
+    file: 'petapp', id: 'actBatch',
+    desc: '动作同帧下发（替换 acts 队列：一行里的动作一起发生，不排队不积压）',
+    detect: (s) => /body\?\.do\(a\); lead = \.45;/.test(s),
+    apply: (s) => s.replace(
+      '      for (const a of b.actions || []) acts.push(a);',
+      '      let lead = 0;\n      for (const a of b.actions || []) { body?.do(a); lead = .45; }',
+    ),
+  },
+  {
+    file: 'petapp', id: 'beatNotice',
+    desc: '气泡生命周期通知：say 开始 / beat 开始 / 说完（表情寿命跟句的信号源）',
+    detect: (s) => /beat: it\.i/.test(s) && /speechStart: 1/.test(s),
+    apply: (s) => s
+      .replace(
+        "    case 'say': dropAsks(); queue.push({ kind: 'say', id: m.id, beats: m.beats, i: -1 }); holdRoam(20); break;",
+        "    case 'say': dropAsks(); body?.set({ speechStart: 1 }); queue.push({ kind: 'say', id: m.id, beats: m.beats, i: -1 }); holdRoam(20); break;",
+      )
+      .replace(
+        '      if (it.i >= it.beats.length) { closeBubble(); return; }',
+        '      if (it.i >= it.beats.length) { body?.set({ speechDone: 1 }); closeBubble(); return; }',
+      )
+      .replace(
+        '      const b = it.beats[it.i];\n      let lead = 0;',
+        '      body?.set({ beat: it.i });\n      const b = it.beats[it.i];\n      let lead = 0;',
+      ),
+  },
+  // ===== script.ts =====
+  {
+    file: 'script', id: 'actModifier',
+    desc: '修饰词放行：微/大/快/慢/×几 不算新词，剥掉修饰后的词去校验',
+    detect: (s) => /「微\/大\/快\/慢」前缀/.test(s),
+    apply: null,   // 已在源文件（138 行注释为锚），Coo 更新后需按当日实现重写——TODO
+  },
 ];
 
 const mode = process.argv.includes('--check') ? 'check'
   : process.argv.includes('--revert') ? 'revert' : 'apply';
 
-if (!fs.existsSync(FILE)) {
-  console.error(`找不到 ${FILE}\nCoo 的安装路径可能变了，改脚本顶部的 FILE。`);
-  process.exit(1);
-}
-
 if (mode === 'revert') {
-  if (!fs.existsSync(BAK)) { console.error('没有备份，无法还原'); process.exit(1); }
-  fs.copyFileSync(BAK, FILE);
-  console.log('已从备份还原');
+  for (const [k, f] of Object.entries(FILES)) {
+    const bak = f + '.bak-petkit';
+    if (fs.existsSync(bak)) { fs.copyFileSync(bak, f); console.log(`已还原 ${k}`); }
+  }
   process.exit(0);
 }
 
-let src = fs.readFileSync(FILE, 'utf8');
-const before = src;
-const report = [];
-
-for (const p of PATCHES) {
-  if (p.detect(src)) { report.push(`  跳过 ${p.id}（已经打过了）`); continue; }
-  const next = p.apply(src);
-  if (next === null) { report.push(`  ✗ ${p.id} 失败：找不到锚点（Coo 可能改了结构）`); continue; }
-  if (next === src) { report.push(`  ✗ ${p.id} 失败：替换没生效`); continue; }
-  src = next;
-  report.push(`  ✓ ${p.id} ${p.desc}`);
+for (const [k, f] of Object.entries(FILES)) {
+  if (!fs.existsSync(f)) { console.error(`找不到 ${k}: ${f}`); process.exit(1); }
 }
 
-console.log(`补丁目标：${FILE}`);
-console.log(report.join('\n'));
+// 按文件分组打补丁（每个文件独立读源 / 独立备份 .bak-petkit）
+for (const [k, f] of Object.entries(FILES)) {
+  let src = fs.readFileSync(f, 'utf8');
+  const before = src;
+  const report = [];
+  const bak = f + '.bak-petkit';
 
-if (mode === 'check') {
-  console.log(src === before ? '\n（检查模式，未写入）' : '\n（检查模式，未写入；上面有可打的补丁）');
-  process.exit(0);
+  for (const p of PATCHES.filter((x) => x.file === k)) {
+    if (p.detect(src)) { report.push(`  跳过 ${p.id}（已打）`); continue; }
+    if (!p.apply) { report.push(`  ⚠ ${p.id} 无自动 apply（Coo 更新后需手动按当日实现重写）`); continue; }
+    const next = p.apply(src);
+    if (next === null) { report.push(`  ✗ ${p.id} 失败：找不到锚点（Coo 可能改了结构）`); continue; }
+    if (next === src) { report.push(`  ✗ ${p.id} 失败：替换没生效`); continue; }
+    src = next;
+    report.push(`  ✓ ${p.id} ${p.desc}`);
+  }
+
+  console.log(`\n补丁目标[${k}]：${f}`);
+  console.log(report.join('\n') || '  （全部已打）');
+
+  if (mode === 'check') continue;
+  if (src === before) { console.log('  无改动'); continue; }
+  if (!fs.existsSync(bak)) fs.copyFileSync(f, bak);
+  fs.writeFileSync(f, src);
+  console.log(`  已写入（备份 ${path.basename(bak)}）`);
 }
 
-if (src === before) {
-  console.log('\n没有改动，无需写入');
-  process.exit(0);
-}
-
-if (!fs.existsSync(BAK)) fs.copyFileSync(FILE, BAK);
-fs.writeFileSync(FILE, src);
-console.log(`\n已写入（备份在 ${path.basename(BAK)}）\n完全退出 Coo 再启动才生效。`);
+if (mode !== 'check') console.log('\n完全退出 Coo 再启动才生效。');
