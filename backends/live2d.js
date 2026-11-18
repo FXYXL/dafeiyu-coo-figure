@@ -943,11 +943,13 @@ export async function createLive2DBody(base, opts, entry, kit) {
   /** paramId -> { from, to, t0, dur, in, out }：每个通道自己管生命周期，到期自动退出 */
   const channel = new Map();
   let lastWordAt = -99;   // 上次有新词的时刻：自动放松的计时基准（2.6）
-  const RELAX_AFTER = 8, RELAX_FADE = 1.5;   // 静默 8 秒开始松，1.5 秒退完
+  const RELAX_FADE = 1.5, SENT_LIFE = 2, SPEECH_END_DELAY = 2;
+  let sentenceCount = 0, bornSentence = -1, lastSpeechEnd = -99;   // 跟句寿命（2.6 改造）
 
   /** kit 的 doWord 会先问这里。返回 true = 这个词我处理了，不要走 pulse。 */
   function actWord(w) {
-    lastWordAt = clockT;   // 任何新词都刷新放松计时（说话、表情都算交互）
+    lastWordAt = clockT;
+    bornSentence = sentenceCount;   // 词出生时的句号（跟句寿命用）   // 任何新词都刷新放松计时（说话、表情都算交互）
     if (!useChannels || !channelWords.has(w)) return false;
     const def = paramActs[w];
     if (!def) return false;
@@ -1082,13 +1084,16 @@ export async function createLive2DBody(base, opts, entry, kit) {
       if (c.keep) {
         // 表情层：只有淡入；淡出靠被同参数覆盖、「恢复」、或 2.6 自动放松
         k = clamp(age / Math.max(1e-3, c.in), 0, 1);
-        // 自动放松：8 秒没新词 → 1.5 秒慢慢退掉（不是瞬切，是"松掉"）
-        const idle = clockT - lastWordAt;
-        if (idle > RELAX_AFTER) {
-          const fade = clamp((idle - RELAX_AFTER) / RELAX_FADE, 0, 1);
+        // 自动放松（2.6 改造）：跟句 2 句 或 说完话 2 秒，任一先到 → 1.5 秒淡出
+        const lived = sentenceCount - bornSentence;              // 活了几句
+        const sinceEnd = lastSpeechEnd >= 0 ? clockT - lastSpeechEnd : 0;   // 说完多久
+        const expired = (bornSentence >= 0 && lived >= SENT_LIFE) || (lastSpeechEnd >= 0 && sinceEnd > SPEECH_END_DELAY);
+        if (expired) {
+          if (!c.relaxStart) c.relaxStart = clockT;
+          const fade = clamp((clockT - c.relaxStart) / RELAX_FADE, 0, 1);
           k *= 1 - fade;
           if (fade >= 1) { channel.delete(id); continue; }
-        }
+        } else if (c.relaxStart) c.relaxStart = 0;
       } else if (age < c.in) k = age / c.in;
       else if (age > c.dur - c.out) k = (c.dur - age) / c.out;
       else k = 1;
@@ -1794,7 +1799,18 @@ export async function createLive2DBody(base, opts, entry, kit) {
   globalThis.__l2dCover = figure.__cover;
   globalThis.__l2dExpr = figure.__expr;
 
-  const body = kit.createBody(host, { figure, words, css: 'foreignObject{pointer-events:none}' });
+  const body = const ADDON_WORDS = new Set(['blush', 'sweat', 'tears', 'bunny-teeth']);   // 附加层：不跟气泡让位
+  const onSpeechStart = () => { sentenceCount++; };
+  const onSpeechEnd = () => { lastSpeechEnd = clockT; };
+  const onBeat = () => {
+    // 气泡边界：face-big + 单通道细节让位，附加层保留——「每个【】表情是这句话的脸」
+    for (const [wid, def] of Object.entries(paramActs)) {
+      if (!def?.state || ADDON_WORDS.has(wid)) continue;
+      for (const q of def.params ?? []) channel.delete(q.id);
+      for (const kk of def.keys ?? []) channel.delete(kk.id);
+    }
+  };
+  const body = kit.createBody(host, { figure, words, css: 'foreignObject{pointer-events:none}', onSpeechStart, onSpeechEnd, onBeat });
   const motionKind = profile.motion?.kind === 'stand' ? 'stand' : 'roam';
   if (SIMPLE && motionKind === 'stand') {
     // 站定：无论 Coo / 预览传什么 roam，都强制 off；正面立绘也不镜像。
