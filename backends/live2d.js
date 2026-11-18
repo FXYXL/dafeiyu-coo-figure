@@ -1799,7 +1799,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
   globalThis.__l2dCover = figure.__cover;
   globalThis.__l2dExpr = figure.__expr;
 
-  const body = const ADDON_WORDS = new Set(['blush', 'sweat', 'tears', 'bunny-teeth']);   // 附加层：不跟气泡让位
+  const ADDON_WORDS = new Set(['blush', 'sweat', 'tears', 'bunny-teeth']);   // 附加层：不跟气泡让位
   const onSpeechStart = () => { sentenceCount++; };
   const onSpeechEnd = () => { lastSpeechEnd = clockT; };
   const onBeat = () => {
