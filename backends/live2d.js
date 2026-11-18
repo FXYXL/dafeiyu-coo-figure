@@ -981,9 +981,11 @@ export async function createLive2DBody(base, opts, entry, kit) {
       for (const id of handParamIds) channel.delete(id);
     }
     // 静态姿势（歪头、侧身、前倾…）：插到一个固定值然后保持
+    // emo：情绪弧度标记（applyFrame 扫描通道喂给弧度引擎，条目退场弧度自动消失）
+    const emo = (profile.emotionArc ?? {})[w] ?? null;
     for (const p of def.params ?? []) {
       const f0 = defVal(p.id);
-      channel.set(p.id, { kind: 'hold', from: f0, to: f0 + ((p.to ?? 0) - f0) * effScale, t0: now, dur, in: inT, out: outT, keep: !!(def.state || def.keep), faceLinked: !!fromFace });
+      channel.set(p.id, { kind: 'hold', from: f0, to: f0 + ((p.to ?? 0) - f0) * effScale, t0: now, dur, in: inT, out: outT, keep: !!(def.state || def.keep), faceLinked: !!fromFace, emo });
     }
     // 波形动作（点头、摇头、甩草…）：正弦摆动叠在通道上。
     // 不支持这一种的话，点头永远只能走旧路，也就永远不能和别的东西叠加。
@@ -996,6 +998,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       post: !!post,
       // state 词的波形和静态参数同寿命（持续抖到退场）——不补的话波形抖 dur 秒就静默消失
       keep: !!(def.state || def.keep),
+      emo,
       t0: now,
       dur,
       in: inT,
@@ -1022,7 +1025,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
         for (let r = 0; r < mod.repeat; r++) {
           for (const [t, v] of frames) out.push([(r * span + t) * mod.pace, v * effScale]);
         }
-        channel.set(id, { kind: 'keys', frames: out, t0: now, dur });
+        channel.set(id, { kind: 'keys', frames: out, t0: now, dur, emo });
       }
     }
     if (def.keys) { /* P2 关键帧：先占位 */ }
@@ -1232,13 +1235,16 @@ export async function createLive2DBody(base, opts, entry, kit) {
 
     // 2) 表演层：连续情绪（VAD → FACS → role）。没有表演层才走离散配方。
     //    量取景的那几帧强制中性姿势：待机动作会把包围盒撑大，脚就量不准。
-    const engine = performance && !neutralPose ? performance.update(t, dt, frame.face) : null;
+    // 情绪弧度：通道条目的 emo 标记（情绪词通道化后 frame.face 恒为 neutral，
+    // 弧度改由通道驱动——条目退场/被顶掉/恢复时标记消失，弧度自动回中性）
+    const emoFace = [...channel.values()].find((c) => c.emo)?.emo ?? null;
+    const engine = performance && !neutralPose ? performance.update(t, dt, emoFace ?? frame.face) : null;
     lastEngine = engine;   // 留给 moodScale：下一次动作的默认幅度跟着当前情绪走
     const recipe = neutralPose
       ? {}
       : (engine
         ? null
-        : (profile.expression?.[frame.face ?? 'neutral'] ?? profile.expression?.neutral ?? {}));
+        : (profile.expression?.[emoFace ?? frame.face ?? 'neutral'] ?? profile.expression?.neutral ?? {}));
     if (recipe) for (const [k, v] of Object.entries(recipe)) if (k !== 'fade') writeRole(k, v);
 
     // 3) 眼睛：形状 + 眨眼 + 困意（乘在表情之上，闭眼笑也能眨）

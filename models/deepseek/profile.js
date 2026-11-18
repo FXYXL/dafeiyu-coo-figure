@@ -521,6 +521,17 @@ export default {
     worried: 'sweat',
   },
 
+  // 情绪弧度映射（2026-11-19）：词 id → expression 弧度表的名字。
+  // expression 表（单数）是按 face 驱动的眉眼嘴"脸型弧度"配方（第三套系统的活着的部分）——
+  // 通道化后 frame.face 恒为 neutral，弧度全灭；现在通道条目打 emo 标记，
+  // applyFrame 扫描通道取情绪名喂给弧度引擎，条目退场弧度自动消失。
+  emotionArc: {
+    blush: 'shy', tears: 'sad', sweat: 'worried', 'heart-eyes': 'love',
+    'smug-face': 'smug', guilty: 'flustered', 'mouth-pout': 'pout', 'eye-half': 'sleepy',
+    angry: 'angry', happy: 'happy', excited: 'excited', surprised: 'surprised',
+    scared: 'scared', thinking: 'thinking', determined: 'determined', confused: 'confused',
+  },
+
 
   // 简易模式不播 motion，但 motion 里的 PartOpacity 是“中性姿势”的一部分：
   // 少了它，hiyori 这类模型会同时显示 PartArmA / PartArmB（四只手）。
