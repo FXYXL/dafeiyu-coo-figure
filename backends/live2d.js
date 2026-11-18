@@ -922,9 +922,12 @@ export async function createLive2DBody(base, opts, entry, kit) {
 
   /** paramId -> { from, to, t0, dur, in, out }：每个通道自己管生命周期，到期自动退出 */
   const channel = new Map();
+  let lastWordAt = -99;   // 上次有新词的时刻：自动放松的计时基准（2.6）
+  const RELAX_AFTER = 8, RELAX_FADE = 1.5;   // 静默 8 秒开始松，1.5 秒退完
 
   /** kit 的 doWord 会先问这里。返回 true = 这个词我处理了，不要走 pulse。 */
   function actWord(w) {
+    lastWordAt = clockT;   // 任何新词都刷新放松计时（说话、表情都算交互）
     if (!useChannels || !channelWords.has(w)) return false;
     const def = paramActs[w];
     if (!def) return false;
@@ -1045,8 +1048,15 @@ export async function createLive2DBody(base, opts, entry, kit) {
       }
       let k;
       if (c.keep) {
-        // 表情层：只有淡入，没有淡出（淡出靠被新词覆盖或「恢复」）
+        // 表情层：只有淡入；淡出靠被同参数覆盖、「恢复」、或 2.6 自动放松
         k = clamp(age / Math.max(1e-3, c.in), 0, 1);
+        // 自动放松：8 秒没新词 → 1.5 秒慢慢退掉（不是瞬切，是"松掉"）
+        const idle = clockT - lastWordAt;
+        if (idle > RELAX_AFTER) {
+          const fade = clamp((idle - RELAX_AFTER) / RELAX_FADE, 0, 1);
+          k *= 1 - fade;
+          if (fade >= 1) { channel.delete(id); continue; }
+        }
       } else if (age < c.in) k = age / c.in;
       else if (age > c.dur - c.out) k = (c.dur - age) / c.out;
       else k = 1;
