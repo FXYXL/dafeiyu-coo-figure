@@ -112,9 +112,9 @@ const PATCHES = [
     apply: (s) => s.replace(
       "      if (typeof s.hold === 'number') ctl.holdRoam(s.hold);",
       `      if (typeof s.hold === 'number') ctl.holdRoam(s.hold);
-      if (s.speechStart) custom?.onSpeechStart?.();
-      if (s.speechDone) custom?.onSpeechEnd?.();
-      if (s.beat !== undefined) custom?.onBeat?.(s.beat);`,
+      if (s.speechStart) opts.figure?.onSpeechStart?.();
+      if (s.speechDone) opts.figure?.onSpeechEnd?.();
+      if (s.beat !== undefined) opts.figure?.onBeat?.(s.beat);`,
     ),
   },
   // ===== pet-app.js =====
