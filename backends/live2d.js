@@ -337,10 +337,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
         channel.delete(qid);
         try { model._model.setParameterValueById(qid, 0); } catch { /* 参数不存在则跳过 */ }
       }
-      if (fw) actWord(fw);
-    } else if (fw) {
-      bornSentence = sentenceCount;   // face 不变：续命（保持语义，和原 exp3 联动一致）
+      if (fw) actWord(fw, true);
     }
+    // （face 不变时不再续命——faceWords 词标 faceLinked，寿命=到下一个词/face 变化）
   }
 
   let currentId = null;
@@ -936,11 +935,15 @@ export async function createLive2DBody(base, opts, entry, kit) {
   let bornAt = -99;   // 词出生时刻：闲置语境（随机动作）的限时基准
 
   /** kit 的 doWord 会先问这里。返回 true = 这个词我处理了，不要走 pulse。 */
-  function actWord(w) {
+  function actWord(w, fromFace) {
     lastWordAt = clockT;
+    // face 联动词（blush/tears/sweat/heart-eyes）的退场：下一个任何词触发就让位。
+    // 「【害羞】→ 下一句【嘟嘴】，脸红影子不该跨句挂着」——情绪影子跟着最近的表达走。
+    for (const [id, entry] of Object.entries(channel)) {
+      if (entry.faceLinked) channel.delete(id);
+    }
     bornSentence = sentenceCount;   // 词出生时的句号（跟句寿命用）
-    bornAt = clockT;                // 词出生的时刻（闲置语境的限时用）   // 任何新词都刷新放松计时（说话、表情都算交互）
-    if (!useChannels || !channelWords.has(w)) return false;
+    bornAt = clockT;                // 词出生的时刻（闲置语境的限时用）    if (!useChannels || !channelWords.has(w)) return false;
     const def = paramActs[w];
     if (!def) return false;
     const now = clockT;
@@ -980,7 +983,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 静态姿势（歪头、侧身、前倾…）：插到一个固定值然后保持
     for (const p of def.params ?? []) {
       const f0 = defVal(p.id);
-      channel.set(p.id, { kind: 'hold', from: f0, to: f0 + ((p.to ?? 0) - f0) * effScale, t0: now, dur, in: inT, out: outT, keep: !!(def.state || def.keep) });
+      channel.set(p.id, { kind: 'hold', from: f0, to: f0 + ((p.to ?? 0) - f0) * effScale, t0: now, dur, in: inT, out: outT, keep: !!(def.state || def.keep), faceLinked: !!fromFace });
     }
     // 波形动作（点头、摇头、甩草…）：正弦摆动叠在通道上。
     // 不支持这一种的话，点头永远只能走旧路，也就永远不能和别的东西叠加。
@@ -1081,9 +1084,12 @@ export async function createLive2DBody(base, opts, entry, kit) {
         const sinceEnd = lastSpeechEnd >= 0 ? clockT - lastSpeechEnd : 0;   // 说完多久
         const bornAge = clockT - bornAt;                         // 出生多久
         const speakingCtx = lastSpeechEnd >= 0 && sinceEnd < 30; // 最近说过话 = 说话语境
-        const expired = speakingCtx
-          ? (bornSentence >= 0 && lived >= SENT_LIFE) || sinceEnd > SPEECH_END_DELAY
-          : bornAge > IDLE_LIFE;
+        // faceLinked 条目（face 联动的影子）不参与寿命——退场=下一个词触发时让位
+        const expired = c.faceLinked
+          ? false
+          : speakingCtx
+            ? (bornSentence >= 0 && lived >= SENT_LIFE) || sinceEnd > SPEECH_END_DELAY
+            : bornAge > IDLE_LIFE;
         if (expired) {
           if (!c.relaxStart) c.relaxStart = clockT;
           const fade = clamp((clockT - c.relaxStart) / RELAX_FADE, 0, 1);
