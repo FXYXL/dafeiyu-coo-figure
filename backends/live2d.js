@@ -271,6 +271,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
   // ---------- 原生表情（exp3）----------
   // 模型自带的表情文件比通用配方更贴脸；由 profile.expressions 把词映射到文件。
   const expressions = new Map();
+  const exp3Params = new Map();   // exp3 名 → 它写的参数 id 列表（切换时清残留用）
   const exprJson = new Map();     // 保留原始 JSON，供组合表情合并
   for (const e of entry.expressions ?? []) {
     try {
@@ -278,6 +279,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       exprJson.set(e.id, mod.default);
       const bytes = new TextEncoder().encode(JSON.stringify(mod.default));
       const clip = model.loadExpression(bytes.buffer, bytes.length, e.id);
+          exp3Params.set(e.id, (exprJson.get(e.id)?.Parameters ?? []).map((q) => q.Id));
       if (clip) expressions.set(e.id, clip);
     } catch (err) {
       console.warn('表情载入失败', e.id, err);
@@ -320,6 +322,13 @@ export async function createLive2DBody(base, opts, entry, kit) {
     if (SIMPLE) return;
     const want = expressionOverride ?? exprTable[face ?? 'neutral'] ?? null;
     if (want !== currentExpr) {
+      // 清旧 exp3 的参数残留：expressionManager 换表情后，旧表情写的 keyN
+      // 会停在模型里没人清（如 shy 的 key7 脸红残留到下下句）。
+      const oldExpParams = currentExpr ? exp3Params.get(currentExpr) : null;
+      if (oldExpParams) for (const qid of oldExpParams) {
+        channel.delete(qid);   // 通道条目（若该参数也被通道词写过）
+        try { model._model.setParameterValueById(qid, 0); } catch { /* 参数不存在则跳过 */ }
+      }
       // 情绪基调切换：face-big 组的通道条目自动退场（2.6/互斥组的边界补丁）。
       // 堵「黑脸挂着（通道），下一句【喜欢】→ exp3 联动 key4=1 → 叠加」的洞：
       // exp3 的联动每帧推自己的 keyN，互斥组拦不到它，所以在基调切换时统一清场。
