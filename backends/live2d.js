@@ -538,7 +538,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
   let activePost = null;   // 当前动作里"必须在物理之后写"的波形（腰/胯这类物理输出参数）
   let bodyLook = [0, 0];   // 本帧的指针跟随量，applyBodyFollow 在物理之后用它推身体
   // 注意力衰减：光标停住一阵、或者盯着看了一段时间，就慢慢收回中位（不是硬切回）。
-  let gazeK = 1;
+  let gazeK = 1;          // 身体（最慢）
+  let gazeKEye = 1;       // 眼睛（最快回正）
+  let gazeKHead = 1;      // 头（中间）
   const gazeCfg = profile.gazeFollow ?? null;
   let gazePrev = [0, 0], gazeMoveAt = 0, gazeAwayAt = 0, gazeInited = false;
   let gazeSway = 0;   // 走神程度 0~1，用来给头部叠一点自然游移（不然头会钉在正前方）
@@ -560,7 +562,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 动作期间（走路 / 跑步 / 坐着 / 被拖着走）：头用满跟随交给原本逻辑，
     // 但**不改走神状态** —— 不然她随机走两步、换个姿势，刚攒起来的走神就白攒了。
     if (!idleLike) {
-      if (moving) { gazeMoveAt = now; gazeWantSince = 0; gazeK = 1; }
+      // 动作期间人动了鼠标：三个系数一起重置，否则走完路回来 head/eye 还是旧的
+      if (moving) { gazeMoveAt = now; gazeWantSince = 0; gazeK = gazeKEye = gazeKHead = 1; }
       return 1;
     }
     const away = !!ptr;   // 指针在窗口内才算"她在看着你"
@@ -570,8 +573,11 @@ export async function createLive2DBody(base, opts, entry, kit) {
       // 光标一挪动就抢回来：几十毫秒（resume=40 → 约 33ms）回到满值，不等指数慢慢爬
       gazeMoveAt = now;
       gazeWantSince = 0;
-      gazeK = Math.min(1, gazeK + dt * (gazeCfg.resume ?? 40));
-      globalThis.__gaze = { k: +gazeK.toFixed(3), idle: +(now - gazeMoveAt).toFixed(1), held: +(now - gazeAwayAt).toFixed(1), moving, over: false, want: 1, look };
+      const rz = dt * (gazeCfg.resume ?? 40);
+      gazeK = Math.min(1, gazeK + rz);
+      gazeKEye = Math.min(1, gazeKEye + rz);
+      gazeKHead = Math.min(1, gazeKHead + rz);
+      globalThis.__gaze = { k: +gazeK.toFixed(3), eye: +gazeKEye.toFixed(3), head: +gazeKHead.toFixed(3), idle: +(now - gazeMoveAt).toFixed(1), held: +(now - gazeAwayAt).toFixed(1), moving, over: false, want: 1, look };
       return gazeK;
     }
     if (!away) gazeAwayAt = now;   // 光标回到中间，重新计时
@@ -591,13 +597,19 @@ export async function createLive2DBody(base, opts, entry, kit) {
       gazeSleepAt = 0;
       gazeWantSince = 0;
       gazeMoveAt = now;   // 自然回神后重新攒，别立刻又走神
-      gazeK += (1 - gazeK) * Math.min(1, dt * (gazeCfg.wake ?? 1.2));
+      const wz = Math.min(1, dt * (gazeCfg.wake ?? 1.2));
+      gazeK += (1 - gazeK) * wz;
+      gazeKEye += (1 - gazeKEye) * wz;
+      gazeKHead += (1 - gazeKHead) * wz;
       return gazeK;
     }
     // 诊断用：把走神的内部状态摊开，harness 的 ?diag 能直接读
     globalThis.__gaze = { k: +gazeK.toFixed(3), idle: +idleFor.toFixed(1), held: +heldFor.toFixed(1), moving, over, want, look: [+(look[0]).toFixed(2), +(look[1]).toFixed(2)] };
     // 收的时候用指数趋近：开头快、越接近中间越慢，落地不硬
+    // 走神时分层：眼睛先飘走，头跟上，身体最后（回神时三个都一样快，不能拖）
     gazeK += (want - gazeK) * Math.min(1, dt * (want > gazeK ? 40 : (gazeCfg.fade ?? 0.5)));
+    gazeKEye += (want - gazeKEye) * Math.min(1, dt * (want > gazeKEye ? 40 : (gazeCfg.fadeEye ?? 1.7)));
+    gazeKHead += (want - gazeKHead) * Math.min(1, dt * (want > gazeKHead ? 40 : (gazeCfg.fadeHead ?? 0.95)));
     return gazeK;
   }
 
@@ -830,9 +842,243 @@ export async function createLive2DBody(base, opts, entry, kit) {
     }
   }
 
+  // ---------- 通道叠加（P1 试点）----------
+  // kit 的动作是"单槽 pulse"，一次只能一个；这里让形象自己接管动作词，
+  // 每个词把自己的参数写进通道（不同 id 共存、同 id 覆盖），就能同时生效。
+  //
+  // 试点阶段只放白名单（profile.channelWords）里的词走这条新路，其余词继续交给 kit 的 pulse。
+  // 出问题把 profile.useChannels 改成 false，整条新路关掉，回到旧行为。
+  const useChannels = profile.useChannels === true;
+  const channelWords = new Set(profile.channelWords ?? []);
+  // 手部动作互斥：三只手共用 Movement1/2/3 这几个开关和一部分手臂参数。
+  // 同时抬两只手不是"多一只手"，是网格打架 —— 所以新的手部词进来时，
+  // 先把上一只手在通道里写的参数全部撤掉。
+  const handParamIds = new Set(['Movement1', 'Movement2', 'Movement3']);
+  for (const [k, v] of Object.entries(paramActs)) {
+    if (!v?.hand) continue;
+    for (const p of [...(v.params ?? []), ...(v.waves ?? []), ...(v.postWaves ?? [])]) handParamIds.add(p.id);
+  }
+
+  // ---------- 修饰词（微/大/快/慢/×几）与中文别名 ----------
+  // kit 的词表只认 id，AI 却习惯写中文 + 修饰。baseWord 先把词还原成基础 id 交给 kit
+  // （音效、配表情、busy 生命周期都照走 act()），同时把"轻重、快慢、几下"记在 pendingMod，
+  // 等 actWord 用它缩放关键帧 / 波形。
+  let pendingMod = null;
+  let lastEngine = null;          // 上一帧的表情数值，用来让动作幅度跟着情绪走
+  const wordAlias = profile.wordAlias ?? {};
+  const MOD_SCALE = { '微': 0.5, '大': 1.5 };
+  const MOD_PACE = { '快': 0.65, '慢': 1.6 };
+
+  /**
+   * 没写「微 / 大」时，幅度跟着当前情绪走：笑 / 张嘴 / 嘴角上扬 → 放开，
+   * 八字眉 / 脸红 / 瘪嘴 → 收着。人做动作本来也不会先算百分比，是被情绪带出来的。
+   */
+  function moodScale() {
+    const e = lastEngine;
+    if (!e) return 1;
+    const up = Math.max(0, e.eyeSmile ?? 0) * 0.5
+      + Math.max(0, e.mouthOpen ?? 0) * 0.3
+      + Math.max(0, e.mouthForm ?? 0) * 0.3;
+    const down = Math.max(0, -(e.mouthForm ?? 0)) * 0.5
+      + Math.max(0, e.cheek ?? 0) * 0.3
+      + Math.max(0, e.browAngle ?? 0) * 0.3;
+    return clamp(1 + up * 0.5 - down * 0.4, 0.6, 1.4);
+  }
+
+  /**
+   * kit 在 doWord 最前面调这个：返回基础 id 就继续走 act()，返回 null 表示没我什么事。
+   * 认三种写法：`nod`、`点头`、`微点头×2`、`快摇头`。
+   */
+  function baseWord(w) {
+    if (typeof w !== 'string') return null;
+    let s = w.trim();
+    if (!s) return null;
+    // 「恢复」/ neutral：撤掉所有通道（动作 + 表情层），回到干净的脸和姿势
+    if (s === '恢复' || s === 'restore' || s === 'neutral') { channel.clear(); return null; }
+    let scale = 1, pace = 1, repeat = 1, touched = false;
+    // 前缀修饰，最多两层（「微快点头」这种也认）
+    for (let n = 0; n < 2; n++) {
+      const c = s[0];
+      if (MOD_SCALE[c] !== undefined) { scale *= MOD_SCALE[c]; s = s.slice(1); touched = true; }
+      else if (MOD_PACE[c] !== undefined) { pace *= MOD_PACE[c]; s = s.slice(1); touched = true; }
+      else break;
+    }
+    // 后缀次数：×3 / x3 / *3
+    const m = /[×x*](\d+)$/.exec(s);
+    if (m) {
+      repeat = Math.max(1, Math.min(6, Number(m[1]) || 1));
+      s = s.slice(0, m.index);
+      touched = true;
+    }
+    const id = wordAlias[s] ?? (paramActs[s] ? s : null);
+    if (!id) return null;                 // 拼错了就当没这个词，kit 自己会丢
+    if (!touched) {
+      pendingMod = null;                  // 没有修饰：清掉上一次的残留
+      return id === w ? null : id;        // 本来就是 id，不用麻烦 kit
+    }
+    pendingMod = { scale, pace, repeat, explicit: true };
+    return id;
+  }
+
+  /** paramId -> { from, to, t0, dur, in, out }：每个通道自己管生命周期，到期自动退出 */
+  const channel = new Map();
+
+  /** kit 的 doWord 会先问这里。返回 true = 这个词我处理了，不要走 pulse。 */
+  function actWord(w) {
+    if (!useChannels || !channelWords.has(w)) return false;
+    const def = paramActs[w];
+    if (!def) return false;
+    const now = clockT;
+    // 修饰：AI 写的「微/大/快/慢/×几」；没写就按当前情绪给个默认幅度
+    const mod = pendingMod ?? { scale: 1, pace: 1, repeat: 1, explicit: false };
+    pendingMod = null;
+    const effScale = mod.scale * (mod.explicit ? 1 : moodScale());
+    const keySpan = def.keys?.length ? Math.max(...def.keys.map((f) => f.t ?? 0)) : 0;
+    const dur = (keySpan || (def.dur ?? 2.4)) * mod.pace * mod.repeat;
+    const inT = Math.min(0.45, dur * 0.2);
+    const outT = Math.min(0.6, dur * 0.28);
+    // from 用参数的**默认值**，不是当前值 ——
+    // 当前值可能已经被 applyFrame 的视线/表情改过（比如 AngleY 被写成 -27），
+    // 拿它当起点会让通道从 -27 插到 -16，动作反而变成'抬头'。
+    const defVal = (id) => {
+      const i = paramIndex.get(id);
+      if (i === undefined) return 0;
+      try { const d = model._model.getParameterDefaultValueByIndex?.(i); return Number.isFinite(d) ? d : 0; } catch { return 0; }
+    };
+    // 手部词：先把上一只手的参数撤掉，再写这一只（三只手不能同时抬）
+    if (def.hand) {
+      if (idlePoseWord) clearIdlePose();
+      for (const id of handParamIds) channel.delete(id);
+    }
+    // 静态姿势（歪头、侧身、前倾…）：插到一个固定值然后保持
+    for (const p of def.params ?? []) {
+      const f0 = defVal(p.id);
+      channel.set(p.id, { kind: 'hold', from: f0, to: f0 + ((p.to ?? 0) - f0) * effScale, t0: now, dur, in: inT, out: outT, keep: !!(def.state || def.keep) });
+    }
+    // 波形动作（点头、摇头、甩草…）：正弦摆动叠在通道上。
+    // 不支持这一种的话，点头永远只能走旧路，也就永远不能和别的东西叠加。
+    const setWave = (wv, post) => channel.set(wv.id, {
+      kind: 'wave',
+      amp: (wv.amp ?? 0) * effScale,
+      freq: (wv.freq ?? 1) / mod.pace,     // 时间拉长 → 频率按比例降，摆幅次数才和原来一致
+      base: wv.base ?? 0,
+      phase: wv.phase ?? 0,
+      post: !!post,
+      t0: now,
+      dur,
+      in: inT,
+      out: outT,
+    });
+    for (const wv of def.waves ?? []) setWave(wv, false);
+    // postWaves 写的是物理的输出参数（腰/胯），只能在 physics.evaluate() 之后写，
+    // 写早了会被当场算回 0 —— 所以单独标 post，由 applyChannelPost 收尾。
+    for (const wv of def.postWaves ?? []) setWave(wv, true);
+    // 关键帧（点头、摇头、叹气…）：按手写的时间点插值。
+    // 比正弦强在能做到"过冲一点再落回来""点一下、停、再点一下"——
+    // 正弦两端必然对称，所以永远是钟摆感，做不出真人的节奏。
+    if (def.keys?.length) {
+      const byId = new Map();
+      for (const f of def.keys) {
+        if (!byId.has(f.id)) byId.set(f.id, []);
+        byId.get(f.id).push([f.t ?? 0, f.v ?? 0]);
+      }
+      for (const [id, frames] of byId) {
+        frames.sort((a, b) => a[0] - b[0]);
+        // 幅度 × scale，时间 × pace；×几 就把整条时间轴复制几份接在后面
+        const span = frames[frames.length - 1][0];
+        const out = [];
+        for (let r = 0; r < mod.repeat; r++) {
+          for (const [t, v] of frames) out.push([(r * span + t) * mod.pace, v * effScale]);
+        }
+        channel.set(id, { kind: 'keys', frames: out, t0: now, dur });
+      }
+    }
+    if (def.keys) { /* P2 关键帧：先占位 */ }
+    console.info('[l2d] 通道记录', w, '静态', (def.params ?? []).length, '波形', (def.waves ?? []).length);
+    // 返回 false：姿态由通道画，但**生命周期交还给 kit**。
+    // 早先这里返回 true 把 doWord 整个截胡，结果 kit 的 act() 从没执行，
+    // 连带丢了 busy 互斥、清表情、setMode('idle')、holdFace 配表情、play 音效。
+    // 而 pulse 姿态本来就是跳过我们的词的（figure 声明了 gestures），交还不会有重复绘制。
+    return false;
+  }
+
+  /** 每帧把通道值写进模型。必须在 applyFrame / applySchemeParams 之后 —— 那些会重置 role 默认值。 */
+  /**
+   * 关键帧采样：frames 是 [[t, v], ...]（已按 t 排序）。
+   * 段内用 smoothstep，避免关键帧之间出现硬折角 —— 但两端的关键帧值是原样保留的，
+   * 所以"过冲一点点再落回来"这种手感不会被削平。
+   */
+  function sampleKeys(frames, t) {
+    if (!frames.length) return 0;
+    if (t <= frames[0][0]) return frames[0][1];
+    const last = frames[frames.length - 1];
+    if (t >= last[0]) return last[1];
+    for (let n = 1; n < frames.length; n++) {
+      const [t1, v1] = frames[n];
+      if (t > t1) continue;
+      const [t0, v0] = frames[n - 1];
+      const span = t1 - t0;
+      if (!(span > 1e-6)) return v1;
+      const k = (t - t0) / span;
+      return v0 + (v1 - v0) * (k * k * (3 - 2 * k));
+    }
+    return last[1];
+  }
+
+  function applyChannel(t) { writeChannel(t, false); }
+  /** 物理之后写的那一批（腰/胯这类物理输出参数）。写早了会被物理算回去。 */
+  function applyChannelPost(t) { writeChannel(t, true); }
+  function writeChannel(t, wantPost) {
+    if (!useChannels || channel.size === 0) return;
+    for (const [id, c] of channel) {
+      const age = t - c.t0;
+      // keep=true：表情通道。一直保持到被同参数的新词覆盖、或者「恢复」清空。
+      // 普通动作有 dur，播完自己退出。
+      if (!c.keep && age > c.dur) { channel.delete(id); continue; }
+      if (!!c.post !== wantPost) continue;                  // 前/后两批各写各的
+      const i = paramIndex.get(id);
+      if (i === undefined) { channel.delete(id); continue; }
+      if (c.kind === 'keys') {
+        // 关键帧自带起止（第一帧和最后一帧就是 0），不再乘环境包络，否则收尾会被压平
+        model._model.setParameterValueByIndex(i, sampleKeys(c.frames, age));
+        continue;
+      }
+      let k;
+      if (c.keep) {
+        // 表情层：只有淡入，没有淡出（淡出靠被新词覆盖或「恢复」）
+        k = clamp(age / Math.max(1e-3, c.in), 0, 1);
+      } else if (age < c.in) k = age / c.in;
+      else if (age > c.dur - c.out) k = (c.dur - age) / c.out;
+      else k = 1;
+      k = clamp(k, 0, 1);
+      k = k * k * (3 - 2 * k);                             // 平滑进/出，避免硬切
+      if (c.kind === 'wave') {
+        // 波形：相位从动作开始算，和环境包络相乘 → 起手轻、收尾轻，中间是完整摆幅
+        const rel = Math.max(0, age);
+        model._model.setParameterValueByIndex(i, (c.base + c.amp * Math.sin((rel * c.freq + c.phase) * Math.PI * 2)) * k);
+      } else {
+        model._model.setParameterValueByIndex(i, c.from + (c.to - c.from) * k);
+      }
+    }
+  }
+
   function applyParamActs(frame) {
     const g = frame?.gesture;
     const act = g && paramActs[g.kind];
+    // 通道接管的词：参数由 applyChannel 画，这里必须让位 —— 两处写同一个参数的话，
+    // 结果取决于谁后写，动作会一半是插值一半是覆盖，看起来像抖动。
+    // 顺手把旧路留下的 activeAct 清掉，免得上一个动作的参数残留。
+    if (act && useChannels && channelWords.has(g.kind)) {
+      if (activeAct) {
+        for (const id of actParamIds(paramActs[activeAct])) {
+          const i = paramIndex.get(id);
+          if (i !== undefined) model._model.setParameterValueByIndex(i, 0);
+        }
+        activeAct = null;
+        activePost = null;
+      }
+      return;
+    }
     if (!act) {
       if (activeAct) {
         for (const id of actParamIds(paramActs[activeAct])) {
@@ -932,6 +1178,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 2) 表演层：连续情绪（VAD → FACS → role）。没有表演层才走离散配方。
     //    量取景的那几帧强制中性姿势：待机动作会把包围盒撑大，脚就量不准。
     const engine = performance && !neutralPose ? performance.update(t, dt, frame.face) : null;
+    lastEngine = engine;   // 留给 moodScale：下一次动作的默认幅度跟着当前情绪走
     const recipe = neutralPose
       ? {}
       : (engine
@@ -968,22 +1215,35 @@ export async function createLive2DBody(base, opts, entry, kit) {
     writeRole('mouthOpen', neutralPose ? 0 : clamp(Math.max(talkOpen, (engine?.mouthOpen ?? 0) * 0.85), 0, 1));
 
     // 5) 视线 + 头身跟随（表演层的待机动作叠在宿主跟随之上）
-    const rawLook = globalThis.__lookOverride !== undefined ? [globalThis.__lookOverride, 0] : frame.look;
-    let look = neutralPose ? [0, 0] : (Array.isArray(rawLook) ? rawLook : [0, 0]);
-    // 追一会儿会"走神"：光标停住不动、或者盯着超过几秒，跟随量慢慢收回中位。
-    // 衰减乘在 look 上，头和身体一起收，不会出现"头回正了身体还歪着"。
-    if (!neutralPose && gazeCfg) {
-      const mode = frame.mode ?? 'idle';
-      const idleLike = mode === 'idle' || mode === 'look' || mode === 'sit';
-      const k = updateGazeInterest(look, Array.isArray(frame.pointer) ? frame.pointer : null, clockT, frame.dt ?? 0.016, idleLike);
-      look = [look[0] * k, look[1] * k];
-      gazeSway = 1 - k;   // 走神越多，头自己游移得越明显
-    } else gazeSway = 0;
+    const rawLook0 = globalThis.__lookOverride !== undefined ? [globalThis.__lookOverride, 0] : frame.look;
+    let rawLook = neutralPose ? [0, 0] : (Array.isArray(rawLook0) ? rawLook0 : [0, 0]);
     // noMirror 的形象不做水平翻转，但 kit 算 look 时乘了 pet.facing。
     // 必须用**瞬时的 facingNow** 抵消，不能用平滑的 faceVis ——
     // kit 那边是瞬时反号的，这边要是慢半拍，翻转那 0.2 秒 look 会短暂反号，
     // 表现就是头猛地往回抽一下再转回来。
-    if (figure.noMirror && Number.isFinite(frame.facingNow)) look = [look[0] * frame.facingNow, look[1]];
+    if (figure.noMirror && Number.isFinite(frame.facingNow)) rawLook = [rawLook[0] * frame.facingNow, rawLook[1]];
+    // 追一会儿会"走神"：光标停住不动、或者盯着超过几秒，跟随量慢慢收回中位。
+    // 分层回正：眼睛先回、头跟上、身体最后 —— 一起收会像"整块被拉回中位"。
+    let look, lookEye, lookHead;
+    if (!neutralPose && gazeCfg) {
+      const mode = frame.mode ?? 'idle';
+      const idleLike = mode === 'idle' || mode === 'look' || mode === 'sit';
+      const k = updateGazeInterest(rawLook, Array.isArray(frame.pointer) ? frame.pointer : null, clockT, frame.dt ?? 0.016, idleLike);
+      // 走路/跑步时头必须看向前进方向：kit 给的是 look=[3,0]，要是乘上走神残留的系数
+      // （0.05）就等于没转，人会僵在原地看屏幕。这里直接用满值，但**不动内部状态** ——
+      // 走完路回到待机，之前攒的走神会接着生效。
+      const walking = mode === 'walk' || mode === 'run';
+      const kBody = walking ? 1 : k;
+      const kEye = walking ? 1 : gazeKEye;
+      const kHead = walking ? 1 : gazeKHead;
+      look = [rawLook[0] * kBody, rawLook[1] * kBody];
+      lookEye = [rawLook[0] * kEye, rawLook[1] * kEye];
+      lookHead = [rawLook[0] * kHead, rawLook[1] * kHead];
+      gazeSway = walking ? 0 : 1 - k;   // 走路时头不自己游移
+    } else {
+      gazeSway = 0;
+      look = lookEye = lookHead = rawLook;
+    }
     bodyLook = look;   // 留给 applyBodyFollow 用（身体跟随要在物理之后写）
     const tilt = neutralPose ? 0 : (frame.tilt ?? 0);
     const lean = neutralPose ? 0 : (frame.lean ?? 0);
@@ -998,10 +1258,10 @@ export async function createLive2DBody(base, opts, entry, kit) {
     const swayX = Math.sin(clockT * 0.21) * gazeSway * 0.30;
     const swayZ = Math.sin(clockT * 0.13 + 1.1) * gazeSway * 0.22;
     if (engine) {
-      writeRole('eyeBallX', clamp(ex * 0.6 + (look[0] ?? 0) * 0.55, -1, 1));
-      writeRole('eyeBallY', clamp(ey * 0.6 - (look[1] ?? 0) * 0.45, -1, 1));
-      writeRole('angleX', clamp(ax * 0.75 + (look[0] ?? 0) * 0.4 + swayX, -1, 1));
-      writeRole('angleY', clamp(ay * 0.75 - (look[1] ?? 0) * 0.35, -1, 1));
+      writeRole('eyeBallX', clamp(ex * 0.6 + (lookEye[0] ?? 0) * 0.55, -1, 1));
+      writeRole('eyeBallY', clamp(ey * 0.6 - (lookEye[1] ?? 0) * 0.45, -1, 1));
+      writeRole('angleX', clamp(ax * 0.75 + (lookHead[0] ?? 0) * 0.4 + swayX, -1, 1));
+      writeRole('angleY', clamp(ay * 0.75 - (lookHead[1] ?? 0) * 0.35, -1, 1));
       writeRole('angleZ', clamp(az + tilt * 0.4 + swayZ, -1, 1));
       // lean 是 kit 算好的身体倾倒量，已经乘过 faceVis（往左走为负、往右走为正），
       // 写进 bodyX（PositionX）会由物理同时推出身体倾斜和胯摆 —— 这就是原版那种动感。
@@ -1012,10 +1272,10 @@ export async function createLive2DBody(base, opts, entry, kit) {
       }
       writeRole('breath', Number.isFinite(engine.breath) ? engine.breath : 0.5 + 0.5 * Math.sin(t * 1.6));
     } else {
-      writeRole('eyeBallX', clamp(look[0] ?? 0, -1, 1));
-      writeRole('eyeBallY', clamp(-(look[1] ?? 0), -1, 1));
-      writeRole('angleX', clamp((look[0] ?? 0) * 0.73 + swayX, -1, 1));
-      writeRole('angleY', clamp(-(look[1] ?? 0) * 0.6, -1, 1));
+      writeRole('eyeBallX', clamp(lookEye[0] ?? 0, -1, 1));
+      writeRole('eyeBallY', clamp(-(lookEye[1] ?? 0), -1, 1));
+      writeRole('angleX', clamp((lookHead[0] ?? 0) * 0.73 + swayX, -1, 1));
+      writeRole('angleY', clamp(-(lookHead[1] ?? 0) * 0.6, -1, 1));
       writeRole('angleZ', clamp(tilt * 0.67 + swayZ, -1, 1));
       writeRole('bodyX', clamp(lean * 0.35, -1, 1));
       writeRole('breath', neutralPose ? 0.5 : 0.5 + 0.5 * Math.sin(t * 1.6));
@@ -1274,6 +1534,11 @@ export async function createLive2DBody(base, opts, entry, kit) {
     get hits() { return currentHits(); },
     get anchors() { return currentAnchors(); },
     colors: { z: '#7fb0e8' },
+    // kit 的 doWord 会先问这里：返回 true 表示这个词形象自己处理（通道叠加），
+    // 不走 kit 的单槽 pulse。白名单外的词返回 false，保持旧行为。
+    actWord,
+    // kit 在 doWord 最前面调用：剥修饰 + 中文转 id，返回基础词
+    baseWord,
     // Live2D 只有一个正面，镜像会把左右手整体换边（手里的狗尾草从右手换到左手），
     // 看起来就是"卡片翻面"。所以声明不镜像：转身改用头部转向表现。
     // kit 会据此跳过整个容器的 scaleX 翻转（见 patch-pet-kit.mjs 的 noMirror 补丁）。
@@ -1403,9 +1668,14 @@ export async function createLive2DBody(base, opts, entry, kit) {
       stepMotion(frame, dt);
       stepExpression(frame.face, dt);
       applyPartOpacity(currentId);
+      // 通道叠加必须写在 stepMotion 之后：Cubism 的 idle 动作每帧会改参数，
+      // 写早了会被它盖掉（实测鞠躬的低头被 idle 吃掉，AngleY 读回是正值）。
+      // 放物理之前，物理才能把它当输入用。
+      applyChannel(clockT);
       try { model._physics?.evaluate(model._model, dt); } catch { /* 物理失败不致命 */ }
       applyPhysicsWaves(clockT);
       applyActPostWaves(clockT);
+      applyChannelPost(clockT);   // 通道里标了 post 的那批（腰/胯）：必须是物理之后当帧最终值
       try { model._pose?.updateParameters(model._model, dt); } catch { /* 姿势失败不致命 */ }
       model._model.update();
       render();

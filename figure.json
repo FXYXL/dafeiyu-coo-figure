@@ -2,7 +2,7 @@
   "manifest": 2,
   "api": 2,
   "id": "deepseek-shenggong",
-  "version": "1.11.0",
+  "version": "1.12.7",
   "name": {
     "zh": "大肥鱼",
     "en": "DaFeiYu"
@@ -357,7 +357,7 @@
       "kind": "expression",
       "names": {
         "zh": [
-          "得意"
+          "神气"
         ],
         "en": [
           "Smug"
@@ -507,7 +507,7 @@
     },
     {
       "id": "circle-eyes",
-      "kind": "expression",
+      "kind": "motion",
       "names": {
         "zh": [
           "圈圈眼",
@@ -518,14 +518,14 @@
         ]
       },
       "about": {
-        "zh": "眼睛变成一圈圈的白圈，表示晕头转向",
-        "en": "Eyes become white rings, dizzy"
+        "zh": "原厂部件开关，保持到被覆盖或恢复"
       },
-      "seconds": 3.5
+      "seconds": 3.5,
+      "lasting": true
     },
     {
       "id": "dark-face",
-      "kind": "expression",
+      "kind": "motion",
       "names": {
         "zh": [
           "黑脸",
@@ -536,14 +536,14 @@
         ]
       },
       "about": {
-        "zh": "整张脸暗下来，表示无语或生气",
-        "en": "Face darkens, speechless or angry"
+        "zh": "原厂部件开关，保持到被覆盖或恢复"
       },
-      "seconds": 3.5
+      "seconds": 3.5,
+      "lasting": true
     },
     {
       "id": "wry-face",
-      "kind": "expression",
+      "kind": "motion",
       "names": {
         "zh": [
           "屑屑眼",
@@ -554,14 +554,14 @@
         ]
       },
       "about": {
-        "zh": "半眯着眼一脸嫌弃",
-        "en": "Half-lidded, disdainful look"
+        "zh": "原厂部件开关，保持到被覆盖或恢复"
       },
-      "seconds": 3.5
+      "seconds": 3.5,
+      "lasting": true
     },
     {
       "id": "glasses-face",
-      "kind": "expression",
+      "kind": "motion",
       "names": {
         "zh": [
           "黑框眼镜"
@@ -571,14 +571,14 @@
         ]
       },
       "about": {
-        "zh": "戴上黑框眼镜",
-        "en": "Puts on black-framed glasses"
+        "zh": "原厂部件开关，保持到被覆盖或恢复"
       },
-      "seconds": 3.5
+      "seconds": 3.5,
+      "lasting": true
     },
     {
       "id": "monocle-face",
-      "kind": "expression",
+      "kind": "motion",
       "names": {
         "zh": [
           "单片眼镜"
@@ -588,14 +588,14 @@
         ]
       },
       "about": {
-        "zh": "戴上一只单片眼镜",
-        "en": "Puts on a monocle"
+        "zh": "原厂部件开关，保持到被覆盖或恢复"
       },
-      "seconds": 3.5
+      "seconds": 3.5,
+      "lasting": true
     },
     {
       "id": "pan-face",
-      "kind": "expression",
+      "kind": "motion",
       "names": {
         "zh": [
           "钢盆",
@@ -606,10 +606,10 @@
         ]
       },
       "about": {
-        "zh": "头顶扣一个钢盆",
-        "en": "A steel basin on the head"
+        "zh": "原厂部件开关，保持到被覆盖或恢复"
       },
-      "seconds": 3.5
+      "seconds": 3.5,
+      "lasting": true
     },
     {
       "id": "wave",
@@ -872,7 +872,7 @@
     },
     {
       "id": "loading-face",
-      "kind": "expression",
+      "kind": "motion",
       "names": {
         "zh": [
           "加载中",
@@ -883,10 +883,10 @@
         ]
       },
       "about": {
-        "zh": "头上出现加载中的标记",
-        "en": "A loading indicator appears"
+        "zh": "原厂部件开关，保持到被覆盖或恢复"
       },
-      "seconds": 3.5
+      "seconds": 3.5,
+      "lasting": true
     },
     {
       "id": "aggrieved",
@@ -938,7 +938,7 @@
       "kind": "expression",
       "names": {
         "zh": [
-          "心虚"
+          "心慌"
         ]
       },
       "about": {
@@ -1005,6 +1005,507 @@
         "en": "Swinging a foxtail grass"
       },
       "seconds": 3.4
+    },
+    {
+      "id": "eye-smile",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "笑眼",
+          "眼睛笑"
+        ]
+      },
+      "about": {
+        "zh": "只有眼睛弯起来，不动别的。可以叠在别的表情上"
+      },
+      "seconds": 1,
+      "lasting": true
+    },
+    {
+      "id": "eye-close",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "闭眼"
+        ]
+      },
+      "about": {
+        "zh": "两只眼睛闭上。可以叠"
+      },
+      "seconds": 1,
+      "lasting": true
+    },
+    {
+      "id": "eye-half",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "半睁",
+          "半睁眼"
+        ]
+      },
+      "about": {
+        "zh": "眼睛半睁，困倦或慵懒。可以叠"
+      },
+      "seconds": 1,
+      "lasting": true
+    },
+    {
+      "id": "eye-wide",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "睁大",
+          "睁大眼"
+        ]
+      },
+      "about": {
+        "zh": "眼睛睁圆。可以叠"
+      },
+      "seconds": 1,
+      "lasting": true
+    },
+    {
+      "id": "wink-left",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "单眨左",
+          "左眼闭"
+        ]
+      },
+      "about": {
+        "zh": "只闭左眼，很乖"
+      },
+      "seconds": 1,
+      "lasting": true
+    },
+    {
+      "id": "wink-right",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "单眨右",
+          "右眼闭"
+        ]
+      },
+      "about": {
+        "zh": "只闭右眼"
+      },
+      "seconds": 1,
+      "lasting": true
+    },
+    {
+      "id": "brow-frown",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "八字眉"
+        ]
+      },
+      "about": {
+        "zh": "眉毛内端上挑，委屈或心疼。可以叠"
+      },
+      "seconds": 1,
+      "lasting": true
+    },
+    {
+      "id": "brow-up",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "挑眉"
+        ]
+      },
+      "about": {
+        "zh": "眉毛抬高，惊讶或疑问。可以叠"
+      },
+      "seconds": 1,
+      "lasting": true
+    },
+    {
+      "id": "brow-knit",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "皱眉"
+        ]
+      },
+      "about": {
+        "zh": "眉头皱起来，生气或不满。可以叠"
+      },
+      "seconds": 1,
+      "lasting": true
+    },
+    {
+      "id": "mouth-smile",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "微笑"
+        ]
+      },
+      "about": {
+        "zh": "只有嘴角上扬。可以叠"
+      },
+      "seconds": 1,
+      "lasting": true
+    },
+    {
+      "id": "mouth-pout",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "瘪嘴"
+        ]
+      },
+      "about": {
+        "zh": "嘴角向下，要哭或不满。可以叠"
+      },
+      "seconds": 1,
+      "lasting": true
+    },
+    {
+      "id": "mouth-open",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "张嘴"
+        ]
+      },
+      "about": {
+        "zh": "嘴张开。可以叠"
+      },
+      "seconds": 1,
+      "lasting": true
+    },
+    {
+      "id": "blush",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "脸红",
+          "脸红红"
+        ]
+      },
+      "about": {
+        "zh": "脸颊泛红，可以叠在别的表情上（原包 key7）"
+      },
+      "seconds": 1
+    },
+    {
+      "id": "restore",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "恢复"
+        ]
+      },
+      "about": {
+        "zh": "清掉所有保持着的表情和姿势，回到平常的样子"
+      },
+      "seconds": 1
+    },
+    {
+      "id": "bitter-smile",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "苦笑"
+        ]
+      },
+      "about": {
+        "zh": "微笑里带着无奈，被逗到但也心疼"
+      },
+      "seconds": 1,
+      "lasting": true
+    },
+    {
+      "id": "holding-up",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "强撑",
+          "嘴硬"
+        ]
+      },
+      "about": {
+        "zh": "笑着但快绷不住了，脸红"
+      },
+      "seconds": 1,
+      "lasting": true
+    },
+    {
+      "id": "guilty-look",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "心虚"
+        ]
+      },
+      "about": {
+        "zh": "半睁眼+八字眉+瘪嘴+脸红，被戳穿的样子。可以叠"
+      },
+      "seconds": 1,
+      "lasting": true
+    },
+    {
+      "id": "act-cute",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "撒娇"
+        ]
+      },
+      "about": {
+        "zh": "笑眼+瘪嘴+脸红，求人、耍赖"
+      },
+      "seconds": 1,
+      "lasting": true
+    },
+    {
+      "id": "defiant",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "不服"
+        ]
+      },
+      "about": {
+        "zh": "皱眉+瘪嘴+半睁，顶嘴、嘴硬"
+      },
+      "seconds": 1,
+      "lasting": true
+    },
+    {
+      "id": "holding-tears",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "忍着不哭",
+          "忍哭"
+        ]
+      },
+      "about": {
+        "zh": "睁大眼+八字眉+瘪嘴，忍住眼泪"
+      },
+      "seconds": 1,
+      "lasting": true
+    },
+    {
+      "id": "smug-face",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "得意"
+        ]
+      },
+      "about": {
+        "zh": "笑眼+挑眉+微笑，显摆"
+      },
+      "seconds": 1,
+      "lasting": true
+    },
+    {
+      "id": "perfunctory",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "敷衍"
+        ]
+      },
+      "about": {
+        "zh": "半睁+微笑，嗯嗯哦哦的样子"
+      },
+      "seconds": 1,
+      "lasting": true
+    },
+    {
+      "id": "head-down",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "低头"
+        ]
+      },
+      "about": {
+        "zh": "头低下去保持住，难过、害羞或认真听的时候"
+      },
+      "seconds": 1,
+      "lasting": true
+    },
+    {
+      "id": "head-up",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "抬头"
+        ]
+      },
+      "about": {
+        "zh": "头抬起来，期待或想起什么"
+      },
+      "seconds": 1,
+      "lasting": true
+    },
+    {
+      "id": "face-front",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "正视"
+        ]
+      },
+      "about": {
+        "zh": "头回正，认真面对对方"
+      },
+      "seconds": 1,
+      "lasting": true
+    },
+    {
+      "id": "stand-straight",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "站直"
+        ]
+      },
+      "about": {
+        "zh": "全身回正，从歪着靠着的姿势站好"
+      },
+      "seconds": 1,
+      "lasting": true
+    },
+    {
+      "id": "squint",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "斜眼",
+          "眯眼"
+        ]
+      },
+      "about": {
+        "zh": "双眼眯起来，不屑或怀疑"
+      },
+      "seconds": 1,
+      "lasting": true
+    },
+    {
+      "id": "smirk",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "坏笑"
+        ]
+      },
+      "about": {
+        "zh": "嘴角歪一边的笑，得意或使坏"
+      },
+      "seconds": 1,
+      "lasting": true
+    },
+    {
+      "id": "press-lips",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "抿嘴"
+        ]
+      },
+      "about": {
+        "zh": "嘴唇抿紧，忍住话或忍笑"
+      },
+      "seconds": 1,
+      "lasting": true
+    },
+    {
+      "id": "sweat",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "冷汗",
+          "冒冷汗"
+        ]
+      },
+      "about": {
+        "zh": "头上冒汗滴，紧张或心虚"
+      },
+      "seconds": 1,
+      "lasting": true
+    },
+    {
+      "id": "shrug",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "耸肩",
+          "耸耸肩"
+        ]
+      },
+      "about": {
+        "zh": "双肩提一下再放下，无奈或不知道"
+      },
+      "seconds": 1,
+      "lasting": false
+    },
+    {
+      "id": "heart-eyes",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "爱心眼"
+        ]
+      },
+      "about": {
+        "zh": "眼睛变成爱心，喜欢、被戳中"
+      },
+      "seconds": 1,
+      "lasting": true
+    },
+    {
+      "id": "tears",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "流泪",
+          "含泪"
+        ]
+      },
+      "about": {
+        "zh": "眼里含泪（含泪汪汪，不是大哭）"
+      },
+      "seconds": 1,
+      "lasting": true
+    },
+    {
+      "id": "xx-eyes",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "紧闭眼",
+          "使劲闭眼"
+        ]
+      },
+      "about": {
+        "zh": "眼睛使劲闭成＞＜，忍住什么的样子"
+      },
+      "seconds": 1,
+      "lasting": true
+    },
+    {
+      "id": "bunny-teeth",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "兔牙"
+        ]
+      },
+      "about": {
+        "zh": "露出两颗大门牙，傻乎乎的可爱"
+      },
+      "seconds": 1,
+      "lasting": true
     }
   ],
   "sounds": {},

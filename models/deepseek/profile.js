@@ -82,6 +82,21 @@ export default {
   // 因为这个模型 PositionX 为正时身体是往左倾的，物理链是反向平衡）。
   // ParamBodyAngleX/Z 是物理的输出参数，后端 applyBodyFollow 会在 physics.evaluate 之后写，
   // 否则会被物理算回 0。x 对应左右，z 对应上下（look 的原始范围约 ±5）。
+  // ---------- 通道叠加（P1 试点）----------
+  // true = 让形象自己接管下面这些词的参数写入（多词可同时生效）。
+  // 出问题改成 false 整条退回 kit 的单槽 pulse。
+  useChannels: true,
+  // 试点白名单：只放纯姿态类词，它们本来就不带手部动画/退出剪辑，接管风险最小。
+  channelWords: [
+    "wave", "nod", "shake", "bow", "spin", "dance", "jump", "shiver", "look", "lean-in", "lean-back", "side", "peek", "tilt", "wiggle", "finger-point", "chest-hand", "grass-hand", "swing", "eye-smile", "eye-close", "eye-half", "eye-wide", "wink-left", "wink-right", "brow-frown", "brow-up", "brow-knit", "mouth-smile", "mouth-pout", "mouth-open", "blush",
+    "bitter-smile", "holding-up", "guilty-look", "act-cute",
+    "defiant", "holding-tears", "smug-face", "perfunctory",
+    "head-down", "head-up", "face-front", "stand-straight", "squint", "smirk",
+    "press-lips", "sweat", "shrug",
+    "circle-eyes", "heart-eyes", "xx-eyes", "wry-face", "dark-face", "tears",
+    "loading-face", "bunny-teeth", "pan-face", "glasses-face", "monocle-face",
+  ],
+
   bodyFollow: { x: 16, z: 11, walk: -14, k: 42, c: 9.5 },
 
   // 走神只靠鼠标唤回：光标停住 3.6 秒（或盯 8 秒）后再酝酿 1.5 秒开始飘，
@@ -95,8 +110,105 @@ export default {
     // 链条：PositionX → ParamBodyAngleX → 胸/裙；PositionX+Z → HipAngleX → 裙摆层；
     //       PositionY → 胸/裙的下垂；ParamBreath → 胸起伏。
     ParamBreath: { hz: 0.25, amp: 0.45, base: 0.5 },
+    // 呼吸不只动胸：头也跟着极轻地起伏（Cubism 官方呼吸就是这么联动的，
+    // 只写 ParamBreath 会显得"薄"）。ParamAngleY 是物理输入，会顺带推一点身体，
+    // 幅度压到 1.2 度，站着不动时刚好，走路时被 kit 的姿态盖过去。
+    ParamAngleY: { hz: 0.25, amp: 1.2, phase: 0.12 },
     PositionZ:   { hz: 0.09, amp: 2.4, phase: 0.3 },
     PositionY:   { hz: 0.17, amp: 1.6, phase: 0.4 },
+  },
+
+  // 动作的中文名 → 词 id。kit 的词表只认 id，但 AI 习惯写中文（说明书就是中文的），
+  // 所以 figure 在 baseWord 里先做一次别名转换。这份表由 figure.json 的 vocab 生成，
+  // 加新动作词后重跑一次生成脚本即可。
+  wordAlias: {
+    '圈圈眼': 'circle-eyes',
+    '蚊香眼': 'circle-eyes',
+    '黑脸': 'dark-face',
+    '阴沉': 'dark-face',
+    '屑屑眼': 'wry-face',
+    '嫌弃': 'wry-face',
+    '黑框眼镜': 'glasses-face',
+    '单片眼镜': 'monocle-face',
+    '钢盆': 'pan-face',
+    '扣盆': 'pan-face',
+    '挥手': 'wave',
+    '招手': 'wave',
+    '点头': 'nod',
+    '摇头': 'shake',
+    '鞠躬': 'bow',
+    '转圈': 'spin',
+    '跳舞': 'dance',
+    '跳一下': 'jump',
+    '蹦': 'jump',
+    '发抖': 'shiver',
+    '哆嗦': 'shiver',
+    '张望': 'look',
+    '凑近': 'lean-in',
+    '探身': 'lean-in',
+    '后仰': 'lean-back',
+    '后退': 'lean-back',
+    '侧身': 'side',
+    '斜凑': 'peek',
+    '歪着凑近': 'peek',
+    '歪头': 'tilt',
+    '扭腰': 'wiggle',
+    '扭一扭': 'wiggle',
+    '竖食指': 'finger-point',
+    '抚胸': 'chest-hand',
+    '狗尾草': 'grass-hand',
+    '加载中': 'loading-face',
+    '转圈圈': 'loading-face',
+    '甩草': 'swing',
+    '甩狗尾草': 'swing',
+    '笑眼': 'eye-smile',
+    '眼睛笑': 'eye-smile',
+    '闭眼': 'eye-close',
+    '半睁': 'eye-half',
+    '半睁眼': 'eye-half',
+    '睁大': 'eye-wide',
+    '睁大眼': 'eye-wide',
+    '单眨左': 'wink-left',
+    '左眼闭': 'wink-left',
+    '单眨右': 'wink-right',
+    '右眼闭': 'wink-right',
+    '八字眉': 'brow-frown',
+    '挑眉': 'brow-up',
+    '皱眉': 'brow-knit',
+    '微笑': 'mouth-smile',
+    '瘪嘴': 'mouth-pout',
+    '张嘴': 'mouth-open',
+    '脸红': 'blush',
+    '脸红红': 'blush',
+    '恢复': 'restore',
+    '苦笑': 'bitter-smile',
+    '强撑': 'holding-up',
+    '嘴硬': 'holding-up',
+    '心虚': 'guilty-look',
+    '撒娇': 'act-cute',
+    '不服': 'defiant',
+    '忍着不哭': 'holding-tears',
+    '忍哭': 'holding-tears',
+    '得意': 'smug-face',
+    '敷衍': 'perfunctory',
+    '低头': 'head-down',
+    '抬头': 'head-up',
+    '正视': 'face-front',
+    '站直': 'stand-straight',
+    '斜眼': 'squint',
+    '眯眼': 'squint',
+    '坏笑': 'smirk',
+    '抿嘴': 'press-lips',
+    '冷汗': 'sweat',
+    '冒冷汗': 'sweat',
+    '耸肩': 'shrug',
+    '耸耸肩': 'shrug',
+    '爱心眼': 'heart-eyes',
+    '流泪': 'tears',
+    '含泪': 'tears',
+    '紧闭眼': 'xx-eyes',
+    '使劲闭眼': 'xx-eyes',
+    '兔牙': 'bunny-teeth',
   },
 
   paramActs: {
@@ -197,6 +309,270 @@ export default {
         { id: 'LeanInput', amp: -3, freq: 1, phase: 0.25 },
       ],
     },
+
+    // —— 单通道表情（2026-11-18）——
+    'eye-smile':   { state: true, dur: 1.2, params: [{ id: 'EyeSmile', to: 1 }] },
+    'eye-close':   { state: true, dur: 1.2, params: [{ id: 'ParamEyeLOpen', to: 0 }, { id: 'ParamEyeROpen', to: 0 }] },
+    'eye-half':    { state: true, dur: 1.2, params: [{ id: 'ParamEyeLOpen', to: 0.45 }, { id: 'ParamEyeROpen', to: 0.45 }, { id: 'EyeSmile', to: 0 }] },
+    'eye-wide':    { state: true, dur: 1.2, params: [{ id: 'ParamEyeLOpen', to: 1 }, { id: 'ParamEyeROpen', to: 1 }, { id: 'EyeSmile', to: 0 }] },
+    'wink-left':   { dur: 0.45, params: [{ id: 'ParamEyeLOpen', to: 0 }] },
+    'wink-right':  { dur: 0.45, params: [{ id: 'ParamEyeROpen', to: 0 }] },
+    'brow-frown':  { state: true, dur: 1.0, params: [
+      { id: 'ParamBrowLY', to: 0.45 }, { id: 'ParamBrowRY', to: 0.45 },
+      { id: 'ParamBrowLAngle', to: -0.55 }, { id: 'ParamBrowRAngle', to: -0.55 },
+    ] },
+    'brow-up':     { state: true, dur: 1.0, params: [
+      { id: 'ParamBrowLY', to: 0.7 }, { id: 'ParamBrowRY', to: 0.7 },
+      { id: 'ParamBrowLAngle', to: 0 }, { id: 'ParamBrowRAngle', to: 0 },
+    ] },
+    'brow-knit':   { state: true, dur: 1.0, params: [
+      { id: 'ParamBrowLY', to: -0.7 }, { id: 'ParamBrowRY', to: -0.7 },
+      { id: 'ParamBrowLAngle', to: -0.9 }, { id: 'ParamBrowRAngle', to: -0.9 },
+    ] },
+    'mouth-smile': { state: true, dur: 1.0, params: [{ id: 'ParamMouthForm', to: 0.7 }] },
+    'mouth-pout':  { state: true, dur: 1.0, params: [{ id: 'ParamMouthForm', to: -0.6 }] },
+    'mouth-open':  { state: true, dur: 1.0, params: [{ id: 'ParamMouthOpenY', to: 0.5 }] },
+    // 脸红：原包 脸红.exp3.json 的开关（key7）
+    'blush':       { state: true, dur: 1.0, params: [{ id: 'key7', to: 1 }] },
+    // 恢复：实际清空在 baseWord 里做；这里占位让 kit 认识它
+    'restore':     { dur: 0.5, params: [] },
+    // —— 基础词补齐（3.1）——
+    'head-down':  { state: true, dur: 1.0, params: [{ id: 'AngleY', to: -18 }] },
+    'head-up':    { state: true, dur: 1.0, params: [{ id: 'AngleY', to: 15 }] },
+    'face-front': { state: true, dur: 1.0, params: [
+      { id: 'AngleX', to: 0 }, { id: 'AngleY', to: 0 }, { id: 'AngleZ', to: 0 },
+    ] },
+    'stand-straight': { state: true, dur: 1.0, params: [
+      { id: 'LeanInput', to: 0 }, { id: 'AngleX', to: 0 }, { id: 'AngleY', to: 0 }, { id: 'AngleZ', to: 0 },
+    ] },
+    'squint':     { state: true, dur: 1.2, params: [
+      { id: 'REyeSquint', to: 1 }, { id: 'LEyeSquint', to: 1 },
+      { id: 'ParamEyeLOpen', to: 0.6 }, { id: 'ParamEyeROpen', to: 0.6 },
+    ] },
+    'smirk':      { state: true, dur: 1.0, params: [
+      { id: 'ParamMouthForm', to: 0.7 }, { id: 'MouthX', to: 0.5 },
+    ] },
+    'press-lips': { state: true, dur: 1.0, params: [
+      { id: 'MouthPressLipOpen', to: 1 }, { id: 'ParamMouthForm', to: -0.2 },
+    ] },
+    'sweat':      { state: true, dur: 1.0, params: [{ id: 'key13', to: 1 }] },
+    'shrug':      { dur: 1.5, keys: [
+      { t: 0,    id: 'ShoulderYy', v: 0 },
+      { t: 0.25, id: 'ShoulderYy', v: 14 },
+      { t: 0.9,  id: 'ShoulderYy', v: 14 },
+      { t: 1.5,  id: 'ShoulderYy', v: 0 },
+    ] },
+    // —— 组合词（通道组合，可继续叠）——
+    'bitter-smile': { state: true, dur: 1.2, params: [
+      { id: 'ParamMouthForm', to: 0.7 },
+      { id: 'ParamBrowLY', to: 0.45 }, { id: 'ParamBrowRY', to: 0.45 },
+      { id: 'ParamBrowLAngle', to: -0.55 }, { id: 'ParamBrowRAngle', to: -0.55 },
+    ] },
+    'holding-up': { state: true, dur: 1.2, params: [
+      { id: 'ParamMouthForm', to: 0.7 },
+      { id: 'ParamBrowLY', to: 0.45 }, { id: 'ParamBrowRY', to: 0.45 },
+      { id: 'ParamBrowLAngle', to: -0.55 }, { id: 'ParamBrowRAngle', to: -0.55 },
+      { id: 'key7', to: 1 },
+    ] },
+    'guilty-look': { state: true, dur: 1.2, params: [
+      { id: 'ParamEyeLOpen', to: 0.45 }, { id: 'ParamEyeROpen', to: 0.45 }, { id: 'EyeSmile', to: 0 },
+      { id: 'ParamBrowLY', to: 0.45 }, { id: 'ParamBrowRY', to: 0.45 },
+      { id: 'ParamBrowLAngle', to: -0.55 }, { id: 'ParamBrowRAngle', to: -0.55 },
+      { id: 'key7', to: 1 }, { id: 'ParamMouthForm', to: -0.6 },
+    ] },
+    'act-cute': { state: true, dur: 1.2, params: [
+      { id: 'EyeSmile', to: 1 }, { id: 'ParamMouthForm', to: -0.6 }, { id: 'key7', to: 1 },
+    ] },
+    'defiant': { state: true, dur: 1.2, params: [
+      { id: 'ParamBrowLY', to: -0.7 }, { id: 'ParamBrowRY', to: -0.7 },
+      { id: 'ParamBrowLAngle', to: -0.9 }, { id: 'ParamBrowRAngle', to: -0.9 },
+      { id: 'ParamMouthForm', to: -0.6 },
+      { id: 'ParamEyeLOpen', to: 0.45 }, { id: 'ParamEyeROpen', to: 0.45 }, { id: 'EyeSmile', to: 0 },
+    ] },
+    'holding-tears': { state: true, dur: 1.2, params: [
+      { id: 'ParamEyeLOpen', to: 1 }, { id: 'ParamEyeROpen', to: 1 }, { id: 'EyeSmile', to: 0 },
+      { id: 'ParamBrowLY', to: 0.45 }, { id: 'ParamBrowRY', to: 0.45 },
+      { id: 'ParamBrowLAngle', to: -0.55 }, { id: 'ParamBrowRAngle', to: -0.55 },
+      { id: 'ParamMouthForm', to: -0.6 },
+    ] },
+    'smug-face': { state: true, dur: 1.2, params: [
+      { id: 'EyeSmile', to: 1 },
+      { id: 'ParamBrowLY', to: 0.7 }, { id: 'ParamBrowRY', to: 0.7 },
+      { id: 'ParamBrowLAngle', to: 0 }, { id: 'ParamBrowRAngle', to: 0 },
+      { id: 'ParamMouthForm', to: 0.7 },
+    ] },
+    'perfunctory': { state: true, dur: 1.2, params: [
+      { id: 'ParamEyeLOpen', to: 0.45 }, { id: 'ParamEyeROpen', to: 0.45 }, { id: 'EyeSmile', to: 0 },
+      { id: 'ParamMouthForm', to: 0.7 },
+    ] },
+    // —— 原包部件开关（keyN，眼睛组互斥：开一个关其他三个）——
+    'circle-eyes': { state: true, dur: 1.0, params: [
+      { id: 'key3', to: 1 }, { id: 'key4', to: 0 }, { id: 'key5', to: 0 }, { id: 'key6', to: 0 },
+    ] },
+    'heart-eyes':  { state: true, dur: 1.0, params: [
+      { id: 'key3', to: 0 }, { id: 'key4', to: 1 }, { id: 'key5', to: 0 }, { id: 'key6', to: 0 },
+    ] },
+    'xx-eyes':     { state: true, dur: 1.0, params: [
+      { id: 'key3', to: 0 }, { id: 'key4', to: 0 }, { id: 'key5', to: 1 }, { id: 'key6', to: 0 },
+    ] },
+    'wry-face':    { state: true, dur: 1.0, params: [
+      { id: 'key3', to: 0 }, { id: 'key4', to: 0 }, { id: 'key5', to: 0 }, { id: 'key6', to: 1 },
+    ] },
+    'dark-face':   { state: true, dur: 1.0, params: [{ id: 'key1', to: 1 }] },
+    'tears':       { state: true, dur: 1.0, params: [{ id: 'key2', to: 1 }] },
+    'loading-face':{ state: true, dur: 1.0, params: [{ id: 'key8', to: 1 }] },
+    'bunny-teeth': { state: true, dur: 1.0, params: [{ id: 'key9', to: 1 }] },
+    'pan-face':    { state: true, dur: 1.0, params: [{ id: 'key10', to: 1 }] },
+    'glasses-face':{ state: true, dur: 1.0, params: [{ id: 'key11', to: 1 }] },
+    'monocle-face':{ state: true, dur: 1.0, params: [{ id: 'key12', to: 1 }] },
+  },
+
+  expressions: {
+    happy: 'smile', excited: 'smile', love: 'love',
+    shy: 'blush', flustered: 'blush',
+    sad: 'tears', cry: 'tears', worried: 'sweat',
+    nod:   { dur: 0.7, waves: [{ id: 'AngleY', amp: 9, freq: 2.5, base: -4 }] },   // kit 的 nod 只有 0.7 秒；base 偏低才像点头而非仰头
+    // 摇头：头左右摇
+    shake: { dur: 0.7, waves: [{ id: 'AngleX', amp: 15, freq: 2 }] },
+    // 跳舞：腰扭 + 头摆 + 歪头 + 身体前后，四条不同频率叠起来才像在跳
+    // 扭腰：腰 + 头 + 歪头 + 身体前后，四条不同频率叠起来才像在跳
+    // （不能叫 dance：kit 里 dance 走 setMode，不给 pulse，拿不到进度）
+    wiggle: {
+      dur: 3.6,
+      waves: [
+        { id: 'ParamBodyAngleZ', amp: 17, freq: 2 },
+        { id: 'AngleZ', amp: 11, freq: 2, phase: 0.12 },
+        { id: 'AngleX', amp: 9, freq: 1, phase: 0.35 },
+        { id: 'LeanInput', amp: -9, freq: 2, phase: 0.25 },
+      ],
+    },
+  },
+
+
+  // 简易模式不播 motion，但 motion 里的 PartOpacity 是“中性姿势”的一部分：
+  // 少了它，hiyori 这类模型会同时显示 PartArmA / PartArmB（四只手）。
+  parts: { base: {} },
+  // 多轴方案：figure.json 的 axes 选中项会拼成 scheme，这里声明每个选项要写死的参数。
+  // 关闭态也要显式写 0，否则从"打开"切回"默认"时旧值会留在参数里。
+  schemes: {
+    // 每个选项都要把受控参数写全：切回不带配件的选项时，旧值必须显式归零，
+    // 否则参数会停留在上一次的状态（模型不会自己复位）。
+    body: {
+      default: { params: { Clothes2: 0 } },
+      type1: { fit: { zoom: 1.449, offset: [0, -0.992], autoFit: false }, params: { Clothes2: 0.4 } },
+      type2: { fit: { zoom: 3.97, offset: [0, -5.0], autoFit: false }, params: { Clothes2: 1 } },
+    },
+
+    shake: { dur: 0.7, waves: [{ id: 'AngleX', amp: 15, freq: 2 }] },
+    // 跳舞：腰扭 + 头摆 + 歪头 + 身体前后，四条不同频率叠起来才像在跳
+    // 扭腰：腰 + 头 + 歪头 + 身体前后，四条不同频率叠起来才像在跳
+    // （不能叫 dance：kit 里 dance 走 setMode，不给 pulse，拿不到进度）
+    wiggle: {
+      dur: 3.6,
+      waves: [
+        { id: 'ParamBodyAngleZ', amp: 17, freq: 2 },
+        { id: 'AngleZ', amp: 11, freq: 2, phase: 0.12 },
+        { id: 'AngleX', amp: 9, freq: 1, phase: 0.35 },
+        { id: 'LeanInput', amp: -9, freq: 2, phase: 0.25 },
+      ],
+    },
+    tilt:        { params: [{ id: 'AngleZ', to: 28 }] },
+
+    // —— 波形动作（连续摆动）——
+    // 点头：头上下点几下
+    nod:   { dur: 0.7, waves: [{ id: 'AngleY', amp: 9, freq: 2.5, base: -4 }] },   // kit 的 nod 只有 0.7 秒；base 偏低才像点头而非仰头
+    // 摇头：头左右摇
+    shake: { dur: 0.7, waves: [{ id: 'AngleX', amp: 15, freq: 2 }] },
+    // 跳舞：腰扭 + 头摆 + 歪头 + 身体前后，四条不同频率叠起来才像在跳
+    // 扭腰：腰 + 头 + 歪头 + 身体前后，四条不同频率叠起来才像在跳
+    // （不能叫 dance：kit 里 dance 走 setMode，不给 pulse，拿不到进度）
+    wiggle: {
+      dur: 3.6,
+      waves: [
+        { id: 'ParamBodyAngleZ', amp: 17, freq: 2 },
+        { id: 'AngleZ', amp: 11, freq: 2, phase: 0.12 },
+        { id: 'AngleX', amp: 9, freq: 1, phase: 0.35 },
+        { id: 'LeanInput', amp: -9, freq: 2, phase: 0.25 },
+      ],
+    },
+    'wiggle': {
+      dur: 3.6,
+      // 腰的左右摆：物理输出参数，postWaves 必须写在 physics.evaluate() 之后
+      postWaves: [
+        { id: 'ParamBodyAngleZ', amp: 22, freq: 1 },
+        { id: 'HipAngleX', amp: 18, freq: 1, phase: 0.12 },
+        { id: 'HipAngleZ', amp: 8, freq: 1, phase: 0.15 },
+        { id: 'ParamBodyAngleRZ', amp: 12, freq: 1, phase: 0.06 },
+      ],
+      waves: [
+        { id: 'ParamBodyAngleZ', amp: 17, freq: 2 },
+        { id: 'AngleZ', amp: 11, freq: 2, phase: 0.12 },
+        { id: 'AngleX', amp: 9, freq: 1, phase: 0.35 },
+        { id: 'LeanInput', amp: -9, freq: 2, phase: 0.25 },
+      ],
+    },
+    'bitter-smile': { state: true, dur: 1.2, params: [
+      { id: 'ParamMouthForm', to: 0.7 },
+      { id: 'ParamBrowLY', to: 0.45 }, { id: 'ParamBrowRY', to: 0.45 },
+      { id: 'ParamBrowLAngle', to: -0.55 }, { id: 'ParamBrowRAngle', to: -0.55 },
+    ] },
+    'holding-up': { state: true, dur: 1.2, params: [
+      { id: 'ParamMouthForm', to: 0.7 },
+      { id: 'ParamBrowLY', to: 0.45 }, { id: 'ParamBrowRY', to: 0.45 },
+      { id: 'ParamBrowLAngle', to: -0.55 }, { id: 'ParamBrowRAngle', to: -0.55 },
+      { id: 'key7', to: 1 },
+    ] },
+    'guilty-look': { state: true, dur: 1.2, params: [
+      { id: 'ParamEyeLOpen', to: 0.45 }, { id: 'ParamEyeROpen', to: 0.45 }, { id: 'EyeSmile', to: 0 },
+      { id: 'ParamBrowLY', to: 0.45 }, { id: 'ParamBrowRY', to: 0.45 },
+      { id: 'ParamBrowLAngle', to: -0.55 }, { id: 'ParamBrowRAngle', to: -0.55 },
+      { id: 'key7', to: 1 }, { id: 'ParamMouthForm', to: -0.6 },
+    ] },
+    'act-cute': { state: true, dur: 1.2, params: [
+      { id: 'EyeSmile', to: 1 }, { id: 'ParamMouthForm', to: -0.6 }, { id: 'key7', to: 1 },
+    ] },
+    'defiant': { state: true, dur: 1.2, params: [
+      { id: 'ParamBrowLY', to: -0.7 }, { id: 'ParamBrowRY', to: -0.7 },
+      { id: 'ParamBrowLAngle', to: -0.9 }, { id: 'ParamBrowRAngle', to: -0.9 },
+      { id: 'ParamMouthForm', to: -0.6 },
+      { id: 'ParamEyeLOpen', to: 0.45 }, { id: 'ParamEyeROpen', to: 0.45 }, { id: 'EyeSmile', to: 0 },
+    ] },
+    'holding-tears': { state: true, dur: 1.2, params: [
+      { id: 'ParamEyeLOpen', to: 1 }, { id: 'ParamEyeROpen', to: 1 }, { id: 'EyeSmile', to: 0 },
+      { id: 'ParamBrowLY', to: 0.45 }, { id: 'ParamBrowRY', to: 0.45 },
+      { id: 'ParamBrowLAngle', to: -0.55 }, { id: 'ParamBrowRAngle', to: -0.55 },
+      { id: 'ParamMouthForm', to: -0.6 },
+    ] },
+    'smug-face': { state: true, dur: 1.2, params: [
+      { id: 'EyeSmile', to: 1 },
+      { id: 'ParamBrowLY', to: 0.7 }, { id: 'ParamBrowRY', to: 0.7 },
+      { id: 'ParamBrowLAngle', to: 0 }, { id: 'ParamBrowRAngle', to: 0 },
+      { id: 'ParamMouthForm', to: 0.7 },
+    ] },
+    'perfunctory': { state: true, dur: 1.2, params: [
+      { id: 'ParamEyeLOpen', to: 0.45 }, { id: 'ParamEyeROpen', to: 0.45 }, { id: 'EyeSmile', to: 0 },
+      { id: 'ParamMouthForm', to: 0.7 },
+    ] },
+    'circle-eyes': { state: true, dur: 1.0, params: [
+      { id: 'key3', to: 1 }, { id: 'key4', to: 0 }, { id: 'key5', to: 0 }, { id: 'key6', to: 0 },
+    ] },
+    'heart-eyes':  { state: true, dur: 1.0, params: [
+      { id: 'key3', to: 0 }, { id: 'key4', to: 1 }, { id: 'key5', to: 0 }, { id: 'key6', to: 0 },
+    ] },
+    'xx-eyes':     { state: true, dur: 1.0, params: [
+      { id: 'key3', to: 0 }, { id: 'key4', to: 0 }, { id: 'key5', to: 1 }, { id: 'key6', to: 0 },
+    ] },
+    'wry-face':    { state: true, dur: 1.0, params: [
+      { id: 'key3', to: 0 }, { id: 'key4', to: 0 }, { id: 'key5', to: 0 }, { id: 'key6', to: 1 },
+    ] },
+    'dark-face':   { state: true, dur: 1.0, params: [{ id: 'key1', to: 1 }] },
+    'tears':       { state: true, dur: 1.0, params: [{ id: 'key2', to: 1 }] },
+    'loading-face':{ state: true, dur: 1.0, params: [{ id: 'key8', to: 1 }] },
+    'bunny-teeth': { state: true, dur: 1.0, params: [{ id: 'key9', to: 1 }] },
+    'pan-face':    { state: true, dur: 1.0, params: [{ id: 'key10', to: 1 }] },
+    'glasses-face':{ state: true, dur: 1.0, params: [{ id: 'key11', to: 1 }] },
+    'monocle-face':{ state: true, dur: 1.0, params: [{ id: 'key12', to: 1 }] },
+
   },
 
   expressions: {
