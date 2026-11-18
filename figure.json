@@ -2,7 +2,7 @@
   "manifest": 2,
   "api": 2,
   "id": "deepseek-shenggong",
-  "version": "1.12.8",
+  "version": "1.12.9",
   "name": {
     "zh": "大肥鱼",
     "en": "DaFeiYu"
@@ -1488,6 +1488,21 @@
       },
       "about": {
         "zh": "露出两颗大门牙，傻乎乎的可爱"
+      },
+      "seconds": 1,
+      "lasting": true
+    },
+    {
+      "id": "tongue-out",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "吐舌",
+          "吐舌头"
+        ]
+      },
+      "about": {
+        "zh": "伸出舌头，调皮（照他们配方）"
       },
       "seconds": 1,
       "lasting": true
