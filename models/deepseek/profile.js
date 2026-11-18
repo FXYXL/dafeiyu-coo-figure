@@ -445,8 +445,7 @@ export default {
   // 「整脸大件」互斥——黑脸/圈圈眼/爱心眼/紧闭眼/屑屑眼/加载/钢盆/无语/阴险都是
   // 换脸级的表达，叠加会怪；流泪/冷汗/脸红/兔牙是"附加层"，不进组（叠加合理）。
   exclusiveGroups: {
-    'face-big': ['dark-face', 'circle-eyes', 'heart-eyes', 'xx-eyes', 'wry-face',
-                 'loading-face', 'pan-face', 'speechless', 'mad'],
+    'face-big': ['dark-face', 'circle-eyes', 'heart-eyes', 'xx-eyes', 'wry-face', 'loading-face', 'pan-face', 'speechless', 'mad', 'aggrieved', 'guilty', 'bitter-smile', 'holding-up', 'guilty-look', 'act-cute', 'defiant', 'holding-tears', 'smug-face', 'perfunctory'],
   },
 
 
