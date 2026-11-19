@@ -439,10 +439,12 @@ export default {
     // 叹气（2.7 整图压扁演示词）：ViewSquash 是虚拟参数（不在模型参数表）——
     // 通道写进虚拟表 → kit custom.squash() 读 → 叠进 sq 弹簧（280/14 自动平滑）。
     // 吸气微拉长 +0.12 → 呼气压扁 -0.18 → 回正；整图（petG 容器）跟着变形。
-    'sigh': { dur: 1.4,
+    'sigh': { dur: 1.9,
+      // 慢下陷版（用户实测 +0.12/-0.18 太弹像弹簧蜜）：无上拉段、幅度减半、
+      // 带保持段、慢回正——弹簧欠阻尼（ζ≈0.42），目标变化越缓震荡越小
       keys: [
-        { id: 'ViewSquash', t: 0, v: 0 }, { id: 'ViewSquash', t: 0.35, v: 0.12 },
-        { id: 'ViewSquash', t: 0.9, v: -0.18 }, { id: 'ViewSquash', t: 1.4, v: 0 },
+        { id: 'ViewSquash', t: 0, v: 0 }, { id: 'ViewSquash', t: 0.4, v: -0.1 },
+        { id: 'ViewSquash', t: 1.2, v: -0.12 }, { id: 'ViewSquash', t: 1.9, v: 0 },
       ],
       // 呼气配一点头（叹气低头感，复用既有头部参数）
       params: [] },
