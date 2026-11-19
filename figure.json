@@ -2,7 +2,7 @@
   "manifest": 2,
   "api": 2,
   "id": "deepseek-shenggong",
-  "version": "1.13.29",
+  "version": "1.13.30",
   "name": {
     "zh": "大肥鱼",
     "en": "DaFeiYu"
@@ -1788,6 +1788,146 @@
       "about": {
         "zh": "前倾",
         "en": "身体向前倾，保持"
+      },
+      "seconds": 1.2
+    },
+    {
+      "id": "happy-burst",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "高兴"
+        ]
+      },
+      "about": {
+        "zh": "高兴",
+        "en": "张嘴眯眼笑加晃头，开心的一套"
+      },
+      "seconds": 2
+    },
+    {
+      "id": "snicker",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "偷笑"
+        ]
+      },
+      "about": {
+        "zh": "偷笑",
+        "en": "坏笑着眼珠瞟一边，憋着笑"
+      },
+      "seconds": 1.2
+    },
+    {
+      "id": "dumbstruck",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "傻眼"
+        ]
+      },
+      "about": {
+        "zh": "傻眼",
+        "en": "瞪大眼张着嘴冒冷汗"
+      },
+      "seconds": 1.2
+    },
+    {
+      "id": "gloating",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "得瑟"
+        ]
+      },
+      "about": {
+        "zh": "得瑟",
+        "en": "屑屑眼后仰着晃头，得意忘形"
+      },
+      "seconds": 2
+    },
+    {
+      "id": "frantic",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "抓狂"
+        ]
+      },
+      "about": {
+        "zh": "抓狂",
+        "en": "皱着眉大张嘴，快速摇头三连"
+      },
+      "seconds": 1.7
+    },
+    {
+      "id": "drowsy-combo",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "犯困"
+        ]
+      },
+      "about": {
+        "zh": "犯困",
+        "en": "半睁着眼低头张着嘴打瞌睡"
+      },
+      "seconds": 1.2
+    },
+    {
+      "id": "touched",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "感动"
+        ]
+      },
+      "about": {
+        "zh": "感动",
+        "en": "八字眉含泪微笑"
+      },
+      "seconds": 1.2
+    },
+    {
+      "id": "sly-idea",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "鬼点子"
+        ]
+      },
+      "about": {
+        "zh": "鬼点子",
+        "en": "挑眉坏笑眼珠一转"
+      },
+      "seconds": 1.2
+    },
+    {
+      "id": "rescued",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "得救"
+        ]
+      },
+      "about": {
+        "zh": "得救",
+        "en": "睁眼微笑松一口大气"
+      },
+      "seconds": 3.5
+    },
+    {
+      "id": "alert-combo",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "警觉"
+        ]
+      },
+      "about": {
+        "zh": "警觉",
+        "en": "站直皱眉看向一边"
       },
       "seconds": 1.2
     }

@@ -114,7 +114,7 @@ export default {
     '扣盆': 'pan-face',
     '挥手': 'wave',
     '招手': 'wave',
-    '点头': 'nod', '叹气': 'sigh', '大笑': 'laugh', '眼泪': 'tears', '挑一下眉': 'brow-raise-once', '歪一下头': 'tilt-once', '晃头': 'head-swing', '慢歪头': 'slow-tilt', '缩一下': 'cower', '吓一跳': 'startle', '左右张望': 'look-around', '摇摆一': 'sway-1', '剧场摇摆一': 'theater-sway-1', '剧场摇摆二': 'theater-sway-2', '慢摇': 'slow-sway', '摇摆二': 'dance', '看过来': 'face-front', '看你': 'face-front', '看左边': 'look-left', '看右边': 'look-right', '看上面': 'look-up', '看下面': 'look-down', '转头': 'turn-head', '前倾': 'lean-forward',
+    '点头': 'nod', '叹气': 'sigh', '大笑': 'laugh', '眼泪': 'tears', '挑一下眉': 'brow-raise-once', '歪一下头': 'tilt-once', '晃头': 'head-swing', '慢歪头': 'slow-tilt', '缩一下': 'cower', '吓一跳': 'startle', '左右张望': 'look-around', '摇摆一': 'sway-1', '剧场摇摆一': 'theater-sway-1', '剧场摇摆二': 'theater-sway-2', '慢摇': 'slow-sway', '摇摆二': 'dance', '看过来': 'face-front', '看你': 'face-front', '看左边': 'look-left', '看右边': 'look-right', '看上面': 'look-up', '看下面': 'look-down', '转头': 'turn-head', '前倾': 'lean-forward', '高兴': 'happy-burst', '偷笑': 'snicker', '傻眼': 'dumbstruck', '得瑟': 'gloating', '抓狂': 'frantic', '犯困': 'drowsy-combo', '感动': 'touched', '鬼点子': 'sly-idea', '得救': 'rescued', '警觉': 'alert-combo',
     '摇头': 'shake',
     '鞠躬': 'bow',
     '转圈': 'spin',
@@ -613,6 +613,98 @@ export default {
     'turn-head': { state: true, dur: 1.2, params: [{ id: 'AngleX', to: 20 }] },
     // 前倾（Body.cs:59）：lean 通道——保持型（与后仰 lean-back 对称）
     'lean-forward': { state: true, dur: 1.2, params: [{ id: 'LeanInput', to: -14 }] },
+    // ── 3.1 组合词单条目（2026-11-19，第四批）——他们家 Combos 展开成单条目跨部位叠加：
+    // params 静态部件 + keys 动作部件，**keys 与 params 不放同参数**（params 后写会覆盖 keys 动作）。
+    // 高兴（Body.cs Combos：张嘴+眯眼笑+晃头）——2s 一套
+    'happy-burst': { dur: 2.0,
+      keys: [
+        { id: 'AngleZ', t: 0, v: 0 }, { id: 'AngleZ', t: 0.3, v: -10 }, { id: 'AngleZ', t: 0.7, v: 10 },
+        { id: 'AngleZ', t: 1.1, v: -8 }, { id: 'AngleZ', t: 1.5, v: 6 }, { id: 'AngleZ', t: 2.0, v: 0 },
+      ],
+      params: [
+        { id: 'ParamMouthOpenY', to: 0.6 }, { id: 'EyeSmile', to: 1 },
+        { id: 'ParamEyeLOpen', to: 0.5 }, { id: 'ParamEyeROpen', to: 0.5 },
+      ] },
+    // 偷笑（坏笑+瞟一眼:左+眯眼笑）——嘴坏笑挂着、眼珠瞟一下
+    'snicker': { dur: 1.2,
+      keys: [
+        { id: 'ParamEyeBallX', t: 0, v: 0 }, { id: 'ParamEyeBallX', t: 0.15, v: 0.85 },
+        { id: 'ParamEyeBallX', t: 0.6, v: 0.85 }, { id: 'ParamEyeBallX', t: 0.8, v: 0 },
+      ],
+      params: [
+        { id: 'ParamMouthForm', to: 0.7 }, { id: 'MouthX', to: 0.5 }, { id: 'EyeSmile', to: 1 },
+        { id: 'ParamEyeLOpen', to: 0.45 }, { id: 'ParamEyeROpen', to: 0.45 },
+      ] },
+    // 傻眼（睁大+张嘴+冷汗）——保持型
+    'dumbstruck': { state: true, dur: 1.2, params: [
+      { id: 'ParamEyeLOpen', to: 1 }, { id: 'ParamEyeROpen', to: 1 }, { id: 'EyeSmile', to: 0 },
+      { id: 'ParamMouthOpenY', to: 0.6 }, { id: 'key13', to: 1 },
+    ] },
+    // 得瑟（屑屑眼+晃头+后仰）——贴图挂着、身体后仰、头晃
+    'gloating': { dur: 2.0,
+      keys: [
+        { id: 'AngleZ', t: 0, v: 0 }, { id: 'AngleZ', t: 0.3, v: -10 }, { id: 'AngleZ', t: 0.7, v: 10 },
+        { id: 'AngleZ', t: 1.1, v: -8 }, { id: 'AngleZ', t: 1.5, v: 6 }, { id: 'AngleZ', t: 2.0, v: 0 },
+      ],
+      params: [
+        { id: 'key6', to: 1 }, { id: 'key1', to: 0 }, { id: 'key3', to: 0 }, { id: 'key4', to: 0 },
+        { id: 'key5', to: 0 }, { id: 'LeanInput', to: 9 },
+      ] },
+    // 抓狂（皱眉+＞＜+张嘴+快摇头×3）——1.7s 三连摇头
+    'frantic': { dur: 1.7,
+      keys: [
+        { id: 'AngleX', t: 0, v: 0 }, { id: 'AngleX', t: 0.17, v: -11 }, { id: 'AngleX', t: 0.5, v: 11 },
+        { id: 'AngleX', t: 0.67, v: -11 }, { id: 'AngleX', t: 1.0, v: 11 },
+        { id: 'AngleX', t: 1.17, v: -11 }, { id: 'AngleX', t: 1.5, v: 11 }, { id: 'AngleX', t: 1.7, v: 0 },
+      ],
+      params: [
+        { id: 'ParamBrowLY', to: -0.7 }, { id: 'ParamBrowRY', to: -0.7 },
+        { id: 'ParamBrowLAngle', to: -0.9 }, { id: 'ParamBrowRAngle', to: -0.9 },
+        { id: 'key5', to: 1 }, { id: 'key1', to: 0 }, { id: 'key3', to: 0 },
+        { id: 'key4', to: 0 }, { id: 'key6', to: 0 }, { id: 'ParamMouthOpenY', to: 0.6 },
+      ] },
+    // 犯困（半睁+低头+张嘴）——保持型
+    'drowsy-combo': { state: true, dur: 1.2, params: [
+      { id: 'ParamEyeLOpen', to: 0.45 }, { id: 'ParamEyeROpen', to: 0.45 }, { id: 'EyeSmile', to: 0 },
+      { id: 'AngleY', to: -14 }, { id: 'ParamMouthOpenY', to: 0.2 },
+    ] },
+    // 感动（八字眉+眼泪+微笑）——保持型
+    'touched': { state: true, dur: 1.2, params: [
+      { id: 'ParamBrowLY', to: 0.45 }, { id: 'ParamBrowRY', to: 0.45 },
+      { id: 'ParamBrowLAngle', to: -0.55 }, { id: 'ParamBrowRAngle', to: -0.55 },
+      { id: 'key2', to: 1 }, { id: 'ParamMouthForm', to: 0.7 },
+    ] },
+    // 鬼点子（挑眉+坏笑+眼珠一转）——1.2s 眼珠转一圈
+    'sly-idea': { dur: 1.2,
+      keys: [
+        { id: 'ParamEyeBallX', t: 0, v: 0 }, { id: 'ParamEyeBallX', t: 0.2, v: 0.8 },
+        { id: 'ParamEyeBallX', t: 0.5, v: -0.8 }, { id: 'ParamEyeBallX', t: 0.8, v: 0.4 },
+        { id: 'ParamEyeBallX', t: 1.2, v: 0 },
+      ],
+      params: [
+        { id: 'ParamBrowLY', to: 0.6 }, { id: 'ParamBrowRY', to: 0.6 }, { id: 'BrowInnerUp', to: 0.4 },
+        { id: 'ParamMouthForm', to: 0.7 }, { id: 'MouthX', to: 0.5 },
+      ] },
+    // 得救（睁大+微笑+叹气）——3.5s 完整松一口气
+    'rescued': { dur: 3.5,
+      keys: [
+        { id: 'ViewSquash', t: 0, v: 0 }, { id: 'ViewSquash', t: 0.8, v: 0.04 },
+        { id: 'ViewSquash', t: 1.2, v: 0.05 }, { id: 'ViewSquash', t: 2.2, v: 0.02 }, { id: 'ViewSquash', t: 3.5, v: 0 },
+        { id: 'AngleY', t: 0, v: 12 }, { id: 'AngleY', t: 0.8, v: 7 },
+        { id: 'AngleY', t: 1.8, v: -8 }, { id: 'AngleY', t: 2.8, v: -7 }, { id: 'AngleY', t: 3.5, v: 0 },
+        { id: 'LeanInput', t: 0, v: 0 }, { id: 'LeanInput', t: 0.8, v: 5 },
+        { id: 'LeanInput', t: 1.8, v: -6 }, { id: 'LeanInput', t: 2.8, v: -5 }, { id: 'LeanInput', t: 3.5, v: 0 },
+      ],
+      params: [
+        { id: 'ParamEyeLOpen', to: 1 }, { id: 'ParamEyeROpen', to: 1 }, { id: 'ParamMouthForm', to: 0.7 },
+      ] },
+    // 警觉（正视站直+皱眉+看左边）——保持型（stand-straight 归位值与 look-left 合并成单 params）
+    'alert-combo': { state: true, dur: 1.2, params: [
+      { id: 'LeanInput', to: 0 }, { id: 'AngleY', to: 0 }, { id: 'AngleZ', to: 0 },
+      { id: 'AngleX', to: 7 }, { id: 'ParamEyeBallX', to: 0.75 },
+      { id: 'ParamBrowLY', to: -0.7 }, { id: 'ParamBrowRY', to: -0.7 },
+      { id: 'ParamBrowLAngle', to: -0.9 }, { id: 'ParamBrowRAngle', to: -0.9 },
+    ] },
     // 跳舞通道版（2026-11-19）：复刻他们家 6 拍摇摆（Body.cs:118-135，用户亲自指导的
     // 「身体左右转、头往相反方向转且晚 0.14 秒、头走小拱形」），拍长 0.53s。
     // 胸腔 Z 是物理输出 → keysPost（物理后写）；kit 原版 act('dance') 的 pulse 组变换/holdFace
