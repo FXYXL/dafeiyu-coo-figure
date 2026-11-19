@@ -173,7 +173,7 @@ const PATCHES = [
   {
     file: 'petapp', id: 'actBatch',
     desc: '动作同帧下发（4 处 acts.push 全改 body.do：say 气泡/<词> inline/pet_act/d.actions）',
-    detect: (s) => !/acts.push/.test(s) && /body\?\.do\(a\)/.test(s),
+    detect: (s) => /tone: b\.tone/.test(s),   // 补丁特征行（全局反证会被别处 acts.push 干扰误报）
     apply: (s) => s
       .replace(
         "case 'act': acts.push(...m.actions); holdRoam(20); break;",
@@ -275,7 +275,7 @@ const PATCHES = [
   {
     file: 'script', id: 'actModifier',
     desc: '修饰词放行：微/大/快/慢/×几 不算新词，剥掉修饰后的词去校验',
-    detect: (s) => /「微\/大\/快\/慢」前缀/.test(s),
+    detect: (s) => /actModifier：修饰词不算新词/.test(s),
     apply: (s) => {
       const out = s.replace(
         `    const id = vocabId(w, vocab);
