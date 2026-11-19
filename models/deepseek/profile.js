@@ -114,7 +114,7 @@ export default {
     '扣盆': 'pan-face',
     '挥手': 'wave',
     '招手': 'wave',
-    '点头': 'nod', '叹气': 'sigh', '大笑': 'laugh', '眼泪': 'tears', '挑一下眉': 'brow-raise-once', '歪一下头': 'tilt-once', '晃头': 'head-swing', '慢歪头': 'slow-tilt', '缩一下': 'cower', '吓一跳': 'startle', '左右张望': 'look-around', '摇摆一': 'sway-1', '剧场摇摆一': 'theater-sway-1', '剧场摇摆二': 'theater-sway-2', '慢摇': 'slow-sway', '摇摆二': 'dance',
+    '点头': 'nod', '叹气': 'sigh', '大笑': 'laugh', '眼泪': 'tears', '挑一下眉': 'brow-raise-once', '歪一下头': 'tilt-once', '晃头': 'head-swing', '慢歪头': 'slow-tilt', '缩一下': 'cower', '吓一跳': 'startle', '左右张望': 'look-around', '摇摆一': 'sway-1', '剧场摇摆一': 'theater-sway-1', '剧场摇摆二': 'theater-sway-2', '慢摇': 'slow-sway', '摇摆二': 'dance', '看过来': 'face-front', '看你': 'face-front', '看左边': 'look-left', '看右边': 'look-right', '看上面': 'look-up', '看下面': 'look-down', '转头': 'turn-head', '前倾': 'lean-forward',
     '摇头': 'shake',
     '鞠躬': 'bow',
     '转圈': 'spin',
@@ -594,6 +594,25 @@ export default {
         { id: 'AngleX', t: 1.6, v: -8 }, { id: 'AngleX', t: 1.9, v: 0 },
       ],
       params: [] },
+    // ── 3.1 看类（Body.cs:55-65，gaze/turn/lean 都是保持型 state）──
+    // 看左边/右边（Body.cs Look 左右）：眼珠 + 头同步——保持型
+    'look-left': { state: true, dur: 1.2, params: [
+      { id: 'ParamEyeBallX', to: 0.75 }, { id: 'AngleX', to: 7 },
+    ] },
+    'look-right': { state: true, dur: 1.2, params: [
+      { id: 'ParamEyeBallX', to: -0.75 }, { id: 'AngleX', to: -7 },
+    ] },
+    // 看上面/下面（Body.cs Look 上下）
+    'look-up': { state: true, dur: 1.2, params: [
+      { id: 'ParamEyeBallY', to: 0.6 }, { id: 'AngleY', to: 4 },
+    ] },
+    'look-down': { state: true, dur: 1.2, params: [
+      { id: 'ParamEyeBallY', to: -0.6 }, { id: 'AngleY', to: -5 },
+    ] },
+    // 转头（Body.cs:55）：大幅转头 ±20——保持型（默认向左，方向修饰 3.6 待做）
+    'turn-head': { state: true, dur: 1.2, params: [{ id: 'AngleX', to: 20 }] },
+    // 前倾（Body.cs:59）：lean 通道——保持型（与后仰 lean-back 对称）
+    'lean-forward': { state: true, dur: 1.2, params: [{ id: 'LeanInput', to: -14 }] },
     // 跳舞通道版（2026-11-19）：复刻他们家 6 拍摇摆（Body.cs:118-135，用户亲自指导的
     // 「身体左右转、头往相反方向转且晚 0.14 秒、头走小拱形」），拍长 0.53s。
     // 胸腔 Z 是物理输出 → keysPost（物理后写）；kit 原版 act('dance') 的 pulse 组变换/holdFace

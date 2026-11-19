@@ -2,7 +2,7 @@
   "manifest": 2,
   "api": 2,
   "id": "deepseek-shenggong",
-  "version": "1.13.28",
+  "version": "1.13.29",
   "name": {
     "zh": "大肥鱼",
     "en": "DaFeiYu"
@@ -1700,6 +1700,96 @@
         "en": "越摇越慢越小，渐渐停下"
       },
       "seconds": 3.9
+    },
+    {
+      "id": "look-left",
+      "kind": "motion",
+      "lasting": true,
+      "names": {
+        "zh": [
+          "看左边"
+        ]
+      },
+      "about": {
+        "zh": "看左边",
+        "en": "眼珠和头一起看向左边，保持"
+      },
+      "seconds": 1.2
+    },
+    {
+      "id": "look-right",
+      "kind": "motion",
+      "lasting": true,
+      "names": {
+        "zh": [
+          "看右边"
+        ]
+      },
+      "about": {
+        "zh": "看右边",
+        "en": "眼珠和头一起看向右边，保持"
+      },
+      "seconds": 1.2
+    },
+    {
+      "id": "look-up",
+      "kind": "motion",
+      "lasting": true,
+      "names": {
+        "zh": [
+          "看上面"
+        ]
+      },
+      "about": {
+        "zh": "看上面",
+        "en": "眼珠和头一起往上看，保持"
+      },
+      "seconds": 1.2
+    },
+    {
+      "id": "look-down",
+      "kind": "motion",
+      "lasting": true,
+      "names": {
+        "zh": [
+          "看下面"
+        ]
+      },
+      "about": {
+        "zh": "看下面",
+        "en": "眼珠和头一起往下看，保持"
+      },
+      "seconds": 1.2
+    },
+    {
+      "id": "turn-head",
+      "kind": "motion",
+      "lasting": true,
+      "names": {
+        "zh": [
+          "转头"
+        ]
+      },
+      "about": {
+        "zh": "转头",
+        "en": "大幅转头看向一侧，保持"
+      },
+      "seconds": 1.2
+    },
+    {
+      "id": "lean-forward",
+      "kind": "motion",
+      "lasting": true,
+      "names": {
+        "zh": [
+          "前倾"
+        ]
+      },
+      "about": {
+        "zh": "前倾",
+        "en": "身体向前倾，保持"
+      },
+      "seconds": 1.2
     }
   ],
   "sounds": {},
