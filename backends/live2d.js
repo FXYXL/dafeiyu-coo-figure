@@ -1309,7 +1309,10 @@ export async function createLive2DBody(base, opts, entry, kit) {
       if (eye.shape === 'down' || eye.shape === 'up') shape = 0;
       else if (eye.shape === 'lid') shape = clamp((eye.ry ?? 12) / 16, 0, 1);
     }
-    const close = neutralPose ? 1 : 1 - clamp(frame.blink ?? 0, 0, 1);
+    // 眨眼词演出期间抑制 kit 自动眨眼（idle 随机眨会叠在 wink/眨眼词上抢戏）——
+    // 通道里有 Eye 参数条目 = 我们的眨眼词正在演
+    const wordBlinking = channel.has('ParamEyeLOpen') || channel.has('ParamEyeROpen');
+    const close = neutralPose || wordBlinking ? 1 : 1 - clamp(frame.blink ?? 0, 0, 1);
     const squint = neutralPose ? 1 : 1 - clamp(frame.eyeClose ?? 0, 0, 1);
     const drowse = neutralPose ? 1 : 1 - 0.75 * clamp(frame.drowse ?? 0, 0, 1);
     const baseOpen = engine
