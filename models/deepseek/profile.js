@@ -510,17 +510,17 @@ export default {
         { id: 'AngleY', t: 0, v: 0 }, { id: 'AngleY', t: 0.08, v: -8 }, { id: 'AngleY', t: 0.6, v: 0 },
       ],
       params: [] },
-    // 吓一跳（Body.cs:115-116）：瞬间压扁回弹 + 瞪眼 + 挑眉——1.2s
-    'startle': { dur: 1.2,
+    // 吓一跳（Body.cs:115-116 适配版）：压扁回弹抖动加大 + 清笑眼（挂着的 EyeSmile 会盖住
+    // 惊吓脸——瞪眼写 1 无对比，得把笑眼清成 0）+ 挑眉 + 微张嘴——1.4s
+    'startle': { dur: 1.4,
       keys: [
-        { id: 'ViewSquash', t: 0, v: 0 }, { id: 'ViewSquash', t: 0.06, v: 0.06 },
-        { id: 'ViewSquash', t: 0.18, v: -0.05 }, { id: 'ViewSquash', t: 0.4, v: 0.05 }, { id: 'ViewSquash', t: 0.6, v: 0 },
-        { id: 'ParamEyeLOpen', t: 0, v: 1 }, { id: 'ParamEyeLOpen', t: 0.08, v: 1 },
-        { id: 'ParamEyeLOpen', t: 0.8, v: 1 }, { id: 'ParamEyeLOpen', t: 1.2, v: 1 },
-        { id: 'ParamEyeROpen', t: 0, v: 1 }, { id: 'ParamEyeROpen', t: 0.08, v: 1 },
-        { id: 'ParamEyeROpen', t: 0.8, v: 1 }, { id: 'ParamEyeROpen', t: 1.2, v: 1 },
+        { id: 'ViewSquash', t: 0, v: 0 }, { id: 'ViewSquash', t: 0.06, v: 0.1 },
+        { id: 'ViewSquash', t: 0.18, v: -0.08 }, { id: 'ViewSquash', t: 0.4, v: 0.08 }, { id: 'ViewSquash', t: 0.6, v: 0 },
+        { id: 'EyeSmile', t: 0, v: 0 }, { id: 'EyeSmile', t: 1.4, v: 0 },
         { id: 'BrowInnerUp', t: 0, v: 0 }, { id: 'BrowInnerUp', t: 0.08, v: 0.9 },
         { id: 'BrowInnerUp', t: 1.0, v: 0.6 }, { id: 'BrowInnerUp', t: 1.4, v: 0 },
+        { id: 'ParamMouthOpenY', t: 0, v: 0 }, { id: 'ParamMouthOpenY', t: 0.08, v: 0.3 },
+        { id: 'ParamMouthOpenY', t: 0.8, v: 0.35 }, { id: 'ParamMouthOpenY', t: 1.4, v: 0 },
       ],
       params: [] },
     // 左右张望（Body.cs:131）：眼珠 + 头同步左右各看一眼——1.9s
