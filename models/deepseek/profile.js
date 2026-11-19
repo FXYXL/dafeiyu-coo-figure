@@ -440,19 +440,32 @@ export default {
     // 「身体左右转、头往相反方向转且晚 0.14 秒、头走小拱形」），拍长 0.53s。
     // 胸腔 Z 是物理输出 → keysPost（物理后写）；kit 原版 act('dance') 的 pulse 组变换/holdFace
     // 对骨骼模型不适用（图片式左右摇晃）→ takeover:true 让 actWord 完整接管（kit act 不再执行）。
+    // 挥手通道版（2026-11-19）：肩 Z 外摆位（15）上下摆（5~25）+ 肩 Y 微耸 + 头微摆——
+    // 垂放手臂的小幅可爱挥手（骨骼值域有限，大幅举臂模型没画形变）。
+    // takeover：kit act('wave') 的 pulse 组摆是贴图式摇晃，且 pet.pulse 单槽会被后词覆盖
+    // （笑眼一触发挥手组摆就没了）——通道版根治。
+    'wave': { takeover: true, dur: 1.6,
+      waves: [
+        { id: 'ShoulderZ', base: 15, amp: 10, freq: 2.5 },
+        { id: 'ShoulderY', base: 8, amp: 5, freq: 2.5 },
+        { id: 'AngleX', amp: 3, freq: 1.25 },
+      ] },
     'dance': { takeover: true, dur: 3.4,
       keys: [
         { id: 'AngleZ', t: 0, v: 0 }, { id: 'AngleZ', t: 0.67, v: -9 }, { id: 'AngleZ', t: 1.2, v: 9 },
         { id: 'AngleZ', t: 1.73, v: -9 }, { id: 'AngleZ', t: 2.26, v: 9 }, { id: 'AngleZ', t: 2.79, v: -9 },
         { id: 'AngleZ', t: 3.2, v: 0 },
-        { id: 'AngleY', t: 0, v: 0 }, { id: 'AngleY', t: 0.27, v: -3 }, { id: 'AngleY', t: 0.8, v: 3 },
-        { id: 'AngleY', t: 1.33, v: -3 }, { id: 'AngleY', t: 1.86, v: 3 }, { id: 'AngleY', t: 2.39, v: -3 },
-        { id: 'AngleY', t: 2.92, v: 3 }, { id: 'AngleY', t: 3.2, v: 0 },
+        { id: 'AngleY', t: 0, v: 0 }, { id: 'AngleY', t: 0.27, v: -6 }, { id: 'AngleY', t: 0.8, v: 6 },
+        { id: 'AngleY', t: 1.33, v: -6 }, { id: 'AngleY', t: 1.86, v: 6 }, { id: 'AngleY', t: 2.39, v: -6 },
+        { id: 'AngleY', t: 2.92, v: 6 }, { id: 'AngleY', t: 3.2, v: 0 },
+        { id: 'ShoulderY', t: 0.53, v: 8 }, { id: 'ShoulderY', t: 0.8, v: 0 },
+        { id: 'ShoulderY', t: 1.33, v: 8 }, { id: 'ShoulderY', t: 1.6, v: 0 },
+        { id: 'ShoulderY', t: 2.13, v: 8 }, { id: 'ShoulderY', t: 2.4, v: 0 },
       ],
       keysPost: [
-        { id: 'ParamBodyAngleZ', t: 0, v: 0 }, { id: 'ParamBodyAngleZ', t: 0.53, v: 18 },
-        { id: 'ParamBodyAngleZ', t: 1.06, v: -18 }, { id: 'ParamBodyAngleZ', t: 1.59, v: 18 },
-        { id: 'ParamBodyAngleZ', t: 2.12, v: -18 }, { id: 'ParamBodyAngleZ', t: 2.65, v: 18 },
+        { id: 'ParamBodyAngleZ', t: 0, v: 0 }, { id: 'ParamBodyAngleZ', t: 0.53, v: 22 },
+        { id: 'ParamBodyAngleZ', t: 1.06, v: -22 }, { id: 'ParamBodyAngleZ', t: 1.59, v: 22 },
+        { id: 'ParamBodyAngleZ', t: 2.12, v: -22 }, { id: 'ParamBodyAngleZ', t: 2.65, v: 22 },
         { id: 'ParamBodyAngleZ', t: 3.2, v: 0 },
       ] },
     'monocle-face':{ state: true, dur: 1.0, params: [{ id: 'key12', to: 1 }] },
