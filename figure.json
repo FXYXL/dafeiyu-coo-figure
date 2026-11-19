@@ -2,7 +2,7 @@
   "manifest": 2,
   "api": 2,
   "id": "deepseek-shenggong",
-  "version": "1.13.26",
+  "version": "1.13.27",
   "name": {
     "zh": "大肥鱼",
     "en": "DaFeiYu"
@@ -1531,6 +1531,149 @@
         "en": "叹一口气，整个人软软地瘪下去再回弹"
       },
       "seconds": 3.5
+    },
+    {
+      "id": "eye-narrow-smile",
+      "kind": "motion",
+      "lasting": true,
+      "names": {
+        "zh": [
+          "眯眼笑"
+        ]
+      },
+      "about": {
+        "zh": "眯眼笑",
+        "en": "闭着眼睛笑（区别于笑眼）"
+      },
+      "seconds": 1.2
+    },
+    {
+      "id": "laugh",
+      "kind": "motion",
+      "lasting": true,
+      "names": {
+        "zh": [
+          "大笑"
+        ]
+      },
+      "about": {
+        "zh": "大笑",
+        "en": "张大嘴笑"
+      },
+      "seconds": 1.2
+    },
+    {
+      "id": "loading",
+      "kind": "motion",
+      "lasting": true,
+      "names": {
+        "zh": [
+          "加载"
+        ]
+      },
+      "about": {
+        "zh": "加载",
+        "en": "头上转圈加载中"
+      },
+      "seconds": 1
+    },
+    {
+      "id": "brow-raise-once",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "挑一下眉"
+        ]
+      },
+      "about": {
+        "zh": "挑一下眉",
+        "en": "单次挑眉"
+      },
+      "seconds": 0.7
+    },
+    {
+      "id": "tilt-once",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "歪一下头"
+        ]
+      },
+      "about": {
+        "zh": "歪一下头",
+        "en": "快速歪一下头再回来"
+      },
+      "seconds": 0.9
+    },
+    {
+      "id": "head-swing",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "晃头"
+        ]
+      },
+      "about": {
+        "zh": "晃头",
+        "en": "左右晃头渐渐停下"
+      },
+      "seconds": 2
+    },
+    {
+      "id": "slow-tilt",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "慢歪头"
+        ]
+      },
+      "about": {
+        "zh": "慢歪头",
+        "en": "慢慢地左右歪头"
+      },
+      "seconds": 4.6
+    },
+    {
+      "id": "cower",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "缩一下"
+        ]
+      },
+      "about": {
+        "zh": "缩一下",
+        "en": "吓了一缩，脖子缩下去"
+      },
+      "seconds": 0.6
+    },
+    {
+      "id": "startle",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "吓一跳"
+        ]
+      },
+      "about": {
+        "zh": "吓一跳",
+        "en": "被吓一跳，弹一下瞪大眼"
+      },
+      "seconds": 1.2
+    },
+    {
+      "id": "look-around",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "左右张望"
+        ]
+      },
+      "about": {
+        "zh": "左右张望",
+        "en": "眼珠和头左右各看一眼"
+      },
+      "seconds": 1.9
     }
   ],
   "sounds": {},

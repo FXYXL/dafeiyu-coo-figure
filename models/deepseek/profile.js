@@ -114,7 +114,7 @@ export default {
     '扣盆': 'pan-face',
     '挥手': 'wave',
     '招手': 'wave',
-    '点头': 'nod', '叹气': 'sigh',
+    '点头': 'nod', '叹气': 'sigh', '眯眼笑': 'eye-narrow-smile', '大笑': 'laugh', '眼泪': 'tears', '加载': 'loading', '挑一下眉': 'brow-raise-once', '歪一下头': 'tilt-once', '晃头': 'head-swing', '慢歪头': 'slow-tilt', '缩一下': 'cower', '吓一跳': 'startle', '左右张望': 'look-around',
     '摇头': 'shake',
     '鞠躬': 'bow',
     '转圈': 'spin',
@@ -461,6 +461,83 @@ export default {
         { id: 'MouthFunnel', t: 0, v: 0 }, { id: 'MouthFunnel', t: 1.1, v: 0 },
         { id: 'MouthFunnel', t: 1.4, v: 0.9 }, { id: 'MouthFunnel', t: 2.2, v: 0.6 },
         { id: 'MouthFunnel', t: 2.6, v: 0 }, { id: 'MouthFunnel', t: 3.5, v: 0 },
+      ],
+      params: [] },
+    // ── 3.1/3.3 第一批（2026-11-19，搬他们家 Body.cs 曲线，符号直接照抄——两边 ViewSquash 都是正=压）──
+    // 眯眼笑（Body.cs:70）：闭眼笑（区别于笑眼的半开）——保持型
+    'eye-narrow-smile': { state: true, dur: 1.2, params: [
+      { id: 'EyeSmile', to: 1 }, { id: 'ParamEyeLOpen', to: 0 }, { id: 'ParamEyeROpen', to: 0 },
+    ] },
+    // 大笑（Body.cs:82）：嘴大张 + 下巴——保持型
+    'laugh': { state: true, dur: 1.2, params: [
+      { id: 'ParamMouthForm', to: 1 }, { id: 'ParamMouthOpenY', to: 0.6 }, { id: 'JawOpen', to: 0.3 },
+    ] },
+    // 眼泪（Body.cs:91）：exp3 贴图 key2——保持型
+    'tears': { state: true, dur: 1.0, params: [{ id: 'key2', to: 1 }] },
+    // 加载（Body.cs:94）：exp3 贴图 key8——保持型
+    'loading': { state: true, dur: 1.0, params: [{ id: 'key8', to: 1 }] },
+    // 挑一下眉（Body.cs:104-105）：双眉挑 + 眉心——0.7s 一次性
+    'brow-raise-once': { dur: 0.7,
+      keys: [
+        { id: 'ParamBrowLY', t: 0, v: 0 }, { id: 'ParamBrowLY', t: 0.1, v: 0.7 },
+        { id: 'ParamBrowLY', t: 0.45, v: 0.7 }, { id: 'ParamBrowLY', t: 0.7, v: 0 },
+        { id: 'ParamBrowRY', t: 0, v: 0 }, { id: 'ParamBrowRY', t: 0.1, v: 0.7 },
+        { id: 'ParamBrowRY', t: 0.45, v: 0.7 }, { id: 'ParamBrowRY', t: 0.7, v: 0 },
+        { id: 'BrowInnerUp', t: 0, v: 0 }, { id: 'BrowInnerUp', t: 0.1, v: 0.5 },
+        { id: 'BrowInnerUp', t: 0.45, v: 0.5 }, { id: 'BrowInnerUp', t: 0.7, v: 0 },
+      ],
+      params: [] },
+    // 歪一下头（Body.cs:106）：快速歪 12 度停住再回——0.9s
+    'tilt-once': { dur: 0.9,
+      keys: [
+        { id: 'AngleZ', t: 0, v: 0 }, { id: 'AngleZ', t: 0.2, v: 12 },
+        { id: 'AngleZ', t: 0.6, v: 12 }, { id: 'AngleZ', t: 0.9, v: 0 },
+      ],
+      params: [] },
+    // 晃头（Body.cs:107）：左右晃渐渐小——2.0s
+    'head-swing': { dur: 2.0,
+      keys: [
+        { id: 'AngleZ', t: 0, v: 0 }, { id: 'AngleZ', t: 0.3, v: -10 }, { id: 'AngleZ', t: 0.7, v: 10 },
+        { id: 'AngleZ', t: 1.1, v: -8 }, { id: 'AngleZ', t: 1.5, v: 6 }, { id: 'AngleZ', t: 2.0, v: 0 },
+      ],
+      params: [] },
+    // 慢歪头（Body.cs:109）：慢慢地左右歪，最后慢慢停下——4.6s
+    'slow-tilt': { dur: 4.6,
+      keys: [
+        { id: 'AngleZ', t: 0, v: 0 }, { id: 'AngleZ', t: 1, v: 8 }, { id: 'AngleZ', t: 2.2, v: -8 },
+        { id: 'AngleZ', t: 3.4, v: 6 }, { id: 'AngleZ', t: 4.6, v: 0 },
+      ],
+      params: [] },
+    // 缩一下（Body.cs:110）：快速压扁一下 + 低头缩脖——0.6s（他们 ViewSquash 正=压，与我们一致）
+    'cower': { dur: 0.6,
+      keys: [
+        { id: 'ViewSquash', t: 0, v: 0 }, { id: 'ViewSquash', t: 0.08, v: 0.05 },
+        { id: 'ViewSquash', t: 0.3, v: 0.01 }, { id: 'ViewSquash', t: 0.6, v: 0 },
+        { id: 'AngleY', t: 0, v: 0 }, { id: 'AngleY', t: 0.08, v: -8 }, { id: 'AngleY', t: 0.6, v: 0 },
+      ],
+      params: [] },
+    // 吓一跳（Body.cs:115-116）：瞬间压扁回弹 + 瞪眼 + 挑眉——1.2s
+    'startle': { dur: 1.2,
+      keys: [
+        { id: 'ViewSquash', t: 0, v: 0 }, { id: 'ViewSquash', t: 0.06, v: 0.06 },
+        { id: 'ViewSquash', t: 0.18, v: -0.05 }, { id: 'ViewSquash', t: 0.4, v: 0.05 }, { id: 'ViewSquash', t: 0.6, v: 0 },
+        { id: 'ParamEyeLOpen', t: 0, v: 1 }, { id: 'ParamEyeLOpen', t: 0.08, v: 1 },
+        { id: 'ParamEyeLOpen', t: 0.8, v: 1 }, { id: 'ParamEyeLOpen', t: 1.2, v: 1 },
+        { id: 'ParamEyeROpen', t: 0, v: 1 }, { id: 'ParamEyeROpen', t: 0.08, v: 1 },
+        { id: 'ParamEyeROpen', t: 0.8, v: 1 }, { id: 'ParamEyeROpen', t: 1.2, v: 1 },
+        { id: 'BrowInnerUp', t: 0, v: 0 }, { id: 'BrowInnerUp', t: 0.08, v: 0.9 },
+        { id: 'BrowInnerUp', t: 1.0, v: 0.6 }, { id: 'BrowInnerUp', t: 1.4, v: 0 },
+      ],
+      params: [] },
+    // 左右张望（Body.cs:131）：眼珠 + 头同步左右各看一眼——1.9s
+    'look-around': { dur: 1.9,
+      keys: [
+        { id: 'ParamEyeBallX', t: 0, v: 0 }, { id: 'ParamEyeBallX', t: 0.15, v: 0.8 },
+        { id: 'ParamEyeBallX', t: 0.75, v: 0.8 }, { id: 'ParamEyeBallX', t: 1.0, v: -0.8 },
+        { id: 'ParamEyeBallX', t: 1.6, v: -0.8 }, { id: 'ParamEyeBallX', t: 1.9, v: 0 },
+        { id: 'AngleX', t: 0, v: 0 }, { id: 'AngleX', t: 0.15, v: 8 },
+        { id: 'AngleX', t: 0.75, v: 8 }, { id: 'AngleX', t: 1.0, v: -8 },
+        { id: 'AngleX', t: 1.6, v: -8 }, { id: 'AngleX', t: 1.9, v: 0 },
       ],
       params: [] },
     // 跳舞通道版（2026-11-19）：复刻他们家 6 拍摇摆（Body.cs:118-135，用户亲自指导的
