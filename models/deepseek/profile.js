@@ -244,7 +244,7 @@ export default {
       { id: 'Param41', to: 0.705 }, { id: 'Param42', to: -0.05 },
       { id: 'Param43', to: -0.164 }, { id: 'Param56', to: 1 },
     ] },
-    'chest-hand': { state: true, dur: 1.2, params: [
+    'chest-hand': { state: true, dur: 4, params: [
       { id: 'Movement2', to: 1 },
       { id: 'Param62', to: 0.034 }, { id: 'Param59', to: 0.509 },
       { id: 'Param60', to: 0.879 }, { id: 'Param61', to: 0.2 },

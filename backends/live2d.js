@@ -900,6 +900,10 @@ export async function createLive2DBody(base, opts, entry, kit) {
     if (typeof w !== 'string') return null;
     let s = w.trim();
     if (!s) return null;
+    // 3.6 :方向修饰——剥后缀记方向（右=-1 镜像），actWord 对方向参数取反
+    dirSide = 1;
+    const sideM = s.match(/[:：](左|右)$/);
+    if (sideM) { s = s.slice(0, -sideM[0].length); if (sideM[1] === '右') dirSide = -1; }
     // 「恢复」/ neutral：撤掉所有通道（动作 + 表情层），回到干净的脸和姿势。
     // 关键：Live2D 参数保持最后写入值——只删条目不够（CheeckPuff/Movement 等残留 1），
     // 必须把被清条目的静态参数显式写回 0（角色参数如 eyeOpen 有 roles 每帧重写，不用管）。
@@ -946,6 +950,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
   const overlay = new Map();
   // 2.7 虚拟参数表：通道里 id 不在模型参数表的条目（如 ViewSquash 整图压扁）不写模型，
   // 存这里给 kit 消费（custom.squash() 读）——弹簧/锚点/阴影全白拿 kit 的 sq 系统。
+  let dirSide = 1;   // 3.6 :方向修饰（1=默认/左，-1=右镜像）——baseWord 设定、actWord 镜像
   const virtualParams = new Map();
   const overlaySet = (src, pid, def) => overlay.set(src + ':' + pid, { pid, t0: clockT, dur: 30, in: 0.2, ...def });
   const overlayClear = (src) => {
@@ -971,6 +976,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
     const def = paramActs[w];
     if (!def) return false;
     const now = clockT;
+    // 3.6 :右 镜像——方向参数（头部横摆/眼珠横移）值取反
+    const MIRROR = new Set(['AngleX', 'AngleZ', 'ParamEyeBallX']);
+    const mir = (id, v) => (dirSide === -1 && MIRROR.has(id) ? -v : v);
     // 修饰：AI 写的「微/大/快/慢/×几」；没写就按当前情绪给个默认幅度
     const mod = pendingMod ?? { scale: 1, pace: 1, repeat: 1, explicit: false };
     pendingMod = null;
@@ -1016,7 +1024,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
     const emo = (profile.emotionArc ?? {})[w] ?? null;
     for (const p of def.params ?? []) {
       const f0 = defVal(p.id);
-      channel.set(p.id, { kind: 'hold', from: f0, to: f0 + ((p.to ?? 0) - f0) * effScale, t0: now, dur, in: inT, out: outT, keep: !!(def.state || def.keep), faceLinked: !!fromFace, emo });
+      channel.set(p.id, { kind: 'hold', from: f0, to: mir(p.id, f0 + ((p.to ?? 0) - f0) * effScale), t0: now, dur, in: inT, out: outT, keep: !!(def.state || def.keep), faceLinked: !!fromFace, emo });
     }
     // 波形动作（点头、摇头、甩草…）：正弦摆动叠在通道上。
     // 不支持这一种的话，点头永远只能走旧路，也就永远不能和别的东西叠加。
@@ -1059,7 +1067,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
         const span = frames[frames.length - 1][0];
         const out = [];
         for (let r = 0; r < mod.repeat; r++) {
-          for (const [t, v] of frames) out.push([(r * span + t) * mod.pace, v * effScale]);
+          for (const [t, v] of frames) out.push([(r * span + t) * mod.pace, mir(id, v) * effScale]);
         }
         channel.set(id, { kind: 'keys', frames: out, t0: now, dur, emo, post });
       }
