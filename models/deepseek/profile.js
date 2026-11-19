@@ -294,28 +294,28 @@ export default {
     // 扭腰：腰 + 头 + 歪头 + 身体前后，四条不同频率叠起来才像在跳
     // （不能叫 dance：kit 里 dance 走 setMode，不给 pulse，拿不到进度）
     wiggle: {
-      dur: 3.6,
+      dur: 4.6,
       // 腰的左右摆：ParamBodyAngleZ / HipAngleZ 是物理的**输出**参数，
       // 写在物理前面会被当场算回 0（这就是之前"腰没动、只剩前后晃"的原因）。
       // postWaves 放在 physics.evaluate() 之后写，才是当帧最终值。
       postWaves: [
-        // 胸腔先动，盆骨慢半拍跟上（从腰往上带的感觉）
-        { id: 'ParamBodyAngleZ', amp: 22, freq: 1 },
+        // 胸腔先动，盆骨慢半拍跟上（从腰往上带的感觉）——2026-11-19 柔和化 ×0.6/×0.7
+        { id: 'ParamBodyAngleZ', amp: 13, freq: 0.7 },
         // 走路时胯部动的是 HipAngleX（盆骨 X），不是 Z。之前只写 Z 所以胯看着没动。
-        { id: 'HipAngleX', amp: 18, freq: 1, phase: 0.12 },
-        { id: 'HipAngleZ', amp: 8, freq: 1, phase: 0.15 },
+        { id: 'HipAngleX', amp: 11, freq: 0.7, phase: 0.12 },
+        { id: 'HipAngleZ', amp: 5, freq: 0.7, phase: 0.15 },
         // ParamBodyAngleRZ 是"身体位移RZ"，物理既不读也不写，可以自由驱动，
         // 它让整个身体一起摆，比只转胸腔明显得多。
-        { id: 'ParamBodyAngleRZ', amp: 12, freq: 1, phase: 0.06 },
+        { id: 'ParamBodyAngleRZ', amp: 7, freq: 0.7, phase: 0.06 },
       ],
       // 头和上半身跟着同一拍，速度慢一点，形成"腰先动、头后跟"
       waves: [
         // PositionX 是物理的输入：身体重心左右移 → 物理推出胸/胯/裙摆/头发
         // 一起动，比单纯转胸腔自然得多（这也是 3.0.0 里 bodyX 的做法）
-        { id: 'PositionX', amp: 20, freq: 0.9 },
-        { id: 'AngleZ', amp: 8, freq: 1, phase: 0.1 },
-        { id: 'AngleX', amp: 6, freq: 0.5, phase: 0.3 },
-        { id: 'LeanInput', amp: -3, freq: 1, phase: 0.25 },
+        { id: 'PositionX', amp: 12, freq: 0.65 },
+        { id: 'AngleZ', amp: 5, freq: 0.7, phase: 0.1 },
+        { id: 'AngleX', amp: 4, freq: 0.35, phase: 0.3 },
+        { id: 'LeanInput', amp: -2, freq: 0.7, phase: 0.25 },
       ],
     },
 
