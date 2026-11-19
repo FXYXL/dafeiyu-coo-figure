@@ -276,7 +276,101 @@ const PATCHES = [
     file: 'script', id: 'actModifier',
     desc: '修饰词放行：微/大/快/慢/×几 不算新词，剥掉修饰后的词去校验',
     detect: (s) => /「微\/大\/快\/慢」前缀/.test(s),
-    apply: null,   // 已在源文件（138 行注释为锚），Coo 更新后需按当日实现重写——TODO
+    apply: (s) => {
+      const out = s.replace(
+        `    const id = vocabId(w, vocab);
+    if (id) out.push(id);
+    else dropped.push(w);`,
+        `    const id = vocabId(w, vocab);
+    if (id) { out.push(id); continue; }
+    // actModifier：修饰词不算新词——剥掉前缀修饰（微/大/快/慢/轻/猛/×几）再校验，
+    // 通过就把原词放行给 kit baseWord（那边解析修饰为幅度/速度）。
+    const bare = w.replace(/^[微大快慢轻猛]+/, '').replace(/^[×xX]\\d+/, '');
+    if (bare && bare !== w && vocabId(bare, vocab)) { out.push(w); continue; }
+    dropped.push(w);`,
+      );
+      if (!out.includes('actModifier：修饰词不算新词')) throw new Error('actModifier：words() 锚点未命中');
+      return out;
+    },
+  },
+  {
+    file: 'script', id: 'beatWaitTone',
+    desc: '2.1 动作阻塞文字 + 2.3 tone：Beat/Anchor 加 wait（motion && !lasting 才算秒）、Beat 加 tone（含！→感叹/末尾…→省略）；wait/anchor.wait 乘 tone pace 与动作实际时长精确同步',
+    detect: (s) => /sumWait/.test(s) && /toneOf/.test(s),
+    apply: (s) => {
+      const out = s
+        .replace(
+          `export interface Anchor {
+  /** Character offset in the beat's text. */
+  at: number;
+  actions: string[];
+}
+
+export interface Beat {
+  actions: string[];
+  text: string;
+  anchors: Anchor[];
+}`,
+          `export interface Anchor {
+  /** Character offset in the beat's text. */
+  at: number;
+  actions: string[];
+  /** 2.1 动作阻塞文字：锚点动作（motion && !lasting）演多久，打字就停多久。 */
+  wait?: number;
+}
+
+export interface Beat {
+  actions: string[];
+  text: string;
+  anchors: Anchor[];
+  /** 2.1 beat 开头动作的阻塞秒数。 */
+  wait?: number;
+  /** 2.3 tone：beat 文本含「！」→ '!'（动作放大加速）、末尾「…」→ '…'（收着放慢）——他们 Body.cs:536 同款判定。 */
+  tone?: string;
+}
+
+/** 2.1 动作阻塞文字：一次性动作（motion && !lasting 保持型不阻塞）演多久，打字就停多久。 */
+function sumWait(ids: string[], vocab: readonly VocabWord[]): number {
+  return ids.reduce((sum, id) => {
+    const v = vocab.find((x) => x.id === id);
+    return sum + (v && v.kind === 'motion' && !v.lasting ? v.seconds || 0 : 0);
+  }, 0);
+}
+
+/** 2.3 tone 判定（他们 Body.cs:536 同款）：含 ！/! 优先 → '!'；否则末尾 …/⋯ → '…'。 */
+function toneOf(text: string): string {
+  const t = text.trimEnd();
+  if (t.includes('！') || t.includes('!')) return '!';
+  if (t.endsWith('…') || t.endsWith('⋯')) return '…';
+  return '';
+}`,
+        )
+        .replace(
+          `      if (cur.text.trim() || cur.actions.length || cur.anchors.length) beats.push(cur);`,
+          `      if (cur.text.trim() || cur.actions.length || cur.anchors.length) {
+        const tone = toneOf(cur.text);
+        const pace = tone === '!' ? 0.85 : tone === '…' ? 1.25 : 1;   // 2.3 阻塞时长也吃 tone——与动作实际时长精确同步
+        for (const a of cur.anchors) a.wait = (a.wait ?? 0) * pace;
+        beats.push({ ...cur, wait: sumWait(cur.actions, vocab) * pace, tone });
+      }`,
+        )
+        .replace(
+          `      if (acts.length) cur.anchors.push({ at: cur.text.length, actions: acts });`,
+          `      if (acts.length) cur.anchors.push({ at: cur.text.length, actions: acts, wait: sumWait(acts, vocab) });`,
+        )
+        .replace(
+          `  if (cur.text.trim() || cur.actions.length || cur.anchors.length) beats.push(cur);`,
+          `  if (cur.text.trim() || cur.actions.length || cur.anchors.length) {
+    const tone = toneOf(cur.text);
+    const pace = tone === '!' ? 0.85 : tone === '…' ? 1.25 : 1;   // 2.3 阻塞时长也吃 tone——与动作实际时长精确同步
+    for (const a of cur.anchors) a.wait = (a.wait ?? 0) * pace;
+    beats.push({ ...cur, wait: sumWait(cur.actions, vocab) * pace, tone });
+  }`,
+        );
+      if ((out.match(/sumWait\(cur\.actions, vocab\) \* pace/g) || []).length !== 2) throw new Error('beatWaitTone：beats.push 锚点未命中（应 2 处）');
+      if (!out.includes("actions: acts, wait: sumWait(acts, vocab)")) throw new Error('beatWaitTone：anchors.push 锚点未命中');
+      return out;
+    },
   },
 ];
 
