@@ -114,7 +114,7 @@ export default {
     '扣盆': 'pan-face',
     '挥手': 'wave',
     '招手': 'wave',
-    '点头': 'nod', '叹气': 'sigh', '眯眼笑': 'eye-narrow-smile', '大笑': 'laugh', '眼泪': 'tears', '加载': 'loading', '挑一下眉': 'brow-raise-once', '歪一下头': 'tilt-once', '晃头': 'head-swing', '慢歪头': 'slow-tilt', '缩一下': 'cower', '吓一跳': 'startle', '左右张望': 'look-around',
+    '点头': 'nod', '叹气': 'sigh', '眯眼笑': 'eye-narrow-smile', '大笑': 'laugh', '眼泪': 'tears', '挑一下眉': 'brow-raise-once', '歪一下头': 'tilt-once', '晃头': 'head-swing', '慢歪头': 'slow-tilt', '缩一下': 'cower', '吓一跳': 'startle', '左右张望': 'look-around',
     '摇头': 'shake',
     '鞠躬': 'bow',
     '转圈': 'spin',
@@ -474,8 +474,6 @@ export default {
     ] },
     // 眼泪（Body.cs:91）：exp3 贴图 key2——保持型
     'tears': { state: true, dur: 1.0, params: [{ id: 'key2', to: 1 }] },
-    // 加载（Body.cs:94）：exp3 贴图 key8——保持型
-    'loading': { state: true, dur: 1.0, params: [{ id: 'key8', to: 1 }] },
     // 挑一下眉（Body.cs:104-105）：双眉挑 + 眉心——0.7s 一次性
     'brow-raise-once': { dur: 0.7,
       keys: [

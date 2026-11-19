@@ -1563,21 +1563,6 @@
       "seconds": 1.2
     },
     {
-      "id": "loading",
-      "kind": "motion",
-      "lasting": true,
-      "names": {
-        "zh": [
-          "加载"
-        ]
-      },
-      "about": {
-        "zh": "加载",
-        "en": "头上转圈加载中"
-      },
-      "seconds": 1
-    },
-    {
       "id": "brow-raise-once",
       "kind": "motion",
       "names": {
