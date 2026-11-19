@@ -440,26 +440,12 @@ export default {
     // 「身体左右转、头往相反方向转且晚 0.14 秒、头走小拱形」），拍长 0.53s。
     // 胸腔 Z 是物理输出 → keysPost（物理后写）；kit 原版 act('dance') 的 pulse 组变换/holdFace
     // 对骨骼模型不适用（图片式左右摇晃）→ takeover:true 让 actWord 完整接管（kit act 不再执行）。
-    // 挥手通道版（2026-11-19）：肩 Z 外摆位（15）上下摆（5~25）+ 肩 Y 微耸 + 头微摆——
-    // 垂放手臂的小幅可爱挥手（骨骼值域有限，大幅举臂模型没画形变）。
-    // takeover：kit act('wave') 的 pulse 组摆是贴图式摇晃，且 pet.pulse 单槽会被后词覆盖
-    // （笑眼一触发挥手组摆就没了）——通道版根治。
-    'wave': { takeover: true, dur: 1.6,
-      params: [
-        { id: 'Movement1', to: 1 }, { id: 'Movement3', to: 0 },   // 抬手手型（狗尾草的手姿）：挥一下再回去
-        { id: 'Param36', to: 0.062 }, { id: 'Param39', to: 0.2 },
-        { id: 'Param41', to: -0.762 }, { id: 'Param42', to: 0.266 }, { id: 'Param56', to: 1 },
-      ],
-      waves: [
-        { id: 'ShoulderZ', base: 8, amp: 7, freq: 2.5 },   // 肩 Z 左右挥
-        { id: 'AngleZ', amp: 6, freq: 1.25 },               // 头跟着微歪
-        { id: 'AngleX', amp: 3, freq: 1.25 },
-      ] },
     'dance': { takeover: true, dur: 3.4,
       // 连续扭（扭腰同款 postWaves，幅度收敛、频率对拍子 1.9）叠在拍子 keys 上 → 「真的在扭」而不是倾斜
       postWaves: [
-        { id: 'ParamBodyAngleZ', amp: 12, freq: 1.9 },
-        { id: 'HipAngleX', amp: 8, freq: 1.9, phase: 0.12 },
+        { id: 'PositionX', amp: 14, freq: 0.94 },   // 重心左右移（他们家注释原话：比单纯转胸腔自然得多）
+        { id: 'ParamBodyAngleZ', amp: 10, freq: 0.94 },
+        { id: 'HipAngleX', amp: 12, freq: 0.94, phase: 0.12 },
       ],
       keys: [
         { id: 'AngleZ', t: 0, v: 0 }, { id: 'AngleZ', t: 0.67, v: -9 }, { id: 'AngleZ', t: 1.2, v: 9 },
