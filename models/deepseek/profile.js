@@ -440,6 +440,14 @@ export default {
     // 「身体左右转、头往相反方向转且晚 0.14 秒、头走小拱形」），拍长 0.53s。
     // 胸腔 Z 是物理输出 → keysPost（物理后写）；kit 原版 act('dance') 的 pulse 组变换/holdFace
     // 对骨骼模型不适用（图片式左右摇晃）→ takeover:true 让 actWord 完整接管（kit act 不再执行）。
+    // 挥手双轨版：通道肩摆（不受 pulse 单槽影响）+ kit pulse 组摆并存——
+    // Movement1 手型是拿狗尾草的姿势（无正常抬手臂形变），弃用；骨骼值域有限（±10）只做小幅
+    'wave': { dur: 1.6,
+      waves: [
+        { id: 'ShoulderZ', base: 10, amp: 8, freq: 2.5 },
+        { id: 'RForearm', amp: 6, freq: 2.5 },
+        { id: 'AngleX', amp: 3, freq: 1.25 },
+      ] },
     'dance': { takeover: true, dur: 3.4,
       // 连续扭（扭腰同款 postWaves，幅度收敛、频率对拍子 1.9）叠在拍子 keys 上 → 「真的在扭」而不是倾斜
       postWaves: [
@@ -457,6 +465,11 @@ export default {
         { id: 'ShoulderY', t: 0.53, v: 8 }, { id: 'ShoulderY', t: 0.8, v: 0 },
         { id: 'ShoulderY', t: 1.33, v: 8 }, { id: 'ShoulderY', t: 1.6, v: 0 },
         { id: 'ShoulderY', t: 2.13, v: 8 }, { id: 'ShoulderY', t: 2.4, v: 0 },
+      ],
+      // ParamBodyAngleX 走普通批次（物理的**输入**）——胸物理组的输入就是胸腔 X/Z，
+      // keysPost 的 Z 只管显示（物理后写），胸晃要靠这个在物理**之前**喂进去
+      waves: [
+        { id: 'ParamBodyAngleX', amp: 15, freq: 0.94 },
       ],
       keysPost: [
         { id: 'ParamBodyAngleZ', t: 0, v: 0 }, { id: 'ParamBodyAngleZ', t: 0.53, v: 22 },
