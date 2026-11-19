@@ -114,7 +114,7 @@ export default {
     '扣盆': 'pan-face',
     '挥手': 'wave',
     '招手': 'wave',
-    '点头': 'nod', '叹气': 'sigh', '大笑': 'laugh', '眼泪': 'tears', '挑一下眉': 'brow-raise-once', '歪一下头': 'tilt-once', '晃头': 'head-swing', '慢歪头': 'slow-tilt', '缩一下': 'cower', '吓一跳': 'startle', '左右张望': 'look-around', '摇摆一': 'sway-1', '剧场摇摆一': 'theater-sway-1', '剧场摇摆二': 'theater-sway-2', '慢摇': 'slow-sway', '摇摆二': 'dance', '看过来': 'face-front', '看你': 'face-front', '看左边': 'look-left', '看右边': 'look-right', '看上面': 'look-up', '看下面': 'look-down', '转头': 'turn-head', '前倾': 'lean-forward', '高兴': 'happy-burst', '偷笑': 'snicker', '傻眼': 'dumbstruck', '得瑟': 'gloating', '抓狂': 'frantic', '犯困': 'drowsy-combo', '感动': 'touched', '鬼点子': 'sly-idea', '得救': 'rescued', '警觉': 'alert-combo',
+    '点头': 'nod', '叹气': 'sigh', '大笑': 'laugh', '眼泪': 'tears', '挑一下眉': 'brow-raise-once', '歪一下头': 'tilt-once', '晃头': 'head-swing', '慢歪头': 'slow-tilt', '缩一下': 'cower', '吓一跳': 'startle', '左右张望': 'look-around', '摇摆一': 'sway-1', '剧场摇摆一': 'theater-sway-1', '剧场摇摆二': 'theater-sway-2', '慢摇': 'slow-sway', '摇摆二': 'dance', '看过来': 'face-front', '看你': 'face-front', '看左边': 'look-left', '看右边': 'look-right', '看上面': 'look-up', '看下面': 'look-down', '转头': 'turn-head', '前倾': 'lean-forward', '单眨眼': 'wink-hold', '眨单眼': 'wink-keep', '快眨左': 'wink-left', '快眨右': 'wink-right', '高兴': 'happy-burst', '偷笑': 'snicker', '傻眼': 'dumbstruck', '得瑟': 'gloating', '抓狂': 'frantic', '犯困': 'drowsy-combo', '感动': 'touched', '鬼点子': 'sly-idea', '得救': 'rescued', '警觉': 'alert-combo',
     '摇头': 'shake',
     '鞠躬': 'bow',
     '转圈': 'spin',
@@ -324,8 +324,39 @@ export default {
     'eye-close':   { state: true, dur: 1.2, params: [{ id: 'ParamEyeLOpen', to: 0 }, { id: 'ParamEyeROpen', to: 0 }] },
     'eye-half':    { state: true, dur: 1.2, params: [{ id: 'ParamEyeLOpen', to: 0.45 }, { id: 'ParamEyeROpen', to: 0.45 }, { id: 'EyeSmile', to: 0 }] },
     'eye-wide':    { state: true, dur: 1.2, params: [{ id: 'ParamEyeLOpen', to: 1 }, { id: 'ParamEyeROpen', to: 1 }, { id: 'EyeSmile', to: 0 }] },
-    'wink-left':   { reflex: true, dur: 0.45, params: [{ id: 'ParamEyeLOpen', to: 0 }] },
-    'wink-right':  { reflex: true, dur: 0.45, params: [{ id: 'ParamEyeROpen', to: 0 }] },
+    // 快眨单眼·左（Body.cs:76-77 套件）：笑眼渐入 + 左眼闭 0.6s + 歪头 12 同步——0.9s
+    // keys 独占 LOpen（params 不写 LOpen，避免后写覆盖）；reflex 豁免 tone
+    'wink-left':   { reflex: true, dur: 0.9,
+      keys: [
+        { id: 'ParamEyeLOpen', t: 0, v: 1 }, { id: 'ParamEyeLOpen', t: 0.14, v: 0 },
+        { id: 'ParamEyeLOpen', t: 0.6, v: 0 }, { id: 'ParamEyeLOpen', t: 0.9, v: 1 },
+        { id: 'AngleZ', t: 0, v: 0 }, { id: 'AngleZ', t: 0.14, v: 12 },
+        { id: 'AngleZ', t: 0.6, v: 12 }, { id: 'AngleZ', t: 0.9, v: 0 },
+        { id: 'EyeSmile', t: 0, v: 0.45 }, { id: 'EyeSmile', t: 0.14, v: 1 },
+        { id: 'EyeSmile', t: 0.6, v: 1 }, { id: 'EyeSmile', t: 0.9, v: 0.45 },
+      ],
+      params: [{ id: 'ParamEyeROpen', to: 0.45 }] },
+    // 快眨单眼·右（Body.cs:76-77 镜像）——0.9s
+    'wink-right':  { reflex: true, dur: 0.9,
+      keys: [
+        { id: 'ParamEyeROpen', t: 0, v: 1 }, { id: 'ParamEyeROpen', t: 0.14, v: 0 },
+        { id: 'ParamEyeROpen', t: 0.6, v: 0 }, { id: 'ParamEyeROpen', t: 0.9, v: 1 },
+        { id: 'AngleZ', t: 0, v: 0 }, { id: 'AngleZ', t: 0.14, v: -12 },
+        { id: 'AngleZ', t: 0.6, v: -12 }, { id: 'AngleZ', t: 0.9, v: 0 },
+        { id: 'EyeSmile', t: 0, v: 0.45 }, { id: 'EyeSmile', t: 0.14, v: 1 },
+        { id: 'EyeSmile', t: 0.6, v: 1 }, { id: 'EyeSmile', t: 0.9, v: 0.45 },
+      ],
+      params: [{ id: 'ParamEyeLOpen', to: 0.45 }] },
+    // 单眨眼（Body.cs:74）：左眼闭着停 2 秒再开——抛媚眼式
+    'wink-hold':   { reflex: true, dur: 2.35,
+      keys: [
+        { id: 'ParamEyeLOpen', t: 0, v: 1 }, { id: 'ParamEyeLOpen', t: 0.2, v: 0 },
+        { id: 'ParamEyeLOpen', t: 2.2, v: 0 }, { id: 'ParamEyeLOpen', t: 2.35, v: 1 },
+      ] },
+    // 眨单眼（Body.cs:73）：左眼常闭 + 笑眼——保持型
+    'wink-keep':   { reflex: true, state: true, dur: 1.2, params: [
+      { id: 'ParamEyeLOpen', to: 0 }, { id: 'EyeSmile', to: 1 },
+    ] },
     'brow-frown':  { state: true, dur: 1.0, params: [
       { id: 'ParamBrowLY', to: 0.45 }, { id: 'ParamBrowRY', to: 0.45 },
       { id: 'ParamBrowLAngle', to: -0.55 }, { id: 'ParamBrowRAngle', to: -0.55 },

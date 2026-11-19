@@ -2,7 +2,7 @@
   "manifest": 2,
   "api": 2,
   "id": "deepseek-shenggong",
-  "version": "1.13.30",
+  "version": "1.13.31",
   "name": {
     "zh": "大肥鱼",
     "en": "DaFeiYu"
@@ -1080,13 +1080,14 @@
       "names": {
         "zh": [
           "单眨左",
-          "左眼闭"
+          "左眼闭",
+          "快眨左"
         ]
       },
       "about": {
         "zh": "只闭左眼，很乖"
       },
-      "seconds": 1,
+      "seconds": 0.9,
       "lasting": true
     },
     {
@@ -1095,13 +1096,14 @@
       "names": {
         "zh": [
           "单眨右",
-          "右眼闭"
+          "右眼闭",
+          "快眨右"
         ]
       },
       "about": {
         "zh": "只闭右眼"
       },
-      "seconds": 1,
+      "seconds": 0.9,
       "lasting": true
     },
     {
@@ -1929,6 +1931,37 @@
       "about": {
         "zh": "警觉",
         "en": "站直皱眉看向一边"
+      },
+      "seconds": 1.2
+    },
+    {
+      "id": "wink-hold",
+      "kind": "motion",
+      "reflex": true,
+      "names": {
+        "zh": [
+          "单眨眼"
+        ]
+      },
+      "about": {
+        "zh": "单眨眼",
+        "en": "左眼闭着停两秒再睁开——抛媚眼"
+      },
+      "seconds": 2.35
+    },
+    {
+      "id": "wink-keep",
+      "kind": "motion",
+      "reflex": true,
+      "lasting": true,
+      "names": {
+        "zh": [
+          "眨单眼"
+        ]
+      },
+      "about": {
+        "zh": "眨单眼",
+        "en": "一直眨着一只眼配笑眼"
       },
       "seconds": 1.2
     }
