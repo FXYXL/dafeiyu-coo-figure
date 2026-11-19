@@ -180,7 +180,15 @@ const PATCHES = [
       )
       .replace(
         'for (const a of b.actions || []) { acts.push(a); lead = .45; }',
-        'for (const a of b.actions || []) { body?.do(a); lead = .45; }\n        if (b.wait) it.typeHold = T + lead + b.wait;   // 2.1 动作阻塞文字：motion 词演完再打字',
+        `for (const a of b.actions || []) { body?.do(a); lead = .45; }
+        if (b.wait) it.typeHold = T + lead + b.wait;   // 2.1 动作阻塞文字：motion 词演完再打字
+        it.bubbleOpen = false;   // 有阻塞时气泡延到动作演完才出现（typingHold）——不留空气泡
+        if (b.text && !b.wait) { openBubble('say', '<p class="b-text"></p>'); sfx.pop(); it.bubbleOpen = true; }
+        else if (!b.text) bubble.hidden = true;`,
+      )
+      .replace(
+        "      if (b.text) { openBubble('say', '<p class=\"b-text\"></p>'); sfx.pop(); } else { bubble.hidden = true; }",
+        '      // 原版 beat 开始立即开气泡——已移到 typingHold 的 bubbleOpen 逻辑（阻塞期不出气泡）',
       )
       .replace(
         'while (it.fired < anchors.length && anchors[it.fired].at <= it.shown) acts.push(...anchors[it.fired++].actions);',
@@ -197,9 +205,17 @@ const PATCHES = [
     detect: (s) => /typeHold/.test(s) && /dt \* 12 \* prefs\.bubbleSpeed/.test(s),
     apply: (s) => s
       .replace(
-        "  const spoken = speech.active && !it.hushed;\n  it.acc += dt * 20 * prefs.bubbleSpeed * (it.rush ? RUSH : 1);",
-        `  const spoken = speech.active && !it.hushed;
-  if (T < (it.typeHold ?? 0)) return;   // 2.1 动作阻塞文字：beat 开头/锚点的 motion 词演完，文字才继续
+        "  if (it.spoken !== text && !it.rush && !it.hushed) { it.spoken = text; speech.begin(text); }\n  // with speech, each pause mark waits its own time, letters type faster, and the voice makes the sound;\n  // estimateSeconds in src/script.ts mirrors these steps, this rate and the holds in stepDialog\n  const spoken = speech.active && !it.hushed;\n  it.acc += dt * 20 * prefs.bubbleSpeed * (it.rush ? RUSH : 1);",
+        `  if (T < (it.typeHold ?? 0)) return;   // 2.1 动作阻塞文字：动作演完才开口（气泡也这时候才出现，阻塞期不留空气泡）
+  if (!it.bubbleOpen) {
+    it.bubbleOpen = true;
+    if (text) { openBubble('say', '<p class="b-text"></p>'); sfx.pop(); }
+    else bubble.hidden = true;
+  }
+  if (it.spoken !== text && !it.rush && !it.hushed) { it.spoken = text; speech.begin(text); }
+  // with speech, each pause mark waits its own time, letters type faster, and the voice makes the sound;
+  // estimateSeconds in src/script.ts mirrors these steps, this rate and the holds in stepDialog
+  const spoken = speech.active && !it.hushed;
   it.acc += dt * 12 * prefs.bubbleSpeed * (it.rush ? RUSH : 1);   // 2.2 打字速度独立（他们 9 字/秒，中文折中 12）；bubbleSpeed 只管停留`,
       )
       .replace(
