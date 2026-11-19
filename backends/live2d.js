@@ -900,8 +900,17 @@ export async function createLive2DBody(base, opts, entry, kit) {
     if (typeof w !== 'string') return null;
     let s = w.trim();
     if (!s) return null;
-    // 「恢复」/ neutral：撤掉所有通道（动作 + 表情层），回到干净的脸和姿势
-    if (s === '恢复' || s === 'restore' || s === 'neutral') { channel.clear(); return null; }
+    // 「恢复」/ neutral：撤掉所有通道（动作 + 表情层），回到干净的脸和姿势。
+    // 关键：Live2D 参数保持最后写入值——只删条目不够（CheeckPuff/Movement 等残留 1），
+    // 必须把被清条目的静态参数显式写回 0（角色参数如 eyeOpen 有 roles 每帧重写，不用管）。
+    if (s === '恢复' || s === 'restore' || s === 'neutral') {
+      for (const [id, c] of channel) {
+        if (c.kind !== 'static' && c.to === undefined) continue;
+        if (c.to !== 0) { const i = paramIndex.get(id); if (i !== undefined) model._model.setParameterValueByIndex(i, 0); }
+      }
+      channel.clear();
+      return null;
+    }
     let scale = 1, pace = 1, repeat = 1, touched = false;
     // 前缀修饰，最多两层（「微快点头」这种也认）
     for (let n = 0; n < 2; n++) {

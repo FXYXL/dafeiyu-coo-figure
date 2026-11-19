@@ -2,7 +2,7 @@
   "manifest": 2,
   "api": 2,
   "id": "deepseek-shenggong",
-  "version": "1.13.35",
+  "version": "1.13.36",
   "name": {
     "zh": "大肥鱼",
     "en": "DaFeiYu"
@@ -1962,6 +1962,20 @@
       "about": {
         "zh": "眨单眼",
         "en": "一直眨着一只眼配笑眼"
+      },
+      "seconds": 1.2
+    },
+    {
+      "id": "put-hand-down",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "放下手"
+        ]
+      },
+      "about": {
+        "zh": "把手上的东西放下，手回到默认姿势",
+        "en": "把手放下"
       },
       "seconds": 1.2
     }

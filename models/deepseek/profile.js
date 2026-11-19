@@ -114,7 +114,7 @@ export default {
     '扣盆': 'pan-face',
     '挥手': 'wave',
     '招手': 'wave',
-    '点头': 'nod', '叹气': 'sigh', '大笑': 'laugh', '眼泪': 'tears', '挑一下眉': 'brow-raise-once', '歪一下头': 'tilt-once', '晃头': 'head-swing', '慢歪头': 'slow-tilt', '缩一下': 'cower', '吓一跳': 'startle', '左右张望': 'look-around', '摇摆一': 'sway-1', '剧场摇摆一': 'theater-sway-1', '剧场摇摆二': 'theater-sway-2', '慢摇': 'slow-sway', '摇摆二': 'dance', '看过来': 'face-front', '看你': 'face-front', '看左边': 'look-left', '看右边': 'look-right', '看上面': 'look-up', '看下面': 'look-down', '转头': 'turn-head', '前倾': 'lean-forward', '单眨眼': 'wink-hold', '眨单眼': 'wink-keep', '快眨左': 'wink-left', '快眨右': 'wink-right', '高兴': 'happy-burst', '偷笑': 'snicker', '傻眼': 'dumbstruck', '得瑟': 'gloating', '抓狂': 'frantic', '犯困': 'drowsy-combo', '感动': 'touched', '鬼点子': 'sly-idea', '得救': 'rescued', '警觉': 'alert-combo',
+    '点头': 'nod', '叹气': 'sigh', '大笑': 'laugh', '眼泪': 'tears', '挑一下眉': 'brow-raise-once', '歪一下头': 'tilt-once', '晃头': 'head-swing', '慢歪头': 'slow-tilt', '缩一下': 'cower', '吓一跳': 'startle', '左右张望': 'look-around', '摇摆一': 'sway-1', '剧场摇摆一': 'theater-sway-1', '剧场摇摆二': 'theater-sway-2', '慢摇': 'slow-sway', '摇摆二': 'dance', '看过来': 'face-front', '看你': 'face-front', '看左边': 'look-left', '看右边': 'look-right', '看上面': 'look-up', '看下面': 'look-down', '转头': 'turn-head', '前倾': 'lean-forward', '单眨眼': 'wink-hold', '眨单眼': 'wink-keep', '快眨左': 'wink-left', '快眨右': 'wink-right', '高兴': 'happy-burst', '偷笑': 'snicker', '傻眼': 'dumbstruck', '得瑟': 'gloating', '抓狂': 'frantic', '犯困': 'drowsy-combo', '感动': 'touched', '鬼点子': 'sly-idea', '得救': 'rescued', '警觉': 'alert-combo', '放下手': 'put-hand-down',
     '摇头': 'shake',
     '鞠躬': 'bow',
     '转圈': 'spin',
@@ -244,13 +244,13 @@ export default {
       { id: 'Param41', to: 0.705 }, { id: 'Param42', to: -0.05 },
       { id: 'Param43', to: -0.164 }, { id: 'Param56', to: 1 },
     ] },
-    'chest-hand': { dur: 4, params: [
+    'chest-hand': { state: true, dur: 1.2, params: [
       { id: 'Movement2', to: 1 },
       { id: 'Param62', to: 0.034 }, { id: 'Param59', to: 0.509 },
       { id: 'Param60', to: 0.879 }, { id: 'Param61', to: 0.2 },
       { id: 'Param56', to: 1 },
     ] },
-    'grass-hand': { dur: 4, params: [
+    'grass-hand': { state: true, dur: 1.2, params: [
       { id: 'Movement1', to: 1 }, { id: 'Movement3', to: 0 },
       { id: 'Param36', to: 0.062 }, { id: 'Param39', to: 0.2 },
       { id: 'Param41', to: -0.762 }, { id: 'Param42', to: 0.266 },
@@ -277,13 +277,19 @@ export default {
         { id: 'AngleX', amp: 3, freq: 0.53, phase: 0.4 },
       ] },
 
-    // —— 脸部小动作（参数直驱，实测鼓腮最明显）——
-    'puff-cheek': { dur: 3, params: [{ id: 'CheeckPuff', to: 1 }] },
-    'pout-lips':  { dur: 3, params: [{ id: 'Mouthpucker', to: 1 }] },
-    'dazed':      { dur: 4, params: [{ id: 'Param11', to: 6 }] },
+    // —— 脸部小动作（参数直驱，实测鼓腮最明显）——    // 放下手（Body.cs HandDown）：手型档全归 0——狗尾草/竖手指/抚胸残留的自救词
+    'put-hand-down': { state: true, dur: 1.2, params: [
+      { id: 'Movement1', to: 0 }, { id: 'Movement2', to: 0 }, { id: 'Movement3', to: 0 },
+      { id: 'Param36', to: 0 }, { id: 'Param39', to: 0 }, { id: 'Param40', to: 0 }, { id: 'Param41', to: 0 },
+      { id: 'Param42', to: 0 }, { id: 'Param43', to: 0 }, { id: 'Param56', to: 0 },
+      { id: 'Param59', to: 0 }, { id: 'Param60', to: 0 }, { id: 'Param61', to: 0 }, { id: 'Param62', to: 0 },
+    ] },
+    'puff-cheek': { state: true, dur: 1.2, params: [{ id: 'CheeckPuff', to: 1 }] },
+    'pout-lips':  { state: true, dur: 1.2, params: [{ id: 'Mouthpucker', to: 1 }] },
+    'dazed':      { state: true, dur: 1.2, params: [{ id: 'Param11', to: 6 }] },
 
     // 歪头
-    tilt:        { params: [{ id: 'AngleZ', to: 28 }] },
+    tilt:        { state: true, dur: 1.2, params: [{ id: 'AngleZ', to: 28 }] },
 
     // —— 波形动作（连续摆动）——
     // 点头：头上下点几下
