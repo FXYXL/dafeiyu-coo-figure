@@ -320,10 +320,10 @@ export default {
     },
 
     // —— 单通道表情（2026-11-18）——
-'eye-smile':   { state: true, dur: 1.2, params: [{ id: 'EyeSmile', to: 1 }, { id: 'ParamEyeLOpen', to: 0.45 }, { id: 'ParamEyeROpen', to: 0.45 }] },
+    'eye-smile':   { state: true, dur: 1.2, params: [{ id: 'EyeSmile', to: 1 }, { id: 'ParamEyeLOpen', to: 0.45 }, { id: 'ParamEyeROpen', to: 0.45 }] },
     'eye-close':   { state: true, dur: 1.2, params: [{ id: 'ParamEyeLOpen', to: 0 }, { id: 'ParamEyeROpen', to: 0 }] },
     'eye-half':    { state: true, dur: 1.2, params: [{ id: 'ParamEyeLOpen', to: 0.45 }, { id: 'ParamEyeROpen', to: 0.45 }, { id: 'EyeSmile', to: 0 }] },
-'eye-wide':    { state: true, dur: 1.2, params: [{ id: 'ParamEyeLOpen', to: 1.35 }, { id: 'ParamEyeROpen', to: 1.35 }, { id: 'EyeSmile', to: 0 }] },
+    'eye-wide':    { state: true, dur: 1.2, params: [{ id: 'ParamEyeLOpen', to: 1.35 }, { id: 'ParamEyeROpen', to: 1.35 }, { id: 'EyeSmile', to: 0 }] },
     // 快眨单眼·左（Body.cs:76-77 套件）：笑眼渐入 + 左眼闭 0.6s + 歪头 12 同步——
     // 全 keys 版（1.2s 收尾渐回）：dur 到期删条目会让 ROpen 跳回 roles 写入值（眨一下观感）
     'wink-left':   { reflex: true, dur: 1.2,
