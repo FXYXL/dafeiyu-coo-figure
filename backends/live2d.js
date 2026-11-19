@@ -942,7 +942,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
   };
   let lastWordAt = -99;   // 上次有新词的时刻：自动放松的计时基准（2.6）
   const RELAX_FADE = 1.5, SENT_LIFE = 2, SPEECH_END_DELAY = 2, IDLE_LIFE = 3;
-  let sentenceCount = 0, bornSentence = -1, lastSpeechEnd = -99;   // 跟句寿命（2.6 改造）
+  let sentenceCount = 0, bornSentence = -1, lastSpeechEnd = -99;
+  let currentTone = '';   // 2.3 tone：当前 beat 的语气（! = 感叹 / … = 省略）——pet-app 每 beat 下发   // 跟句寿命（2.6 改造）
   let bornAt = -99;   // 词出生时刻：闲置语境（随机动作）的限时基准
 
   /** kit 的 doWord 会先问这里。返回 true = 这个词我处理了，不要走 pulse。 */
@@ -961,9 +962,16 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 修饰：AI 写的「微/大/快/慢/×几」；没写就按当前情绪给个默认幅度
     const mod = pendingMod ?? { scale: 1, pace: 1, repeat: 1, explicit: false };
     pendingMod = null;
-    const effScale = mod.scale * (mod.explicit ? 1 : moodScale());
+    // 2.3 tone（他们 Body.cs:335/360/365）：beat 末尾 ！/… 影响一次性动作的幅度与速度——
+    //   ！→ 放大 1.2 倍、加速（时长 ×0.85）；… → 收着 0.85、放慢（×1.25）。
+    //   只作用一次性动作（state 保持型不吃，Hold 型表情不是"演"的）；reflex 反射词豁免；
+    //   AI 显式写了修饰（微/大/快/慢）时 AI 优先（他们 size == null 同款语义）。
+    const toneEff = currentTone && !def.state && !def.reflex && !mod.explicit
+      ? (currentTone === '!' ? { scale: 1.2, pace: 0.85 } : { scale: 0.85, pace: 1.25 })
+      : null;
+    const effScale = mod.scale * (mod.explicit ? 1 : moodScale()) * (toneEff?.scale ?? 1);
     const keySpan = def.keys?.length ? Math.max(...def.keys.map((f) => f.t ?? 0)) : 0;
-    const dur = (keySpan || (def.dur ?? 2.4)) * mod.pace * mod.repeat;
+    const dur = (keySpan || (def.dur ?? 2.4)) * mod.pace * mod.repeat * (toneEff?.pace ?? 1);
     const inT = Math.min(0.45, dur * 0.2);
     const outT = Math.min(0.6, dur * 0.28);
     // from 用参数的**默认值**，不是当前值 ——
@@ -1641,6 +1649,10 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 情绪词的 kit 表情名（wordExtras 用）：pet_act 传中文原词、baseWord 还原成配方 id
     // （blush/tears/heart-eyes…），kit 的 FACE_TONES/爱心/挤压按 kit 表情名（shy/sad/love…）——
     // 用 emotionArc 换算回去，主动触发的音效/粒子才和随机表情一致
+    onTone(t) {
+      currentTone = t || '';
+      globalThis.__l2dTone = currentTone;   // 诊断：harness diag 可读
+    },
     emotionFace(w) {
       return (profile.emotionArc ?? {})[w] ?? (profile.expression?.[w] ? w : null);
     },

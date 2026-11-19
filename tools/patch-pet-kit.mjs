@@ -114,6 +114,7 @@ const PATCHES = [
       `      if (typeof s.hold === 'number') ctl.holdRoam(s.hold);
       if (s.speechStart) opts.figure?.onSpeechStart?.();
       if (s.speechDone) opts.figure?.onSpeechEnd?.();
+      if (s.tone !== undefined) opts.figure?.onTone?.(s.tone);   // 2.3 tone：当前 beat 的语气传给 actWord
       if (s.beat !== undefined) opts.figure?.onBeat?.(s.beat);`,
     ),
   },
@@ -180,7 +181,8 @@ const PATCHES = [
       )
       .replace(
         'for (const a of b.actions || []) { acts.push(a); lead = .45; }',
-        `for (const a of b.actions || []) { body?.do(a); lead = .45; }
+        `if (b.tone) body?.set({ tone: b.tone });   // 2.3 tone 先下发，动作的幅度/速度跟着语气走
+        for (const a of b.actions || []) { body?.do(a); lead = .45; }
         if (b.wait) it.typeHold = T + lead + b.wait;   // 2.1 动作阻塞文字：motion 词演完再打字
         it.bubbleOpen = false;   // 有阻塞时气泡延到动作演完才出现（typingHold）——不留空气泡
         if (b.text && !b.wait) { openBubble('say', '<p class="b-text"></p>'); sfx.pop(); it.bubbleOpen = true; }

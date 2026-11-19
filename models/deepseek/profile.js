@@ -322,8 +322,8 @@ export default {
     'eye-close':   { state: true, dur: 1.2, params: [{ id: 'ParamEyeLOpen', to: 0 }, { id: 'ParamEyeROpen', to: 0 }] },
     'eye-half':    { state: true, dur: 1.2, params: [{ id: 'ParamEyeLOpen', to: 0.45 }, { id: 'ParamEyeROpen', to: 0.45 }, { id: 'EyeSmile', to: 0 }] },
     'eye-wide':    { state: true, dur: 1.2, params: [{ id: 'ParamEyeLOpen', to: 1 }, { id: 'ParamEyeROpen', to: 1 }, { id: 'EyeSmile', to: 0 }] },
-    'wink-left':   { dur: 0.45, params: [{ id: 'ParamEyeLOpen', to: 0 }] },
-    'wink-right':  { dur: 0.45, params: [{ id: 'ParamEyeROpen', to: 0 }] },
+    'wink-left':   { reflex: true, dur: 0.45, params: [{ id: 'ParamEyeLOpen', to: 0 }] },
+    'wink-right':  { reflex: true, dur: 0.45, params: [{ id: 'ParamEyeROpen', to: 0 }] },
     'brow-frown':  { state: true, dur: 1.0, params: [
       { id: 'ParamBrowLY', to: 0.45 }, { id: 'ParamBrowRY', to: 0.45 },
       { id: 'ParamBrowLAngle', to: -0.55 }, { id: 'ParamBrowRAngle', to: -0.55 },
