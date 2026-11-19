@@ -389,9 +389,24 @@ export default {
       { id: 'ParamBrowLAngle', to: -0.55 }, { id: 'ParamBrowRAngle', to: -0.55 },
       { id: 'key7', to: 1 }, { id: 'ParamMouthForm', to: -0.6 },
     ] },
-    'act-cute': { state: true, dur: 1.2, params: [
-      { id: 'EyeSmile', to: 1 }, { id: 'ParamMouthForm', to: -0.6 }, { id: 'key7', to: 1 },
-    ] },
+    // 撒娇（2026-11-19 按他们家 Combos 重写：嘟嘴+歪头+八字眉+慢眨眼）——
+    // 嘟嘴三件套（MouthFunnel 0.7 + Mouthpucker 1 + MouthForm -0.4，Body.cs:86 原样）
+    // + 歪头 16 + 八字眉 + 慢眨眼两连——3.2s
+    'act-cute': { dur: 3.2,
+      keys: [
+        { id: 'ParamEyeLOpen', t: 0, v: 1 }, { id: 'ParamEyeLOpen', t: 0.6, v: 0.12 },
+        { id: 'ParamEyeLOpen', t: 1.2, v: 1 }, { id: 'ParamEyeLOpen', t: 1.9, v: 0.12 },
+        { id: 'ParamEyeLOpen', t: 2.6, v: 1 }, { id: 'ParamEyeLOpen', t: 3.2, v: 1 },
+        { id: 'ParamEyeROpen', t: 0, v: 1 }, { id: 'ParamEyeROpen', t: 0.6, v: 0.12 },
+        { id: 'ParamEyeROpen', t: 1.2, v: 1 }, { id: 'ParamEyeROpen', t: 1.9, v: 0.12 },
+        { id: 'ParamEyeROpen', t: 2.6, v: 1 }, { id: 'ParamEyeROpen', t: 3.2, v: 1 },
+      ],
+      params: [
+        { id: 'MouthFunnel', to: 0.7 }, { id: 'Mouthpucker', to: 1 }, { id: 'ParamMouthForm', to: -0.4 },
+        { id: 'AngleZ', to: 16 },
+        { id: 'ParamBrowLY', to: 0.45 }, { id: 'ParamBrowRY', to: 0.45 },
+        { id: 'ParamBrowLAngle', to: -0.55 }, { id: 'ParamBrowRAngle', to: -0.55 },
+      ] },
     'defiant': { state: true, dur: 1.2, params: [
       { id: 'ParamBrowLY', to: -0.7 }, { id: 'ParamBrowRY', to: -0.7 },
       { id: 'ParamBrowLAngle', to: -0.9 }, { id: 'ParamBrowRAngle', to: -0.9 },
@@ -763,10 +778,19 @@ export default {
     'monocle-face':{ state: true, dur: 1.0, params: [{ id: 'key12', to: 1 }] },
     // —— 原 expressionCombos 的组合，翻译成通道版（2026-11-18 统一，全部可叠+自动放松）——
     // 无语 = 黑脸(key1) + 圈圈眼(key3)，其余眼睛关
-    'speechless': { state: true, dur: 1.0, params: [
-      { id: 'key1', to: 1 },
-      { id: 'key3', to: 1 }, { id: 'key4', to: 0 }, { id: 'key5', to: 0 }, { id: 'key6', to: 0 },
-    ] },
+    // 无语（2026-11-19 按他们家 Combos 重写：斜眼+抿嘴+微摇头）——
+    // 斜眼三参数（REyeSquint/LEyeSquint 0.9 + 眼半开 0.7，Body.cs 斜眼原样）+ 抿嘴 + 微摇头两连——2s
+    'speechless': { dur: 2.0,
+      keys: [
+        { id: 'AngleX', t: 0, v: 0 }, { id: 'AngleX', t: 0.3, v: -8 },
+        { id: 'AngleX', t: 0.8, v: 8 }, { id: 'AngleX', t: 1.2, v: -6 },
+        { id: 'AngleX', t: 1.6, v: 4 }, { id: 'AngleX', t: 2.0, v: 0 },
+      ],
+      params: [
+        { id: 'REyeSquint', to: 0.9 }, { id: 'LEyeSquint', to: 0.9 },
+        { id: 'ParamEyeLOpen', to: 0.7 }, { id: 'ParamEyeROpen', to: 0.7 },
+        { id: 'MouthPressLipOpen', to: -1 }, { id: 'ParamMouthForm', to: -0.5 },
+      ] },
     // 阴险 = 黑脸(key1) + 屑屑眼(key6)
     'mad': { state: true, dur: 1.0, params: [
       { id: 'key1', to: 1 },
