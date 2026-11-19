@@ -458,6 +458,9 @@ export default {
         { id: 'ParamMouthOpenY', t: 0, v: 0 }, { id: 'ParamMouthOpenY', t: 1.1, v: 0 },
         { id: 'ParamMouthOpenY', t: 1.4, v: 0.35 }, { id: 'ParamMouthOpenY', t: 2.2, v: 0.12 },
         { id: 'ParamMouthOpenY', t: 2.8, v: 0 }, { id: 'ParamMouthOpenY', t: 3.5, v: 0 },
+        { id: 'MouthFunnel', t: 0, v: 0 }, { id: 'MouthFunnel', t: 1.1, v: 0 },
+        { id: 'MouthFunnel', t: 1.4, v: 0.9 }, { id: 'MouthFunnel', t: 2.2, v: 0.6 },
+        { id: 'MouthFunnel', t: 2.6, v: 0 }, { id: 'MouthFunnel', t: 3.5, v: 0 },
       ],
       params: [] },
     // 跳舞通道版（2026-11-19）：复刻他们家 6 拍摇摆（Body.cs:118-135，用户亲自指导的
