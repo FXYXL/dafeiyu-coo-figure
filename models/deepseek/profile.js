@@ -238,7 +238,7 @@ export default {
     // 这三个动作原本靠播原生 motion，但那几段动画的轨迹是"举起→放下"，
     // 播完手已经落回身侧，看起来像没做。改成直接写 motion 峰值那一帧的参数，
     // 参数层自己保持 → 手会一直举着，退出段再平滑放回。
-    'finger-point': { dur: 4, params: [
+    'finger-point': { state: true, dur: 4, params: [
       { id: 'Movement1', to: 0 }, { id: 'Movement3', to: 1 },
       { id: 'Param40', to: 1 }, { id: 'Param39', to: 0.322 },
       { id: 'Param41', to: 0.705 }, { id: 'Param42', to: -0.05 },
@@ -250,7 +250,7 @@ export default {
       { id: 'Param60', to: 0.879 }, { id: 'Param61', to: 0.2 },
       { id: 'Param56', to: 1 },
     ] },
-    'grass-hand': { state: true, dur: 1.2, params: [
+    'grass-hand': { state: true, dur: 4, params: [
       { id: 'Movement1', to: 1 }, { id: 'Movement3', to: 0 },
       { id: 'Param36', to: 0.062 }, { id: 'Param39', to: 0.2 },
       { id: 'Param41', to: -0.762 }, { id: 'Param42', to: 0.266 },
