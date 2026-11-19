@@ -451,7 +451,6 @@ export default {
     'dance': { takeover: true, dur: 3.4,
       // 连续扭（扭腰同款 postWaves，幅度收敛、频率对拍子 1.9）叠在拍子 keys 上 → 「真的在扭」而不是倾斜
       postWaves: [
-        { id: 'PositionX', amp: 14, freq: 0.94 },   // 重心左右移（他们家注释原话：比单纯转胸腔自然得多）
         { id: 'ParamBodyAngleZ', amp: 10, freq: 0.94 },
         { id: 'HipAngleX', amp: 12, freq: 0.94, phase: 0.12 },
       ],
@@ -466,10 +465,12 @@ export default {
         { id: 'ShoulderY', t: 1.33, v: 8 }, { id: 'ShoulderY', t: 1.6, v: 0 },
         { id: 'ShoulderY', t: 2.13, v: 8 }, { id: 'ShoulderY', t: 2.4, v: 0 },
       ],
-      // ParamBodyAngleX 走普通批次（物理的**输入**）——胸物理组的输入就是胸腔 X/Z，
-      // keysPost 的 Z 只管显示（物理后写），胸晃要靠这个在物理**之前**喂进去
+      // 物理驱动线（胸晃/朝向的来源）：PositionX 是唯一「非输出+是输入」的重心参数，
+      // 必须**物理前写**（waves）——放 postWaves 物理吃不到；ParamBodyAngleX/Z 都是
+      // 物理输出，前写会被当场算回（写了白写）。RZ 物理不读不写，自由驱动整体摆。
       waves: [
-        { id: 'ParamBodyAngleX', amp: 15, freq: 0.94 },
+        { id: 'PositionX', amp: 14, freq: 0.94 },
+        { id: 'ParamBodyAngleRZ', amp: 9, freq: 0.94, phase: 0.06 },
       ],
       keysPost: [
         { id: 'ParamBodyAngleZ', t: 0, v: 0 }, { id: 'ParamBodyAngleZ', t: 0.53, v: 22 },
