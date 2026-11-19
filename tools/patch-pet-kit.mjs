@@ -244,6 +244,19 @@ const PATCHES = [
     },
   },
   {
+    file: 'body', id: 'squashBridge',
+    desc: '2.7 动作驱动整图压扁：把 figure 的 squash()（虚拟参数 ViewSquash，通道 key 帧驱动）叠加进 kit 的 sq 弹簧目标——弹簧（280/14）、锚点、阴影、与落地/拖拽/哈欠的叠加全部白拿。不能 sqT +=（idle 分支不重置 sqT，会每帧累加），改在弹簧积分行叠加目标值（每帧读、无状态残留）',
+    detect: (s) => /custom\?\.squash\?\.\(\)/.test(s),
+    apply: (s) => {
+      const out = s.replace(
+        '    pet.sqv += ((sqT - pet.sq) * 280 - pet.sqv * 14) * dt;',
+        '    pet.sqv += (((sqT + (custom?.squash?.() ?? 0)) - pet.sq) * 280 - pet.sqv * 14) * dt;   // 2.7 整图压扁：figure 虚拟参数 ViewSquash 叠加进弹簧目标',
+      );
+      if (!out.includes('custom?.squash?.()')) throw new Error('squashBridge：弹簧积分行锚点未命中');
+      return out;
+    },
+  },
+  {
     file: 'body', id: 'actFaceSkip',
     desc: 'kit 内置动作（wave/bow/dance/flap）不再附带 holdFace——动作不动脸，脸由词表/弧度管；否则 holdFace 触发 face 清场会把挂着的表情（笑眼等 keep 条目）全删',
     detect: (s) => /actFaceSkip/.test(s),

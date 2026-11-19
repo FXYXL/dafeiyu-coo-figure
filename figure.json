@@ -2,7 +2,7 @@
   "manifest": 2,
   "api": 2,
   "id": "deepseek-shenggong",
-  "version": "1.13.25",
+  "version": "1.13.26",
   "name": {
     "zh": "大肥鱼",
     "en": "DaFeiYu"
@@ -1517,6 +1517,17 @@
       },
       "seconds": 1,
       "lasting": true
+    },
+    {
+      "id": "sigh",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "叹气"
+        ]
+      },
+      "about": {},
+      "seconds": 1.4
     }
   ],
   "sounds": {},

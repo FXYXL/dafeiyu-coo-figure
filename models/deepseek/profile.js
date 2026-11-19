@@ -114,7 +114,7 @@ export default {
     '扣盆': 'pan-face',
     '挥手': 'wave',
     '招手': 'wave',
-    '点头': 'nod',
+    '点头': 'nod', '叹气': 'sigh',
     '摇头': 'shake',
     '鞠躬': 'bow',
     '转圈': 'spin',
@@ -436,6 +436,16 @@ export default {
     'tongue-out': { state: true, dur: 1.0, params: [
       { id: 'TongueOut', to: 1 }, { id: 'ParamMouthOpenY', to: 0.35 },
     ] },
+    // 叹气（2.7 整图压扁演示词）：ViewSquash 是虚拟参数（不在模型参数表）——
+    // 通道写进虚拟表 → kit custom.squash() 读 → 叠进 sq 弹簧（280/14 自动平滑）。
+    // 吸气微拉长 +0.12 → 呼气压扁 -0.18 → 回正；整图（petG 容器）跟着变形。
+    'sigh': { dur: 1.4,
+      keys: [
+        { id: 'ViewSquash', t: 0, v: 0 }, { id: 'ViewSquash', t: 0.35, v: 0.12 },
+        { id: 'ViewSquash', t: 0.9, v: -0.18 }, { id: 'ViewSquash', t: 1.4, v: 0 },
+      ],
+      // 呼气配一点头（叹气低头感，复用既有头部参数）
+      params: [] },
     // 跳舞通道版（2026-11-19）：复刻他们家 6 拍摇摆（Body.cs:118-135，用户亲自指导的
     // 「身体左右转、头往相反方向转且晚 0.14 秒、头走小拱形」），拍长 0.53s。
     // 胸腔 Z 是物理输出 → keysPost（物理后写）；kit 原版 act('dance') 的 pulse 组变换/holdFace

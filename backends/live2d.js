@@ -935,6 +935,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
   // **增量**（to 即增量值，如 +14 = 在当前头角度上再加 14）——rua 头反向 + 歪头词 = 歪得更远。
   // key: `${src}:${pid}`——同 src 同参数重写覆盖，不同 src 相加。外力源负责 overlayClear。
   const overlay = new Map();
+  // 2.7 虚拟参数表：通道里 id 不在模型参数表的条目（如 ViewSquash 整图压扁）不写模型，
+  // 存这里给 kit 消费（custom.squash() 读）——弹簧/锚点/阴影全白拿 kit 的 sq 系统。
+  const virtualParams = new Map();
   const overlaySet = (src, pid, def) => overlay.set(src + ':' + pid, { pid, t0: clockT, dur: 30, in: 0.2, ...def });
   const overlayClear = (src) => {
     if (!src) { overlay.clear(); return; }
@@ -1098,6 +1101,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
   /** 物理之后写的那一批（腰/胯这类物理输出参数）。写早了会被物理算回去。 */
   function applyChannelPost(t) { writeChannel(t, true); }
   function writeChannel(t, wantPost) {
+    if (!wantPost) virtualParams.clear();   // 虚拟表每帧前批重建——条目过期/通道清空后 ViewSquash 归 0，不残值
     if (!useChannels || (channel.size === 0 && overlay.size === 0)) return;
     for (const [id, c] of channel) {
       const age = t - c.t0;
@@ -1106,10 +1110,13 @@ export async function createLive2DBody(base, opts, entry, kit) {
       if (!c.keep && age > c.dur) { channel.delete(id); continue; }
       if (!!c.post !== wantPost) continue;                  // 前/后两批各写各的
       const i = paramIndex.get(id);
-      if (i === undefined) { channel.delete(id); continue; }
+      const virtual = i === undefined;   // 虚拟参数：不写模型，写虚拟表（kit 的 custom.squash() 读）
+      if (virtual && !wantPost) { /* 前批下面求值后存表 */ }
+      if (virtual && wantPost) continue;   // 虚拟参数只在前批处理一次
       if (c.kind === 'keys') {
         // 关键帧自带起止（第一帧和最后一帧就是 0），不再乘环境包络，否则收尾会被压平
-        model._model.setParameterValueByIndex(i, sampleKeys(c.frames, age));
+        if (virtual) virtualParams.set(id, { v: sampleKeys(c.frames, age), t: clockT });
+        else model._model.setParameterValueByIndex(i, sampleKeys(c.frames, age));
         continue;
       }
       let k;
@@ -1147,9 +1154,11 @@ export async function createLive2DBody(base, opts, entry, kit) {
       if (c.kind === 'wave') {
         // 波形：相位从动作开始算，和环境包络相乘 → 起手轻、收尾轻，中间是完整摆幅
         const rel = Math.max(0, age);
-        model._model.setParameterValueByIndex(i, (c.base + c.amp * Math.sin((rel * c.freq + c.phase) * Math.PI * 2)) * k);
+        if (virtual) virtualParams.set(id, { v: (c.base + c.amp * Math.sin((rel * c.freq + c.phase) * Math.PI * 2)) * k, t: clockT });
+        else model._model.setParameterValueByIndex(i, (c.base + c.amp * Math.sin((rel * c.freq + c.phase) * Math.PI * 2)) * k);
       } else {
-        model._model.setParameterValueByIndex(i, c.from + (c.to - c.from) * k);
+        if (virtual) virtualParams.set(id, { v: c.from + (c.to - c.from) * k, t: clockT });
+        else model._model.setParameterValueByIndex(i, c.from + (c.to - c.from) * k);
       }
     }
     // 叠加层（2.8）：主通道写完后，把外力增量**加**到当前值上（rua 头反向叠在歪头词上 = 更歪）
@@ -1640,6 +1649,12 @@ export async function createLive2DBody(base, opts, entry, kit) {
     get extent() { return currentExtent(); },
     get hits() { return currentHits(); },
     get anchors() { return currentAnchors(); },
+    // 2.7 整图压扁：kit 每帧读，叠加进自己的 sq 弹簧（sqT += squash()）——
+    // 弹簧（280/14）、锚点、阴影、与落地/拖拽的叠加全部白拿
+    squash() {
+      const e = virtualParams.get('ViewSquash');
+      return e ? e.v : 0;
+    },
     colors: { z: '#7fb0e8' },
     // 2.8 叠加层：外力源（rua/触摸）在主通道结果之上相加——不动词表、不触发 face 清场
     overlaySet,
