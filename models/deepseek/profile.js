@@ -445,12 +445,22 @@ export default {
     // takeover：kit act('wave') 的 pulse 组摆是贴图式摇晃，且 pet.pulse 单槽会被后词覆盖
     // （笑眼一触发挥手组摆就没了）——通道版根治。
     'wave': { takeover: true, dur: 1.6,
+      params: [
+        { id: 'Movement1', to: 1 }, { id: 'Movement3', to: 0 },   // 抬手手型（狗尾草的手姿）：挥一下再回去
+        { id: 'Param36', to: 0.062 }, { id: 'Param39', to: 0.2 },
+        { id: 'Param41', to: -0.762 }, { id: 'Param42', to: 0.266 }, { id: 'Param56', to: 1 },
+      ],
       waves: [
-        { id: 'ShoulderZ', base: 15, amp: 10, freq: 2.5 },
-        { id: 'ShoulderY', base: 8, amp: 5, freq: 2.5 },
+        { id: 'ShoulderZ', base: 8, amp: 7, freq: 2.5 },   // 肩 Z 左右挥
+        { id: 'AngleZ', amp: 6, freq: 1.25 },               // 头跟着微歪
         { id: 'AngleX', amp: 3, freq: 1.25 },
       ] },
     'dance': { takeover: true, dur: 3.4,
+      // 连续扭（扭腰同款 postWaves，幅度收敛、频率对拍子 1.9）叠在拍子 keys 上 → 「真的在扭」而不是倾斜
+      postWaves: [
+        { id: 'ParamBodyAngleZ', amp: 12, freq: 1.9 },
+        { id: 'HipAngleX', amp: 8, freq: 1.9, phase: 0.12 },
+      ],
       keys: [
         { id: 'AngleZ', t: 0, v: 0 }, { id: 'AngleZ', t: 0.67, v: -9 }, { id: 'AngleZ', t: 1.2, v: 9 },
         { id: 'AngleZ', t: 1.73, v: -9 }, { id: 'AngleZ', t: 2.26, v: 9 }, { id: 'AngleZ', t: 2.79, v: -9 },
@@ -609,16 +619,16 @@ export default {
       dur: 3.6,
       // 腰的左右摆：物理输出参数，postWaves 必须写在 physics.evaluate() 之后
       postWaves: [
-        { id: 'ParamBodyAngleZ', amp: 22, freq: 1 },
-        { id: 'HipAngleX', amp: 18, freq: 1, phase: 0.12 },
-        { id: 'HipAngleZ', amp: 8, freq: 1, phase: 0.15 },
-        { id: 'ParamBodyAngleRZ', amp: 12, freq: 1, phase: 0.06 },
+        { id: 'ParamBodyAngleZ', amp: 13, freq: 0.7 },
+        { id: 'HipAngleX', amp: 11, freq: 0.7, phase: 0.12 },
+        { id: 'HipAngleZ', amp: 8, freq: 0.7, phase: 0.15 },
+        { id: 'ParamBodyAngleRZ', amp: 7, freq: 0.7, phase: 0.06 },
       ],
       waves: [
-        { id: 'ParamBodyAngleZ', amp: 17, freq: 2 },
-        { id: 'AngleZ', amp: 11, freq: 2, phase: 0.12 },
-        { id: 'AngleX', amp: 9, freq: 1, phase: 0.35 },
-        { id: 'LeanInput', amp: -9, freq: 2, phase: 0.25 },
+        { id: 'ParamBodyAngleZ', amp: 8, freq: 0.7 },
+        { id: 'AngleZ', amp: 6, freq: 0.7, phase: 0.12 },
+        { id: 'AngleX', amp: 4, freq: 0.35, phase: 0.35 },
+        { id: 'LeanInput', amp: -3, freq: 0.7, phase: 0.25 },
       ],
     },
     'bitter-smile': { state: true, dur: 1.2, params: [
