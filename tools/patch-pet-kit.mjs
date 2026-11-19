@@ -244,6 +244,16 @@ const PATCHES = [
     },
   },
   {
+    file: 'body', id: 'actFaceSkip',
+    desc: 'kit 内置动作（wave/bow/dance/flap）不再附带 holdFace——动作不动脸，脸由词表/弧度管；否则 holdFace 触发 face 清场会把挂着的表情（笑眼等 keep 条目）全删',
+    detect: (s) => /actFaceSkip/.test(s),
+    apply: (s) => s
+      .replace("      case 'wave': pulse('wave', 1.6); holdFace('happy', 1.8); break;", "      case 'wave': pulse('wave', 1.6); break;   // actFaceSkip：挥手不附带 happy 脸（Live2D 的脸由词/弧度管）")
+      .replace("      case 'bow': if (!seated) setMode('idle'); pulse('bow', 1.6); holdFace('bowing', 1.5); play('tick', 'move'); break;", "      case 'bow': if (!seated) setMode('idle'); pulse('bow', 1.6); play('tick', 'move'); break;   // actFaceSkip")
+      .replace("      case 'flap': setMode('crouch', { jumpV: 540, jumpVx: 0 }); pulse('flap', 1.4); holdFace('happy', 1.6); play('chirps', 'move'); break;", "      case 'flap': setMode('crouch', { jumpV: 540, jumpVx: 0 }); pulse('flap', 1.4); play('chirps', 'move'); break;   // actFaceSkip")
+      .replace("      case 'dance': setMode('dance', { dur: 3.2 }); holdFace('happy', 3.4); play('dance', 'move'); break;", "      case 'dance': setMode('dance', { dur: 3.2 }); play('dance', 'move'); break;   // actFaceSkip"),
+  },
+  {
     file: 'petapp', id: 'beatNotice',
     desc: '气泡生命周期通知：say 开始 / beat 开始 / 说完（表情寿命跟句的信号源）',
     detect: (s) => /beat: it\.i/.test(s) && /speechStart: 1/.test(s),
