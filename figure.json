@@ -2,7 +2,7 @@
   "manifest": 2,
   "api": 2,
   "id": "deepseek-shenggong",
-  "version": "1.13.36",
+  "version": "1.13.38",
   "name": {
     "zh": "大肥鱼",
     "en": "DaFeiYu"
@@ -639,7 +639,7 @@
         "zh": "上下点头，表示同意",
         "en": "上下点头，表示同意"
       },
-      "seconds": 0.7
+      "seconds": 1.06
     },
     {
       "id": "shake",
@@ -653,7 +653,7 @@
         "zh": "左右摇头，表示不同意",
         "en": "左右摇头，表示不同意"
       },
-      "seconds": 0.7
+      "seconds": 1.34
     },
     {
       "id": "bow",

@@ -293,9 +293,19 @@ export default {
 
     // —— 波形动作（连续摆动）——
     // 点头：头上下点几下
-    nod:   { dur: 0.7, waves: [{ id: 'AngleY', amp: 9, freq: 2.5, base: -4 }] },   // kit 的 nod 只有 0.7 秒；base 偏低才像点头而非仰头
+    nod:   { dur: 1.06,
+      // 两连点头（Body.cs:102 Repeat 展开）：点到 -10 停顿回 1，再点一次——顿挫感
+      keys: [
+        { id: 'AngleY', t: 0, v: 0 }, { id: 'AngleY', t: 0.17, v: -10 }, { id: 'AngleY', t: 0.4, v: 1 },
+        { id: 'AngleY', t: 0.63, v: -10 }, { id: 'AngleY', t: 0.86, v: 1 }, { id: 'AngleY', t: 1.06, v: 0 },
+      ] },
     // 摇头：头左右摇
-    shake: { dur: 0.7, waves: [{ id: 'AngleX', amp: 15, freq: 2 }] },
+    shake: { dur: 1.34,
+      // 两连摇头（Body.cs:103 Repeat 展开）：左 -11 停顿右 11，再一轮
+      keys: [
+        { id: 'AngleX', t: 0, v: 0 }, { id: 'AngleX', t: 0.17, v: -11 }, { id: 'AngleX', t: 0.45, v: 11 },
+        { id: 'AngleX', t: 0.73, v: -11 }, { id: 'AngleX', t: 1.01, v: 11 }, { id: 'AngleX', t: 1.34, v: 0 },
+      ] },
     // 跳舞：腰扭 + 头摆 + 歪头 + 身体前后，四条不同频率叠起来才像在跳
     // 扭腰：腰 + 头 + 歪头 + 身体前后，四条不同频率叠起来才像在跳
     // （不能叫 dance：kit 里 dance 走 setMode，不给 pulse，拿不到进度）
@@ -378,7 +388,10 @@ export default {
       { id: 'ParamBrowLY', to: -0.8 }, { id: 'ParamBrowRY', to: -0.8 },
       { id: 'ParamBrowLAngle', to: -1 }, { id: 'ParamBrowRAngle', to: -1 },
     ] },
-    'mouth-smile': { state: true, dur: 1.0, params: [{ id: 'ParamMouthForm', to: 1 }] },
+    'mouth-smile': { state: true, dur: 1.0, params: [{ id: 'ParamMouthForm', to: 1 }] },    // 嘟嘴三件套（Body.cs:86 原样）：漏斗嘴+撅嘴+嘴形负——真嘟嘴
+    'pout': { state: true, dur: 1.2, params: [
+      { id: 'MouthFunnel', to: 0.7 }, { id: 'Mouthpucker', to: 1 }, { id: 'ParamMouthForm', to: -0.4 },
+    ] },
     'mouth-pout':  { state: true, dur: 1.0, params: [{ id: 'ParamMouthForm', to: -1 }] },
     'mouth-open':  { state: true, dur: 1.0, params: [{ id: 'ParamMouthOpenY', to: 0.7 }, { id: 'JawOpen', to: 0.4 }, { id: 'MouthFunnel', to: 0.3 }] },
     // 脸红：原包 脸红.exp3.json 的开关（key7）
@@ -929,7 +942,12 @@ export default {
       type2: { fit: { zoom: 3.97, offset: [0, -5.0], autoFit: false }, params: { Clothes2: 1 } },
     },
 
-    shake: { dur: 0.7, waves: [{ id: 'AngleX', amp: 15, freq: 2 }] },
+    shake: { dur: 1.34,
+      // 两连摇头（Body.cs:103 Repeat 展开）：左 -11 停顿右 11，再一轮
+      keys: [
+        { id: 'AngleX', t: 0, v: 0 }, { id: 'AngleX', t: 0.17, v: -11 }, { id: 'AngleX', t: 0.45, v: 11 },
+        { id: 'AngleX', t: 0.73, v: -11 }, { id: 'AngleX', t: 1.01, v: 11 }, { id: 'AngleX', t: 1.34, v: 0 },
+      ] },
     // 跳舞：腰扭 + 头摆 + 歪头 + 身体前后，四条不同频率叠起来才像在跳
     // 扭腰：腰 + 头 + 歪头 + 身体前后，四条不同频率叠起来才像在跳
     // （不能叫 dance：kit 里 dance 走 setMode，不给 pulse，拿不到进度）
@@ -946,9 +964,19 @@ export default {
 
     // —— 波形动作（连续摆动）——
     // 点头：头上下点几下
-    nod:   { dur: 0.7, waves: [{ id: 'AngleY', amp: 9, freq: 2.5, base: -4 }] },   // kit 的 nod 只有 0.7 秒；base 偏低才像点头而非仰头
+    nod:   { dur: 1.06,
+      // 两连点头（Body.cs:102 Repeat 展开）：点到 -10 停顿回 1，再点一次——顿挫感
+      keys: [
+        { id: 'AngleY', t: 0, v: 0 }, { id: 'AngleY', t: 0.17, v: -10 }, { id: 'AngleY', t: 0.4, v: 1 },
+        { id: 'AngleY', t: 0.63, v: -10 }, { id: 'AngleY', t: 0.86, v: 1 }, { id: 'AngleY', t: 1.06, v: 0 },
+      ] },
     // 摇头：头左右摇
-    shake: { dur: 0.7, waves: [{ id: 'AngleX', amp: 15, freq: 2 }] },
+    shake: { dur: 1.34,
+      // 两连摇头（Body.cs:103 Repeat 展开）：左 -11 停顿右 11，再一轮
+      keys: [
+        { id: 'AngleX', t: 0, v: 0 }, { id: 'AngleX', t: 0.17, v: -11 }, { id: 'AngleX', t: 0.45, v: 11 },
+        { id: 'AngleX', t: 0.73, v: -11 }, { id: 'AngleX', t: 1.01, v: 11 }, { id: 'AngleX', t: 1.34, v: 0 },
+      ] },
     // 跳舞：腰扭 + 头摆 + 歪头 + 身体前后，四条不同频率叠起来才像在跳
     // 扭腰：腰 + 头 + 歪头 + 身体前后，四条不同频率叠起来才像在跳
     // （不能叫 dance：kit 里 dance 走 setMode，不给 pulse，拿不到进度）
