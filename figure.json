@@ -1087,7 +1087,7 @@
       "about": {
         "zh": "只闭左眼，很乖"
       },
-      "seconds": 0.9,
+      "seconds": 1.2,
       "lasting": true
     },
     {
@@ -1103,7 +1103,7 @@
       "about": {
         "zh": "只闭右眼"
       },
-      "seconds": 0.9,
+      "seconds": 1.2,
       "lasting": true
     },
     {

@@ -324,29 +324,33 @@ export default {
     'eye-close':   { state: true, dur: 1.2, params: [{ id: 'ParamEyeLOpen', to: 0 }, { id: 'ParamEyeROpen', to: 0 }] },
     'eye-half':    { state: true, dur: 1.2, params: [{ id: 'ParamEyeLOpen', to: 0.45 }, { id: 'ParamEyeROpen', to: 0.45 }, { id: 'EyeSmile', to: 0 }] },
     'eye-wide':    { state: true, dur: 1.2, params: [{ id: 'ParamEyeLOpen', to: 1 }, { id: 'ParamEyeROpen', to: 1 }, { id: 'EyeSmile', to: 0 }] },
-    // 快眨单眼·左（Body.cs:76-77 套件）：笑眼渐入 + 左眼闭 0.6s + 歪头 12 同步——0.9s
-    // keys 独占 LOpen（params 不写 LOpen，避免后写覆盖）；reflex 豁免 tone
-    'wink-left':   { reflex: true, dur: 0.9,
+    // 快眨单眼·左（Body.cs:76-77 套件）：笑眼渐入 + 左眼闭 0.6s + 歪头 12 同步——
+    // 全 keys 版（1.2s 收尾渐回）：dur 到期删条目会让 ROpen 跳回 roles 写入值（眨一下观感）
+    'wink-left':   { reflex: true, dur: 1.2,
       keys: [
         { id: 'ParamEyeLOpen', t: 0, v: 1 }, { id: 'ParamEyeLOpen', t: 0.14, v: 0 },
-        { id: 'ParamEyeLOpen', t: 0.6, v: 0 }, { id: 'ParamEyeLOpen', t: 0.9, v: 1 },
+        { id: 'ParamEyeLOpen', t: 0.6, v: 0 }, { id: 'ParamEyeLOpen', t: 0.9, v: 1 }, { id: 'ParamEyeLOpen', t: 1.2, v: 1 },
+        { id: 'ParamEyeROpen', t: 0, v: 1 }, { id: 'ParamEyeROpen', t: 0.14, v: 0.45 },
+        { id: 'ParamEyeROpen', t: 0.9, v: 0.45 }, { id: 'ParamEyeROpen', t: 1.2, v: 1 },
         { id: 'AngleZ', t: 0, v: 0 }, { id: 'AngleZ', t: 0.14, v: 12 },
-        { id: 'AngleZ', t: 0.6, v: 12 }, { id: 'AngleZ', t: 0.9, v: 0 },
+        { id: 'AngleZ', t: 0.6, v: 12 }, { id: 'AngleZ', t: 0.9, v: 12 }, { id: 'AngleZ', t: 1.2, v: 0 },
         { id: 'EyeSmile', t: 0, v: 0.45 }, { id: 'EyeSmile', t: 0.14, v: 1 },
-        { id: 'EyeSmile', t: 0.6, v: 1 }, { id: 'EyeSmile', t: 0.9, v: 0.45 },
+        { id: 'EyeSmile', t: 0.9, v: 1 }, { id: 'EyeSmile', t: 1.2, v: 0.45 },
       ],
-      params: [{ id: 'ParamEyeROpen', to: 0.45 }] },
-    // 快眨单眼·右（Body.cs:76-77 镜像）——0.9s
-    'wink-right':  { reflex: true, dur: 0.9,
+      params: [] },
+    // 快眨单眼·右（Body.cs:76-77 镜像）——全 keys 版 1.2s
+    'wink-right':  { reflex: true, dur: 1.2,
       keys: [
         { id: 'ParamEyeROpen', t: 0, v: 1 }, { id: 'ParamEyeROpen', t: 0.14, v: 0 },
-        { id: 'ParamEyeROpen', t: 0.6, v: 0 }, { id: 'ParamEyeROpen', t: 0.9, v: 1 },
+        { id: 'ParamEyeROpen', t: 0.6, v: 0 }, { id: 'ParamEyeROpen', t: 0.9, v: 1 }, { id: 'ParamEyeROpen', t: 1.2, v: 1 },
+        { id: 'ParamEyeLOpen', t: 0, v: 1 }, { id: 'ParamEyeLOpen', t: 0.14, v: 0.45 },
+        { id: 'ParamEyeLOpen', t: 0.9, v: 0.45 }, { id: 'ParamEyeLOpen', t: 1.2, v: 1 },
         { id: 'AngleZ', t: 0, v: 0 }, { id: 'AngleZ', t: 0.14, v: -12 },
-        { id: 'AngleZ', t: 0.6, v: -12 }, { id: 'AngleZ', t: 0.9, v: 0 },
+        { id: 'AngleZ', t: 0.6, v: -12 }, { id: 'AngleZ', t: 0.9, v: -12 }, { id: 'AngleZ', t: 1.2, v: 0 },
         { id: 'EyeSmile', t: 0, v: 0.45 }, { id: 'EyeSmile', t: 0.14, v: 1 },
-        { id: 'EyeSmile', t: 0.6, v: 1 }, { id: 'EyeSmile', t: 0.9, v: 0.45 },
+        { id: 'EyeSmile', t: 0.9, v: 1 }, { id: 'EyeSmile', t: 1.2, v: 0.45 },
       ],
-      params: [{ id: 'ParamEyeLOpen', to: 0.45 }] },
+      params: [] },
     // 单眨眼（Body.cs:74）：左眼闭着停 2 秒再开——抛媚眼式
     'wink-hold':   { reflex: true, dur: 2.35,
       keys: [
