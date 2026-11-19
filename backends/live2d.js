@@ -1030,9 +1030,14 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 关键帧（点头、摇头、叹气…）：按手写的时间点插值。
     // 比正弦强在能做到"过冲一点再落回来""点一下、停、再点一下"——
     // 正弦两端必然对称，所以永远是钟摆感，做不出真人的节奏。
-    if (def.keys?.length) {
+    // 关键帧（点头、摇头、叹气…）：按手写的时间点插值。
+    // 比正弦强在能做到"过冲一点再落回来""点一下、停、再点一下"——
+    // 正弦两端必然对称，所以永远是钟摆感，做不出真人的节奏。
+    // keysPost：物理输出参数（胸腔 Z 等）的关键帧——写早了会被物理算回，由 applyChannelPost 收尾。
+    for (const [keyArr, post] of [[def.keys, false], [def.keysPost, true]]) {
+      if (!keyArr?.length) continue;
       const byId = new Map();
-      for (const f of def.keys) {
+      for (const f of keyArr) {
         if (!byId.has(f.id)) byId.set(f.id, []);
         byId.get(f.id).push([f.t ?? 0, f.v ?? 0]);
       }
@@ -1044,22 +1049,25 @@ export async function createLive2DBody(base, opts, entry, kit) {
         for (let r = 0; r < mod.repeat; r++) {
           for (const [t, v] of frames) out.push([(r * span + t) * mod.pace, v * effScale]);
         }
-        channel.set(id, { kind: 'keys', frames: out, t0: now, dur, emo });
+        channel.set(id, { kind: 'keys', frames: out, t0: now, dur, emo, post });
       }
     }
-    if (def.keys) { /* P2 关键帧：先占位 */ }
     console.info('[l2d] 通道记录', w, '静态', (def.params ?? []).length, '波形', (def.waves ?? []).length);
     // 返回 false：姿态由通道画，但**生命周期交还给 kit**。
     // 早先这里返回 true 把 doWord 整个截胡，结果 kit 的 act() 从没执行，
     // 连带丢了 busy 互斥、清表情、setMode('idle')、holdFace 配表情、play 音效。
     // 而 pulse 姿态本来就是跳过我们的词的（figure 声明了 gestures），交还不会有重复绘制。
     //
+    // 例外 2：takeover 词（dance 等通道复刻版，替换 kit 原生 pulse 的词）同样完整接管——
+    //   kit act 对它们只会播 pulse 组变换（2D 小人的贴图摆动，对骨骼模型很怪）和
+    //   holdFace 强脸——通道 keys 版才有真动作。motion 词照旧 return false。
+    if (emo || def.takeover) return true;
     // 例外：情绪词（emotionArc 覆盖的）返回 true **完整接管**——
     //   交还的话 kit words 表把它们标成 motion（paramActs 词构建时统一标 motion），
     //   doWord 会走 act 分支（把表情当动作播，setExpr/音效/粒子全跳过，2026-11-19 实测）；
     //   走 setExpr 分支又会触发 face 清场把刚写的条目删掉。
     //   接管后 extras（音效/爱心/挤压）由 kit wordExtras 提供，face 清场不再触发。
-    if (emo) return true;
+
     return false;
   }
 

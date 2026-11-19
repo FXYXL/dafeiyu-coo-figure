@@ -132,6 +132,8 @@ export default {
     '斜凑': 'peek',
     '歪着凑近': 'peek',
     '歪头': 'tilt',
+    // 跳舞通道版（2.3 配套，2026-11-19）：复刻他们家 6 拍摇摆（Body.cs:118-135，用户亲自指导的
+    // 「身体左右转、头往相反方向转且晚 0.14 秒、头走小拱形」），拍长 0.53s。
     '扭腰': 'wiggle',
     '扭一扭': 'wiggle',
     '竖食指': 'finger-point',
@@ -434,6 +436,25 @@ export default {
     'tongue-out': { state: true, dur: 1.0, params: [
       { id: 'TongueOut', to: 1 }, { id: 'ParamMouthOpenY', to: 0.35 },
     ] },
+    // 跳舞通道版（2026-11-19）：复刻他们家 6 拍摇摆（Body.cs:118-135，用户亲自指导的
+    // 「身体左右转、头往相反方向转且晚 0.14 秒、头走小拱形」），拍长 0.53s。
+    // 胸腔 Z 是物理输出 → keysPost（物理后写）；kit 原版 act('dance') 的 pulse 组变换/holdFace
+    // 对骨骼模型不适用（图片式左右摇晃）→ takeover:true 让 actWord 完整接管（kit act 不再执行）。
+    'dance': { takeover: true, dur: 3.4,
+      keys: [
+        { id: 'AngleZ', t: 0, v: 0 }, { id: 'AngleZ', t: 0.67, v: -9 }, { id: 'AngleZ', t: 1.2, v: 9 },
+        { id: 'AngleZ', t: 1.73, v: -9 }, { id: 'AngleZ', t: 2.26, v: 9 }, { id: 'AngleZ', t: 2.79, v: -9 },
+        { id: 'AngleZ', t: 3.2, v: 0 },
+        { id: 'AngleY', t: 0, v: 0 }, { id: 'AngleY', t: 0.27, v: -3 }, { id: 'AngleY', t: 0.8, v: 3 },
+        { id: 'AngleY', t: 1.33, v: -3 }, { id: 'AngleY', t: 1.86, v: 3 }, { id: 'AngleY', t: 2.39, v: -3 },
+        { id: 'AngleY', t: 2.92, v: 3 }, { id: 'AngleY', t: 3.2, v: 0 },
+      ],
+      keysPost: [
+        { id: 'ParamBodyAngleZ', t: 0, v: 0 }, { id: 'ParamBodyAngleZ', t: 0.53, v: 18 },
+        { id: 'ParamBodyAngleZ', t: 1.06, v: -18 }, { id: 'ParamBodyAngleZ', t: 1.59, v: 18 },
+        { id: 'ParamBodyAngleZ', t: 2.12, v: -18 }, { id: 'ParamBodyAngleZ', t: 2.65, v: 18 },
+        { id: 'ParamBodyAngleZ', t: 3.2, v: 0 },
+      ] },
     'monocle-face':{ state: true, dur: 1.0, params: [{ id: 'key12', to: 1 }] },
     // —— 原 expressionCombos 的组合，翻译成通道版（2026-11-18 统一，全部可叠+自动放松）——
     // 无语 = 黑脸(key1) + 圈圈眼(key3)，其余眼睛关
