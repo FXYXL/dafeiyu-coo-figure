@@ -439,15 +439,26 @@ export default {
     // 叹气（2.7 整图压扁演示词）：ViewSquash 是虚拟参数（不在模型参数表）——
     // 通道写进虚拟表 → kit custom.squash() 读 → 叠进 sq 弹簧（280/14 自动平滑）。
     // 吸气微拉长 +0.12 → 呼气压扁 -0.18 → 回正；整图（petG 容器）跟着变形。
-    'sigh': { dur: 2.2,
-      // 「稍微压一下」终版：kit 渲染 sy=1-pet.sq（正值=压扁）——之前符号理解反了。
-      // 密集中间点线性缓动（每段 ≤0.06/0.5s，弹簧 ζ≈0.42 完全跟住零震荡），峰值 +0.07
+    // 叹气终版（2026-11-19）：搬他们家 Body.cs:111-113 的完整配方（3.5s 节奏）——
+    // 压扁峰值 0.05（用户：再小 1/4）+ 呼气微张嘴 + 双眼慢慢闭上再回开 + 身体后仰前倾 + 头微摇。
+    // kit 渲染 sy=1-pet.sq（正值=压扁）；keys 密集中间点缓动防弹簧过冲。
+    'sigh': { dur: 3.5,
       keys: [
-        { id: 'ViewSquash', t: 0, v: 0 }, { id: 'ViewSquash', t: 0.6, v: 0.03 },
-        { id: 'ViewSquash', t: 1.2, v: 0.06 }, { id: 'ViewSquash', t: 1.7, v: 0.07 },
-        { id: 'ViewSquash', t: 2.2, v: 0 },
+        { id: 'ViewSquash', t: 0, v: 0 }, { id: 'ViewSquash', t: 0.8, v: 0.04 },
+        { id: 'ViewSquash', t: 1.2, v: 0.05 }, { id: 'ViewSquash', t: 2.2, v: 0.02 },
+        { id: 'ViewSquash', t: 3.5, v: 0 },
+        { id: 'AngleY', t: 0, v: 0 }, { id: 'AngleY', t: 0.8, v: 7 },
+        { id: 'AngleY', t: 1.8, v: -8 }, { id: 'AngleY', t: 2.8, v: -7 }, { id: 'AngleY', t: 3.5, v: 0 },
+        { id: 'LeanInput', t: 0, v: 0 }, { id: 'LeanInput', t: 0.8, v: 5 },
+        { id: 'LeanInput', t: 1.8, v: -6 }, { id: 'LeanInput', t: 2.8, v: -5 }, { id: 'LeanInput', t: 3.5, v: 0 },
+        { id: 'ParamEyeLOpen', t: 0, v: 1 }, { id: 'ParamEyeLOpen', t: 0.8, v: 0.5 },
+        { id: 'ParamEyeLOpen', t: 1.8, v: 0.3 }, { id: 'ParamEyeLOpen', t: 2.8, v: 0.35 }, { id: 'ParamEyeLOpen', t: 3.5, v: 1 },
+        { id: 'ParamEyeROpen', t: 0, v: 1 }, { id: 'ParamEyeROpen', t: 0.8, v: 0.5 },
+        { id: 'ParamEyeROpen', t: 1.8, v: 0.3 }, { id: 'ParamEyeROpen', t: 2.8, v: 0.35 }, { id: 'ParamEyeROpen', t: 3.5, v: 1 },
+        { id: 'ParamMouthOpenY', t: 0, v: 0 }, { id: 'ParamMouthOpenY', t: 1.1, v: 0 },
+        { id: 'ParamMouthOpenY', t: 1.4, v: 0.35 }, { id: 'ParamMouthOpenY', t: 2.2, v: 0.12 },
+        { id: 'ParamMouthOpenY', t: 2.8, v: 0 }, { id: 'ParamMouthOpenY', t: 3.5, v: 0 },
       ],
-      // 呼气配一点头（叹气低头感，复用既有头部参数）
       params: [] },
     // 跳舞通道版（2026-11-19）：复刻他们家 6 拍摇摆（Body.cs:118-135，用户亲自指导的
     // 「身体左右转、头往相反方向转且晚 0.14 秒、头走小拱形」），拍长 0.53s。
