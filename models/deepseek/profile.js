@@ -625,15 +625,22 @@ export default {
         { id: 'ParamMouthOpenY', to: 0.6 }, { id: 'EyeSmile', to: 1 },
         { id: 'ParamEyeLOpen', to: 0.5 }, { id: 'ParamEyeROpen', to: 0.5 },
       ] },
-    // 偷笑（坏笑+瞟一眼:左+眯眼笑）——嘴坏笑挂着、眼珠瞟一下
-    'snicker': { dur: 1.2,
+    // 偷笑加长版（2026-11-19 用户：好玩加长）：坏笑立即挂 → 0.5s 后眼珠瞟过去停一会
+    // → 1.3s 笑意渐浓（眯眼）——单条目内用 keys 时间轴做出「先后感」——2.8s
+    'snicker': { dur: 2.8,
       keys: [
-        { id: 'ParamEyeBallX', t: 0, v: 0 }, { id: 'ParamEyeBallX', t: 0.15, v: 0.85 },
-        { id: 'ParamEyeBallX', t: 0.6, v: 0.85 }, { id: 'ParamEyeBallX', t: 0.8, v: 0 },
+        { id: 'ParamEyeBallX', t: 0, v: 0 }, { id: 'ParamEyeBallX', t: 0.5, v: 0 },
+        { id: 'ParamEyeBallX', t: 0.7, v: 0.85 }, { id: 'ParamEyeBallX', t: 1.8, v: 0.85 },
+        { id: 'ParamEyeBallX', t: 2.1, v: 0 }, { id: 'ParamEyeBallX', t: 2.8, v: 0 },
+        { id: 'EyeSmile', t: 0, v: 0 }, { id: 'EyeSmile', t: 0.9, v: 0 },
+        { id: 'EyeSmile', t: 1.3, v: 1 }, { id: 'EyeSmile', t: 2.8, v: 1 },
+        { id: 'ParamEyeLOpen', t: 0, v: 1 }, { id: 'ParamEyeLOpen', t: 0.9, v: 1 },
+        { id: 'ParamEyeLOpen', t: 1.3, v: 0.45 }, { id: 'ParamEyeLOpen', t: 2.8, v: 0.45 },
+        { id: 'ParamEyeROpen', t: 0, v: 1 }, { id: 'ParamEyeROpen', t: 0.9, v: 1 },
+        { id: 'ParamEyeROpen', t: 1.3, v: 0.45 }, { id: 'ParamEyeROpen', t: 2.8, v: 0.45 },
       ],
       params: [
-        { id: 'ParamMouthForm', to: 0.7 }, { id: 'MouthX', to: 0.5 }, { id: 'EyeSmile', to: 1 },
-        { id: 'ParamEyeLOpen', to: 0.45 }, { id: 'ParamEyeROpen', to: 0.45 },
+        { id: 'ParamMouthForm', to: 0.7 }, { id: 'MouthX', to: 0.5 },
       ] },
     // 傻眼（睁大+张嘴+冷汗）——保持型
     'dumbstruck': { state: true, dur: 1.2, params: [
@@ -674,12 +681,18 @@ export default {
       { id: 'ParamBrowLAngle', to: -0.55 }, { id: 'ParamBrowRAngle', to: -0.55 },
       { id: 'key2', to: 1 }, { id: 'ParamMouthForm', to: 0.7 },
     ] },
-    // 鬼点子（挑眉+坏笑+眼珠一转）——1.2s 眼珠转一圈
-    'sly-idea': { dur: 1.2,
+    // 鬼点子（挑眉+坏笑+眼珠一转+竖手指）：Movement3 是竖食指部件显示档——
+    // keys 竖起 0.3s、末段渐隐收回（默认手自动露出，不残留）——2.6s
+    'sly-idea': { dur: 2.6,
       keys: [
         { id: 'ParamEyeBallX', t: 0, v: 0 }, { id: 'ParamEyeBallX', t: 0.2, v: 0.8 },
         { id: 'ParamEyeBallX', t: 0.5, v: -0.8 }, { id: 'ParamEyeBallX', t: 0.8, v: 0.4 },
         { id: 'ParamEyeBallX', t: 1.2, v: 0 },
+        { id: 'Movement3', t: 0, v: 0 }, { id: 'Movement3', t: 0.4, v: 1 },
+        { id: 'Movement3', t: 2.2, v: 1 }, { id: 'Movement3', t: 2.6, v: 0 },
+        { id: 'Movement1', t: 0, v: 0 }, { id: 'Movement1', t: 2.6, v: 0 },
+        { id: 'Param40', t: 0.4, v: 1 }, { id: 'Param40', t: 2.2, v: 1 }, { id: 'Param40', t: 2.6, v: 0 },
+        { id: 'Param41', t: 0.4, v: 0.705 }, { id: 'Param41', t: 2.2, v: 0.705 }, { id: 'Param41', t: 2.6, v: 0 },
       ],
       params: [
         { id: 'ParamBrowLY', to: 0.6 }, { id: 'ParamBrowRY', to: 0.6 }, { id: 'BrowInnerUp', to: 0.4 },
