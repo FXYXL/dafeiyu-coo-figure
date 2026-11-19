@@ -1533,21 +1533,6 @@
       "seconds": 3.5
     },
     {
-      "id": "eye-narrow-smile",
-      "kind": "motion",
-      "lasting": true,
-      "names": {
-        "zh": [
-          "眯眼笑"
-        ]
-      },
-      "about": {
-        "zh": "眯眼笑",
-        "en": "闭着眼睛笑（区别于笑眼）"
-      },
-      "seconds": 1.2
-    },
-    {
       "id": "laugh",
       "kind": "motion",
       "lasting": true,

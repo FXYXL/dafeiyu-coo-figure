@@ -114,7 +114,7 @@ export default {
     '扣盆': 'pan-face',
     '挥手': 'wave',
     '招手': 'wave',
-    '点头': 'nod', '叹气': 'sigh', '眯眼笑': 'eye-narrow-smile', '大笑': 'laugh', '眼泪': 'tears', '挑一下眉': 'brow-raise-once', '歪一下头': 'tilt-once', '晃头': 'head-swing', '慢歪头': 'slow-tilt', '缩一下': 'cower', '吓一跳': 'startle', '左右张望': 'look-around',
+    '点头': 'nod', '叹气': 'sigh', '大笑': 'laugh', '眼泪': 'tears', '挑一下眉': 'brow-raise-once', '歪一下头': 'tilt-once', '晃头': 'head-swing', '慢歪头': 'slow-tilt', '缩一下': 'cower', '吓一跳': 'startle', '左右张望': 'look-around',
     '摇头': 'shake',
     '鞠躬': 'bow',
     '转圈': 'spin',
@@ -464,10 +464,6 @@ export default {
       ],
       params: [] },
     // ── 3.1/3.3 第一批（2026-11-19，搬他们家 Body.cs 曲线，符号直接照抄——两边 ViewSquash 都是正=压）──
-    // 眯眼笑（Body.cs:70）：闭眼笑（区别于笑眼的半开）——保持型
-    'eye-narrow-smile': { state: true, dur: 1.2, params: [
-      { id: 'EyeSmile', to: 1 }, { id: 'ParamEyeLOpen', to: 0 }, { id: 'ParamEyeROpen', to: 0 },
-    ] },
     // 大笑（Body.cs:82）：嘴大张 + 下巴——保持型
     'laugh': { state: true, dur: 1.2, params: [
       { id: 'ParamMouthForm', to: 1 }, { id: 'ParamMouthOpenY', to: 0.6 }, { id: 'JawOpen', to: 0.3 },
