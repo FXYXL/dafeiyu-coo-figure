@@ -372,9 +372,9 @@ export default {
       { id: 'ParamBrowLY', to: -0.8 }, { id: 'ParamBrowRY', to: -0.8 },
       { id: 'ParamBrowLAngle', to: -1 }, { id: 'ParamBrowRAngle', to: -1 },
     ] },
-'mouth-smile': { state: true, dur: 1.0, params: [{ id: 'ParamMouthForm', to: 1 }] },
-'mouth-pout':  { state: true, dur: 1.0, params: [{ id: 'ParamMouthForm', to: -1 }] },
-'mouth-open':  { state: true, dur: 1.0, params: [{ id: 'ParamMouthOpenY', to: 0.7 }, { id: 'JawOpen', to: 0.4 }, { id: 'MouthFunnel', to: 0.3 }] },
+    'mouth-smile': { state: true, dur: 1.0, params: [{ id: 'ParamMouthForm', to: 1 }] },
+    'mouth-pout':  { state: true, dur: 1.0, params: [{ id: 'ParamMouthForm', to: -1 }] },
+    'mouth-open':  { state: true, dur: 1.0, params: [{ id: 'ParamMouthOpenY', to: 0.7 }, { id: 'JawOpen', to: 0.4 }, { id: 'MouthFunnel', to: 0.3 }] },
     // 脸红：原包 脸红.exp3.json 的开关（key7）
     'blush':       { state: true, dur: 1.0, params: [{ id: 'key7', to: 1 }] },
     // 恢复：实际清空在 baseWord 里做；这里占位让 kit 认识它
