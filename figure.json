@@ -2,7 +2,7 @@
   "manifest": 2,
   "api": 2,
   "id": "deepseek-shenggong",
-  "version": "1.13.24",
+  "version": "1.13.25",
   "name": {
     "zh": "大肥鱼",
     "en": "DaFeiYu"
@@ -624,7 +624,8 @@
         "zh": "抬起手挥一挥，打招呼",
         "en": "抬起手挥一挥，打招呼"
       },
-      "seconds": 1.6
+      "seconds": 1.6,
+      "handish": true
     },
     {
       "id": "nod",
@@ -840,7 +841,8 @@
         "zh": "伸出一只手指向下点",
         "en": "伸出一只手指向下点"
       },
-      "seconds": 4
+      "seconds": 4,
+      "handish": true
     },
     {
       "id": "chest-hand",
@@ -854,7 +856,8 @@
         "zh": "一只手抚在胸口",
         "en": "一只手抚在胸口"
       },
-      "seconds": 4
+      "seconds": 4,
+      "handish": true
     },
     {
       "id": "grass-hand",
@@ -868,7 +871,8 @@
         "zh": "手里拿着一根狗尾巴草",
         "en": "手里拿着一根狗尾巴草"
       },
-      "seconds": 4
+      "seconds": 4,
+      "handish": true
     },
     {
       "id": "loading-face",
@@ -1008,7 +1012,8 @@
         "zh": "拿着狗尾草来回挥",
         "en": "Swinging a foxtail grass"
       },
-      "seconds": 3.4
+      "seconds": 3.4,
+      "handish": true
     },
     {
       "id": "eye-smile",

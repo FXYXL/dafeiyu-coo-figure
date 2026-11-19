@@ -329,12 +329,25 @@ export interface Beat {
   tone?: string;
 }
 
-/** 2.1 动作阻塞文字：一次性动作（motion && !lasting 保持型不阻塞）演多久，打字就停多久。 */
-function sumWait(ids: string[], vocab: readonly VocabWord[]): number {
-  return ids.reduce((sum, id) => {
+/** 2.1+2.4 动作节拍（他们 Body.cs:322/371-373 同款）：文字不等动作真实时长，等固定节拍——
+ *  普通 0.35 / 手势 0.7 / 吓一跳 0.45，多词取 max，上限 2.4（动作继续后台演，文字该说就说）。
+ *  纯动作行（无文字）：max(0.8, 动作时长封顶2.4, 手势1.1)。 */
+const BEAT = 0.35, HAND_BEAT = 0.7, STARTLE_BEAT = 0.45, LONGEST_WAIT = 2.4;
+const HANDISH = new Set(['wave', 'finger-point', 'chest-hand', 'grass-hand', 'swing']);
+function sumWait(ids: string[], vocab: readonly VocabWord[], hasText: boolean): number {
+  let wait = 0;
+  for (const id of ids) {
     const v = vocab.find((x) => x.id === id);
-    return sum + (v && v.kind === 'motion' && !v.lasting ? v.seconds || 0 : 0);
-  }, 0);
+    if (!v || v.kind !== 'motion' || v.lasting) continue;
+    const handish = (v as any).handish || HANDISH.has(id);
+    if (!hasText) {
+      wait = Math.max(wait, Math.min(v.seconds || 0, LONGEST_WAIT), handish ? 1.1 : 0);
+    } else {
+      wait = Math.max(wait, id === 'startle' ? STARTLE_BEAT : handish ? HAND_BEAT : BEAT);
+    }
+  }
+  if (!hasText) wait = Math.max(wait, 0.8);
+  return Math.min(wait, LONGEST_WAIT);
 }
 
 /** 2.3 tone 判定（他们 Body.cs:536 同款）：含 ！/! 优先 → '!'；否则末尾 …/⋯ → '…'。 */
@@ -351,12 +364,12 @@ function toneOf(text: string): string {
         const tone = toneOf(cur.text);
         const pace = tone === '!' ? 0.85 : tone === '…' ? 1.25 : 1;   // 2.3 阻塞时长也吃 tone——与动作实际时长精确同步
         for (const a of cur.anchors) a.wait = (a.wait ?? 0) * pace;
-        beats.push({ ...cur, wait: sumWait(cur.actions, vocab) * pace, tone });
+        beats.push({ ...cur, wait: sumWait(cur.actions, vocab, !!cur.text.trim()) * pace, tone });
       }`,
         )
         .replace(
           `      if (acts.length) cur.anchors.push({ at: cur.text.length, actions: acts });`,
-          `      if (acts.length) cur.anchors.push({ at: cur.text.length, actions: acts, wait: sumWait(acts, vocab) });`,
+          `      if (acts.length) cur.anchors.push({ at: cur.text.length, actions: acts, wait: sumWait(acts, vocab, true) });`,
         )
         .replace(
           `  if (cur.text.trim() || cur.actions.length || cur.anchors.length) beats.push(cur);`,
@@ -364,11 +377,11 @@ function toneOf(text: string): string {
     const tone = toneOf(cur.text);
     const pace = tone === '!' ? 0.85 : tone === '…' ? 1.25 : 1;   // 2.3 阻塞时长也吃 tone——与动作实际时长精确同步
     for (const a of cur.anchors) a.wait = (a.wait ?? 0) * pace;
-    beats.push({ ...cur, wait: sumWait(cur.actions, vocab) * pace, tone });
+    beats.push({ ...cur, wait: sumWait(cur.actions, vocab, !!cur.text.trim()) * pace, tone });
   }`,
         );
-      if ((out.match(/sumWait\(cur\.actions, vocab\) \* pace/g) || []).length !== 2) throw new Error('beatWaitTone：beats.push 锚点未命中（应 2 处）');
-      if (!out.includes("actions: acts, wait: sumWait(acts, vocab)")) throw new Error('beatWaitTone：anchors.push 锚点未命中');
+      if ((out.match(/sumWait\(cur\.actions, vocab, !!cur\.text\.trim\(\)\) \* pace/g) || []).length !== 2) throw new Error('beatWaitTone：beats.push 锚点未命中（应 2 处）');
+      if (!out.includes('actions: acts, wait: sumWait(acts, vocab, true)')) throw new Error('beatWaitTone：anchors.push 锚点未命中');
       return out;
     },
   },
