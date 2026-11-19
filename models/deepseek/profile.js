@@ -224,7 +224,7 @@ export default {
     // —— 静态姿态（进入 → 保持 → 退出）——
     // 探身贴近镜头：负值往前靠，物理会联动身体透视（最像 VTS 里的前倾）
     'lean-in':   { params: [{ id: 'LeanInput', to: -30 }] },
-    'lean-back': { params: [{ id: 'LeanInput', to: 30 }] },
+    'lean-back': { params: [{ id: 'LeanInput', to: 9 }] },
     // 探身鞠躬：上半身真的往前压，配合 kit 自带的闭眼
     bow:         { params: [{ id: 'LeanInput', to: -24 }] },
     // 侧身：身体侧转 + 头跟着转一点，单靠身体参数幅度太小吃不出来
@@ -283,7 +283,7 @@ export default {
     'dazed':      { dur: 4, params: [{ id: 'Param11', to: 6 }] },
 
     // 歪头
-    tilt:        { params: [{ id: 'AngleZ', to: 28 }] },
+    tilt:        { params: [{ id: 'AngleZ', to: 16 }] },
 
     // —— 波形动作（连续摆动）——
     // 点头：头上下点几下
@@ -377,8 +377,8 @@ export default {
     // 恢复：实际清空在 baseWord 里做；这里占位让 kit 认识它
     'restore':     { dur: 0.5, params: [] },
     // —— 基础词补齐（3.1）——
-    'head-down':  { state: true, dur: 1.0, params: [{ id: 'AngleY', to: -18 }] },
-    'head-up':    { state: true, dur: 1.0, params: [{ id: 'AngleY', to: 15 }] },
+    'head-down':  { state: true, dur: 1.0, params: [{ id: 'AngleY', to: -14 }] },
+    'head-up':    { state: true, dur: 1.0, params: [{ id: 'AngleY', to: 12 }] },
     'face-front': { state: true, dur: 1.0, params: [
       { id: 'AngleX', to: 0 }, { id: 'AngleY', to: 0 }, { id: 'AngleZ', to: 0 },
     ] },
@@ -933,7 +933,7 @@ export default {
         { id: 'LeanInput', amp: -9, freq: 2, phase: 0.25 },
       ],
     },
-    tilt:        { params: [{ id: 'AngleZ', to: 28 }] },
+    tilt:        { params: [{ id: 'AngleZ', to: 16 }] },
 
     // —— 波形动作（连续摆动）——
     // 点头：头上下点几下
