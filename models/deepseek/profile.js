@@ -114,7 +114,7 @@ export default {
     '扣盆': 'pan-face',
     '挥手': 'wave',
     '招手': 'wave',
-    '点头': 'nod', '叹气': 'sigh', '大笑': 'laugh', '眼泪': 'tears', '挑一下眉': 'brow-raise-once', '歪一下头': 'tilt-once', '晃头': 'head-swing', '慢歪头': 'slow-tilt', '缩一下': 'cower', '吓一跳': 'startle', '左右张望': 'look-around',
+    '点头': 'nod', '叹气': 'sigh', '大笑': 'laugh', '眼泪': 'tears', '挑一下眉': 'brow-raise-once', '歪一下头': 'tilt-once', '晃头': 'head-swing', '慢歪头': 'slow-tilt', '缩一下': 'cower', '吓一跳': 'startle', '左右张望': 'look-around', '摇摆一': 'sway-1', '剧场摇摆一': 'theater-sway-1', '剧场摇摆二': 'theater-sway-2', '慢摇': 'slow-sway', '摇摆二': 'dance',
     '摇头': 'shake',
     '鞠躬': 'bow',
     '转圈': 'spin',
@@ -521,6 +521,66 @@ export default {
         { id: 'BrowInnerUp', t: 1.0, v: 0.6 }, { id: 'BrowInnerUp', t: 1.4, v: 0 },
         { id: 'ParamMouthOpenY', t: 0, v: 0 }, { id: 'ParamMouthOpenY', t: 0.08, v: 0.3 },
         { id: 'ParamMouthOpenY', t: 0.8, v: 0.35 }, { id: 'ParamMouthOpenY', t: 1.4, v: 0 },
+      ],
+      params: [] },
+    // 摇摆一（Body.cs:120/125/126/129 曲线，node 重算 Dance/Groove）——12 拍快速左右摇摆（听歌第一段）
+    'sway-1': { dur: 7.714,
+      // PositionX 前批写（非输出+输入，物理驱动胸晃——铁律）；胸腔 X/Z keysPost 显示
+      keys: [
+        { id: 'PositionX', t: 0, v: 0 }, { id: 'PositionX', t: 0.321, v: 13 }, { id: 'PositionX', t: 0.964, v: -13 }, { id: 'PositionX', t: 1.607, v: 13 }, { id: 'PositionX', t: 2.25, v: -13 }, { id: 'PositionX', t: 2.893, v: 13 }, { id: 'PositionX', t: 3.536, v: -13 }, { id: 'PositionX', t: 4.179, v: 13 }, { id: 'PositionX', t: 4.821, v: -13 }, { id: 'PositionX', t: 5.464, v: 13 }, { id: 'PositionX', t: 6.107, v: -13 }, { id: 'PositionX', t: 6.75, v: 13 }, { id: 'PositionX', t: 7.393, v: -13 }, { id: 'PositionX', t: 7.714, v: 0 },
+        { id: 'AngleX', t: 0, v: 0 }, { id: 'AngleX', t: 0.461, v: -19 }, { id: 'AngleX', t: 1.104, v: 19 }, { id: 'AngleX', t: 1.747, v: -19 }, { id: 'AngleX', t: 2.39, v: 19 }, { id: 'AngleX', t: 3.033, v: -19 }, { id: 'AngleX', t: 3.676, v: 19 }, { id: 'AngleX', t: 4.319, v: -19 }, { id: 'AngleX', t: 4.961, v: 19 }, { id: 'AngleX', t: 5.604, v: -19 }, { id: 'AngleX', t: 6.247, v: 19 }, { id: 'AngleX', t: 6.89, v: -19 }, { id: 'AngleX', t: 7.533, v: 19 }, { id: 'AngleX', t: 7.854, v: 0 },
+        { id: 'AngleZ', t: 0, v: 0 }, { id: 'AngleZ', t: 0.461, v: -8 }, { id: 'AngleZ', t: 1.104, v: 8 }, { id: 'AngleZ', t: 1.747, v: -8 }, { id: 'AngleZ', t: 2.39, v: 8 }, { id: 'AngleZ', t: 3.033, v: -8 }, { id: 'AngleZ', t: 3.676, v: 8 }, { id: 'AngleZ', t: 4.319, v: -8 }, { id: 'AngleZ', t: 4.961, v: 8 }, { id: 'AngleZ', t: 5.604, v: -8 }, { id: 'AngleZ', t: 6.247, v: 8 }, { id: 'AngleZ', t: 6.89, v: -8 }, { id: 'AngleZ', t: 7.533, v: 8 }, { id: 'AngleZ', t: 7.854, v: 0 },
+        { id: 'AngleY', t: 0, v: 0 }, { id: 'AngleY', t: 0.461, v: -4.5 }, { id: 'AngleY', t: 0.783, v: 9.5 }, { id: 'AngleY', t: 1.104, v: -4.5 }, { id: 'AngleY', t: 1.426, v: 9.5 }, { id: 'AngleY', t: 1.747, v: -4.5 }, { id: 'AngleY', t: 2.069, v: 9.5 }, { id: 'AngleY', t: 2.39, v: -4.5 }, { id: 'AngleY', t: 2.711, v: 9.5 }, { id: 'AngleY', t: 3.033, v: -4.5 }, { id: 'AngleY', t: 3.354, v: 9.5 }, { id: 'AngleY', t: 3.676, v: -4.5 }, { id: 'AngleY', t: 3.997, v: 9.5 }, { id: 'AngleY', t: 4.319, v: -4.5 }, { id: 'AngleY', t: 4.64, v: 9.5 }, { id: 'AngleY', t: 4.961, v: -4.5 }, { id: 'AngleY', t: 5.283, v: 9.5 }, { id: 'AngleY', t: 5.604, v: -4.5 }, { id: 'AngleY', t: 5.926, v: 9.5 }, { id: 'AngleY', t: 6.247, v: -4.5 }, { id: 'AngleY', t: 6.569, v: 9.5 }, { id: 'AngleY', t: 6.89, v: -4.5 }, { id: 'AngleY', t: 7.211, v: 9.5 }, { id: 'AngleY', t: 7.533, v: -4.5 }, { id: 'AngleY', t: 7.854, v: 0 },
+      ],
+      keysPost: [
+        { id: 'ParamBodyAngleX', t: 0, v: 0 }, { id: 'ParamBodyAngleX', t: 0.321, v: 13 }, { id: 'ParamBodyAngleX', t: 0.964, v: -13 }, { id: 'ParamBodyAngleX', t: 1.607, v: 13 }, { id: 'ParamBodyAngleX', t: 2.25, v: -13 }, { id: 'ParamBodyAngleX', t: 2.893, v: 13 }, { id: 'ParamBodyAngleX', t: 3.536, v: -13 }, { id: 'ParamBodyAngleX', t: 4.179, v: 13 }, { id: 'ParamBodyAngleX', t: 4.821, v: -13 }, { id: 'ParamBodyAngleX', t: 5.464, v: 13 }, { id: 'ParamBodyAngleX', t: 6.107, v: -13 }, { id: 'ParamBodyAngleX', t: 6.75, v: 13 }, { id: 'ParamBodyAngleX', t: 7.393, v: -13 }, { id: 'ParamBodyAngleX', t: 7.714, v: 0 },
+        { id: 'ParamBodyAngleZ', t: 0, v: 0 }, { id: 'ParamBodyAngleZ', t: 0.321, v: 6.5 }, { id: 'ParamBodyAngleZ', t: 0.964, v: -6.5 }, { id: 'ParamBodyAngleZ', t: 1.607, v: 6.5 }, { id: 'ParamBodyAngleZ', t: 2.25, v: -6.5 }, { id: 'ParamBodyAngleZ', t: 2.893, v: 6.5 }, { id: 'ParamBodyAngleZ', t: 3.536, v: -6.5 }, { id: 'ParamBodyAngleZ', t: 4.179, v: 6.5 }, { id: 'ParamBodyAngleZ', t: 4.821, v: -6.5 }, { id: 'ParamBodyAngleZ', t: 5.464, v: 6.5 }, { id: 'ParamBodyAngleZ', t: 6.107, v: -6.5 }, { id: 'ParamBodyAngleZ', t: 6.75, v: 6.5 }, { id: 'ParamBodyAngleZ', t: 7.393, v: -6.5 }, { id: 'ParamBodyAngleZ', t: 7.714, v: 0 },
+      ],
+      params: [] },
+    // 剧场摇摆一（Body.cs:120/125/126/129 曲线，node 重算 Dance/Groove）——摇摆一的柔和慢速版（小剧场用）
+    'theater-sway-1': { dur: 11.02,
+      // PositionX 前批写（非输出+输入，物理驱动胸晃——铁律）；胸腔 X/Z keysPost 显示
+      keys: [
+        { id: 'PositionX', t: 0, v: 0 }, { id: 'PositionX', t: 0.459, v: 9.1 }, { id: 'PositionX', t: 1.378, v: -9.1 }, { id: 'PositionX', t: 2.296, v: 9.1 }, { id: 'PositionX', t: 3.214, v: -9.1 }, { id: 'PositionX', t: 4.133, v: 9.1 }, { id: 'PositionX', t: 5.051, v: -9.1 }, { id: 'PositionX', t: 5.969, v: 9.1 }, { id: 'PositionX', t: 6.888, v: -9.1 }, { id: 'PositionX', t: 7.806, v: 9.1 }, { id: 'PositionX', t: 8.724, v: -9.1 }, { id: 'PositionX', t: 9.643, v: 9.1 }, { id: 'PositionX', t: 10.561, v: -9.1 }, { id: 'PositionX', t: 11.02, v: 0 },
+        { id: 'AngleX', t: 0, v: 0 }, { id: 'AngleX', t: 0.599, v: -13.3 }, { id: 'AngleX', t: 1.518, v: 13.3 }, { id: 'AngleX', t: 2.436, v: -13.3 }, { id: 'AngleX', t: 3.354, v: 13.3 }, { id: 'AngleX', t: 4.273, v: -13.3 }, { id: 'AngleX', t: 5.191, v: 13.3 }, { id: 'AngleX', t: 6.109, v: -13.3 }, { id: 'AngleX', t: 7.028, v: 13.3 }, { id: 'AngleX', t: 7.946, v: -13.3 }, { id: 'AngleX', t: 8.864, v: 13.3 }, { id: 'AngleX', t: 9.783, v: -13.3 }, { id: 'AngleX', t: 10.701, v: 13.3 }, { id: 'AngleX', t: 11.16, v: 0 },
+        { id: 'AngleZ', t: 0, v: 0 }, { id: 'AngleZ', t: 0.599, v: -5.6 }, { id: 'AngleZ', t: 1.518, v: 5.6 }, { id: 'AngleZ', t: 2.436, v: -5.6 }, { id: 'AngleZ', t: 3.354, v: 5.6 }, { id: 'AngleZ', t: 4.273, v: -5.6 }, { id: 'AngleZ', t: 5.191, v: 5.6 }, { id: 'AngleZ', t: 6.109, v: -5.6 }, { id: 'AngleZ', t: 7.028, v: 5.6 }, { id: 'AngleZ', t: 7.946, v: -5.6 }, { id: 'AngleZ', t: 8.864, v: 5.6 }, { id: 'AngleZ', t: 9.783, v: -5.6 }, { id: 'AngleZ', t: 10.701, v: 5.6 }, { id: 'AngleZ', t: 11.16, v: 0 },
+        { id: 'AngleY', t: 0, v: 0 }, { id: 'AngleY', t: 0.599, v: -3.15 }, { id: 'AngleY', t: 1.058, v: 6.65 }, { id: 'AngleY', t: 1.518, v: -3.15 }, { id: 'AngleY', t: 1.977, v: 6.65 }, { id: 'AngleY', t: 2.436, v: -3.15 }, { id: 'AngleY', t: 2.895, v: 6.65 }, { id: 'AngleY', t: 3.354, v: -3.15 }, { id: 'AngleY', t: 3.813, v: 6.65 }, { id: 'AngleY', t: 4.273, v: -3.15 }, { id: 'AngleY', t: 4.732, v: 6.65 }, { id: 'AngleY', t: 5.191, v: -3.15 }, { id: 'AngleY', t: 5.65, v: 6.65 }, { id: 'AngleY', t: 6.109, v: -3.15 }, { id: 'AngleY', t: 6.569, v: 6.65 }, { id: 'AngleY', t: 7.028, v: -3.15 }, { id: 'AngleY', t: 7.487, v: 6.65 }, { id: 'AngleY', t: 7.946, v: -3.15 }, { id: 'AngleY', t: 8.405, v: 6.65 }, { id: 'AngleY', t: 8.864, v: -3.15 }, { id: 'AngleY', t: 9.324, v: 6.65 }, { id: 'AngleY', t: 9.783, v: -3.15 }, { id: 'AngleY', t: 10.242, v: 6.65 }, { id: 'AngleY', t: 10.701, v: -3.15 }, { id: 'AngleY', t: 11.16, v: 0 },
+      ],
+      keysPost: [
+        { id: 'ParamBodyAngleX', t: 0, v: 0 }, { id: 'ParamBodyAngleX', t: 0.459, v: 9.1 }, { id: 'ParamBodyAngleX', t: 1.378, v: -9.1 }, { id: 'ParamBodyAngleX', t: 2.296, v: 9.1 }, { id: 'ParamBodyAngleX', t: 3.214, v: -9.1 }, { id: 'ParamBodyAngleX', t: 4.133, v: 9.1 }, { id: 'ParamBodyAngleX', t: 5.051, v: -9.1 }, { id: 'ParamBodyAngleX', t: 5.969, v: 9.1 }, { id: 'ParamBodyAngleX', t: 6.888, v: -9.1 }, { id: 'ParamBodyAngleX', t: 7.806, v: 9.1 }, { id: 'ParamBodyAngleX', t: 8.724, v: -9.1 }, { id: 'ParamBodyAngleX', t: 9.643, v: 9.1 }, { id: 'ParamBodyAngleX', t: 10.561, v: -9.1 }, { id: 'ParamBodyAngleX', t: 11.02, v: 0 },
+        { id: 'ParamBodyAngleZ', t: 0, v: 0 }, { id: 'ParamBodyAngleZ', t: 0.459, v: 4.55 }, { id: 'ParamBodyAngleZ', t: 1.378, v: -4.55 }, { id: 'ParamBodyAngleZ', t: 2.296, v: 4.55 }, { id: 'ParamBodyAngleZ', t: 3.214, v: -4.55 }, { id: 'ParamBodyAngleZ', t: 4.133, v: 4.55 }, { id: 'ParamBodyAngleZ', t: 5.051, v: -4.55 }, { id: 'ParamBodyAngleZ', t: 5.969, v: 4.55 }, { id: 'ParamBodyAngleZ', t: 6.888, v: -4.55 }, { id: 'ParamBodyAngleZ', t: 7.806, v: 4.55 }, { id: 'ParamBodyAngleZ', t: 8.724, v: -4.55 }, { id: 'ParamBodyAngleZ', t: 9.643, v: 4.55 }, { id: 'ParamBodyAngleZ', t: 10.561, v: -4.55 }, { id: 'ParamBodyAngleZ', t: 11.02, v: 0 },
+      ],
+      params: [] },
+    // 剧场摇摆二（Body.cs:120/125/126/129 曲线，node 重算 Dance/Groove）——摇摆二的柔和慢速版（小剧场用）
+    'theater-sway-2': { dur: 6.531,
+      // PositionX 前批写（非输出+输入，物理驱动胸晃——铁律）；胸腔 X/Z keysPost 显示
+      keys: [
+        { id: 'PositionX', t: 0, v: 0 }, { id: 'PositionX', t: 0.544, v: 2.8 }, { id: 'PositionX', t: 1.633, v: -2.8 }, { id: 'PositionX', t: 2.721, v: 2.8 }, { id: 'PositionX', t: 3.81, v: -2.8 }, { id: 'PositionX', t: 4.898, v: 2.8 }, { id: 'PositionX', t: 5.986, v: -2.8 }, { id: 'PositionX', t: 6.531, v: 0 },
+        { id: 'AngleX', t: 0, v: 0 }, { id: 'AngleX', t: 0.644, v: 6.3 }, { id: 'AngleX', t: 1.733, v: -6.3 }, { id: 'AngleX', t: 2.821, v: 6.3 }, { id: 'AngleX', t: 3.91, v: -6.3 }, { id: 'AngleX', t: 4.998, v: 6.3 }, { id: 'AngleX', t: 6.086, v: -6.3 }, { id: 'AngleX', t: 6.631, v: 0 },
+        { id: 'AngleZ', t: 0, v: 0 }, { id: 'AngleZ', t: 0.604, v: 14.7 }, { id: 'AngleZ', t: 1.693, v: -14.7 }, { id: 'AngleZ', t: 2.781, v: 14.7 }, { id: 'AngleZ', t: 3.87, v: -14.7 }, { id: 'AngleZ', t: 4.958, v: 14.7 }, { id: 'AngleZ', t: 6.046, v: -14.7 }, { id: 'AngleZ', t: 6.591, v: 0 },
+        { id: 'AngleY', t: 0, v: 0 }, { id: 'AngleY', t: 0.594, v: -2.8 }, { id: 'AngleY', t: 1.138, v: 2.1 }, { id: 'AngleY', t: 1.683, v: -2.8 }, { id: 'AngleY', t: 2.227, v: 2.1 }, { id: 'AngleY', t: 2.771, v: -2.8 }, { id: 'AngleY', t: 3.315, v: 2.1 }, { id: 'AngleY', t: 3.86, v: -2.8 }, { id: 'AngleY', t: 4.404, v: 2.1 }, { id: 'AngleY', t: 4.948, v: -2.8 }, { id: 'AngleY', t: 5.492, v: 2.1 }, { id: 'AngleY', t: 6.036, v: -2.8 }, { id: 'AngleY', t: 6.581, v: 0 },
+        { id: 'ShoulderY', t: 0, v: 0 }, { id: 'ShoulderY', t: 0.544, v: 9.8 }, { id: 'ShoulderY', t: 1.633, v: -9.8 }, { id: 'ShoulderY', t: 2.721, v: 9.8 }, { id: 'ShoulderY', t: 3.81, v: -9.8 }, { id: 'ShoulderY', t: 4.898, v: 9.8 }, { id: 'ShoulderY', t: 5.986, v: -9.8 }, { id: 'ShoulderY', t: 6.531, v: 0 },
+        { id: 'ShoulderX', t: 0, v: 0 }, { id: 'ShoulderX', t: 0.544, v: 7 }, { id: 'ShoulderX', t: 1.633, v: -7 }, { id: 'ShoulderX', t: 2.721, v: 7 }, { id: 'ShoulderX', t: 3.81, v: -7 }, { id: 'ShoulderX', t: 4.898, v: 7 }, { id: 'ShoulderX', t: 5.986, v: -7 }, { id: 'ShoulderX', t: 6.531, v: 0 },
+      ],
+      keysPost: [
+        { id: 'ParamBodyAngleX', t: 0, v: 0 }, { id: 'ParamBodyAngleX', t: 0.544, v: 2.8 }, { id: 'ParamBodyAngleX', t: 1.633, v: -2.8 }, { id: 'ParamBodyAngleX', t: 2.721, v: 2.8 }, { id: 'ParamBodyAngleX', t: 3.81, v: -2.8 }, { id: 'ParamBodyAngleX', t: 4.898, v: 2.8 }, { id: 'ParamBodyAngleX', t: 5.986, v: -2.8 }, { id: 'ParamBodyAngleX', t: 6.531, v: 0 },
+        { id: 'ParamBodyAngleZ', t: 0, v: 0 }, { id: 'ParamBodyAngleZ', t: 0.544, v: 3.5 }, { id: 'ParamBodyAngleZ', t: 1.633, v: -3.5 }, { id: 'ParamBodyAngleZ', t: 2.721, v: 3.5 }, { id: 'ParamBodyAngleZ', t: 3.81, v: -3.5 }, { id: 'ParamBodyAngleZ', t: 4.898, v: 3.5 }, { id: 'ParamBodyAngleZ', t: 5.986, v: -3.5 }, { id: 'ParamBodyAngleZ', t: 6.531, v: 0 },
+      ],
+      params: [] },
+    // 慢摇（Body.cs:120/125/126/129 曲线，node 重算 Dance/Groove）——越摇越慢越小，渐渐停下
+    'slow-sway': { dur: 3.857,
+      // PositionX 前批写（非输出+输入，物理驱动胸晃——铁律）；胸腔 X/Z keysPost 显示
+      keys: [
+        { id: 'PositionX', t: 0, v: 0 }, { id: 'PositionX', t: 0.5, v: 4 }, { id: 'PositionX', t: 1.643, v: -2.8 }, { id: 'PositionX', t: 3.071, v: 1.6 }, { id: 'PositionX', t: 3.857, v: 0 },
+        { id: 'AngleX', t: 0, v: 0 }, { id: 'AngleX', t: 0.6, v: 9 }, { id: 'AngleX', t: 1.743, v: -6.3 }, { id: 'AngleX', t: 3.171, v: 3.6 }, { id: 'AngleX', t: 3.957, v: 0 },
+        { id: 'AngleZ', t: 0, v: 0 }, { id: 'AngleZ', t: 0.56, v: 21 }, { id: 'AngleZ', t: 1.703, v: -14.7 }, { id: 'AngleZ', t: 3.131, v: 8.4 }, { id: 'AngleZ', t: 3.917, v: 0 },
+        { id: 'AngleY', t: 0, v: 0 }, { id: 'AngleY', t: 0.55, v: -4 }, { id: 'AngleY', t: 1.121, v: 2.55 }, { id: 'AngleY', t: 1.693, v: -2.8 }, { id: 'AngleY', t: 2.407, v: 1.65 }, { id: 'AngleY', t: 3.121, v: -1.6 }, { id: 'AngleY', t: 3.907, v: 0 },
+        { id: 'ShoulderY', t: 0, v: 0 }, { id: 'ShoulderY', t: 0.5, v: 14 }, { id: 'ShoulderY', t: 1.643, v: -9.8 }, { id: 'ShoulderY', t: 3.071, v: 5.6 }, { id: 'ShoulderY', t: 3.857, v: 0 },
+        { id: 'ShoulderX', t: 0, v: 0 }, { id: 'ShoulderX', t: 0.5, v: 10 }, { id: 'ShoulderX', t: 1.643, v: -7 }, { id: 'ShoulderX', t: 3.071, v: 4 }, { id: 'ShoulderX', t: 3.857, v: 0 },
+      ],
+      keysPost: [
+        { id: 'ParamBodyAngleX', t: 0, v: 0 }, { id: 'ParamBodyAngleX', t: 0.5, v: 4 }, { id: 'ParamBodyAngleX', t: 1.643, v: -2.8 }, { id: 'ParamBodyAngleX', t: 3.071, v: 1.6 }, { id: 'ParamBodyAngleX', t: 3.857, v: 0 },
+        { id: 'ParamBodyAngleZ', t: 0, v: 0 }, { id: 'ParamBodyAngleZ', t: 0.5, v: 5 }, { id: 'ParamBodyAngleZ', t: 1.643, v: -3.5 }, { id: 'ParamBodyAngleZ', t: 3.071, v: 2 }, { id: 'ParamBodyAngleZ', t: 3.857, v: 0 },
       ],
       params: [] },
     // 左右张望（Body.cs:131）：眼珠 + 头同步左右各看一眼——1.9s

@@ -2,7 +2,7 @@
   "manifest": 2,
   "api": 2,
   "id": "deepseek-shenggong",
-  "version": "1.13.27",
+  "version": "1.13.28",
   "name": {
     "zh": "大肥鱼",
     "en": "DaFeiYu"
@@ -1644,6 +1644,62 @@
         "en": "眼珠和头一起，先看左边停一拍再看右边——慢速的两眼张望"
       },
       "seconds": 1.9
+    },
+    {
+      "id": "sway-1",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "摇摆一"
+        ]
+      },
+      "about": {
+        "zh": "摇摆一",
+        "en": "12 拍快速左右摇摆，听歌第一段"
+      },
+      "seconds": 7.7
+    },
+    {
+      "id": "theater-sway-1",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "剧场摇摆一"
+        ]
+      },
+      "about": {
+        "zh": "剧场摇摆一",
+        "en": "摇摆一的柔和慢速版"
+      },
+      "seconds": 11
+    },
+    {
+      "id": "theater-sway-2",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "剧场摇摆二"
+        ]
+      },
+      "about": {
+        "zh": "剧场摇摆二",
+        "en": "摇摆二的柔和慢速版"
+      },
+      "seconds": 6.5
+    },
+    {
+      "id": "slow-sway",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "慢摇"
+        ]
+      },
+      "about": {
+        "zh": "慢摇",
+        "en": "越摇越慢越小，渐渐停下"
+      },
+      "seconds": 3.9
     }
   ],
   "sounds": {},
