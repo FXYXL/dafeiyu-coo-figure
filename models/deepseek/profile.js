@@ -320,10 +320,10 @@ export default {
     },
 
     // —— 单通道表情（2026-11-18）——
-    'eye-smile':   { state: true, dur: 1.2, params: [{ id: 'EyeSmile', to: 1 }] },
+'eye-smile':   { state: true, dur: 1.2, params: [{ id: 'EyeSmile', to: 1 }, { id: 'ParamEyeLOpen', to: 0.45 }, { id: 'ParamEyeROpen', to: 0.45 }] },
     'eye-close':   { state: true, dur: 1.2, params: [{ id: 'ParamEyeLOpen', to: 0 }, { id: 'ParamEyeROpen', to: 0 }] },
     'eye-half':    { state: true, dur: 1.2, params: [{ id: 'ParamEyeLOpen', to: 0.45 }, { id: 'ParamEyeROpen', to: 0.45 }, { id: 'EyeSmile', to: 0 }] },
-    'eye-wide':    { state: true, dur: 1.2, params: [{ id: 'ParamEyeLOpen', to: 1 }, { id: 'ParamEyeROpen', to: 1 }, { id: 'EyeSmile', to: 0 }] },
+'eye-wide':    { state: true, dur: 1.2, params: [{ id: 'ParamEyeLOpen', to: 1.35 }, { id: 'ParamEyeROpen', to: 1.35 }, { id: 'EyeSmile', to: 0 }] },
     // 快眨单眼·左（Body.cs:76-77 套件）：笑眼渐入 + 左眼闭 0.6s + 歪头 12 同步——
     // 全 keys 版（1.2s 收尾渐回）：dur 到期删条目会让 ROpen 跳回 roles 写入值（眨一下观感）
     'wink-left':   { reflex: true, dur: 1.2,
@@ -362,20 +362,19 @@ export default {
       { id: 'ParamEyeLOpen', to: 0 }, { id: 'EyeSmile', to: 1 },
     ] },
     'brow-frown':  { state: true, dur: 1.0, params: [
-      { id: 'ParamBrowLY', to: 0.45 }, { id: 'ParamBrowRY', to: 0.45 },
-      { id: 'ParamBrowLAngle', to: -0.55 }, { id: 'ParamBrowRAngle', to: -0.55 },
+      { id: 'BrowInnerUp', to: 1 },
+      { id: 'ParamBrowLAngle', to: 0.6 }, { id: 'ParamBrowRAngle', to: 0.6 },
     ] },
     'brow-up':     { state: true, dur: 1.0, params: [
-      { id: 'ParamBrowLY', to: 0.7 }, { id: 'ParamBrowRY', to: 0.7 },
-      { id: 'ParamBrowLAngle', to: 0 }, { id: 'ParamBrowRAngle', to: 0 },
+      { id: 'ParamBrowLY', to: 0.6 }, { id: 'ParamBrowRY', to: 0.6 }, { id: 'BrowInnerUp', to: 0.4 },
     ] },
     'brow-knit':   { state: true, dur: 1.0, params: [
-      { id: 'ParamBrowLY', to: -0.7 }, { id: 'ParamBrowRY', to: -0.7 },
-      { id: 'ParamBrowLAngle', to: -0.9 }, { id: 'ParamBrowRAngle', to: -0.9 },
+      { id: 'ParamBrowLY', to: -0.8 }, { id: 'ParamBrowRY', to: -0.8 },
+      { id: 'ParamBrowLAngle', to: -1 }, { id: 'ParamBrowRAngle', to: -1 },
     ] },
-    'mouth-smile': { state: true, dur: 1.0, params: [{ id: 'ParamMouthForm', to: 0.7 }] },
-    'mouth-pout':  { state: true, dur: 1.0, params: [{ id: 'ParamMouthForm', to: -0.6 }] },
-    'mouth-open':  { state: true, dur: 1.0, params: [{ id: 'ParamMouthOpenY', to: 0.5 }] },
+'mouth-smile': { state: true, dur: 1.0, params: [{ id: 'ParamMouthForm', to: 1 }] },
+'mouth-pout':  { state: true, dur: 1.0, params: [{ id: 'ParamMouthForm', to: -1 }] },
+'mouth-open':  { state: true, dur: 1.0, params: [{ id: 'ParamMouthOpenY', to: 0.7 }, { id: 'JawOpen', to: 0.4 }, { id: 'MouthFunnel', to: 0.3 }] },
     // 脸红：原包 脸红.exp3.json 的开关（key7）
     'blush':       { state: true, dur: 1.0, params: [{ id: 'key7', to: 1 }] },
     // 恢复：实际清空在 baseWord 里做；这里占位让 kit 认识它
@@ -394,7 +393,7 @@ export default {
       { id: 'ParamEyeLOpen', to: 0.6 }, { id: 'ParamEyeROpen', to: 0.6 },
     ] },
     'smirk':      { state: true, dur: 1.0, params: [
-      { id: 'ParamMouthForm', to: 0.7 }, { id: 'MouthX', to: 0.5 },
+      { id: 'ParamMouthForm', to: 1 }, { id: 'MouthX', to: 0.6 },
     ] },
     'press-lips': { state: true, dur: 1.0, params: [
       { id: 'MouthPressLipOpen', to: -1 }, { id: 'ParamMouthForm', to: -0.5 },
