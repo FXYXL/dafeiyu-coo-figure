@@ -929,6 +929,17 @@ export async function createLive2DBody(base, opts, entry, kit) {
 
   /** paramId -> { from, to, t0, dur, in, out }：每个通道自己管生命周期，到期自动退出 */
   const channel = new Map();
+
+  // ---------- 叠加层（2.8 通道相加）：外力源（rua/触摸）写这里，在主通道结果之上相加 ----------
+  // 主通道词与词之间保持「后写覆盖」（苦笑+微笑的语义不变）；叠加层是相对主通道的
+  // **增量**（to 即增量值，如 +14 = 在当前头角度上再加 14）——rua 头反向 + 歪头词 = 歪得更远。
+  // key: `${src}:${pid}`——同 src 同参数重写覆盖，不同 src 相加。外力源负责 overlayClear。
+  const overlay = new Map();
+  const overlaySet = (src, pid, def) => overlay.set(src + ':' + pid, { pid, t0: clockT, dur: 30, in: 0.2, ...def });
+  const overlayClear = (src) => {
+    if (!src) { overlay.clear(); return; }
+    for (const k of [...overlay.keys()]) if (k.startsWith(src + ':')) overlay.delete(k);
+  };
   let lastWordAt = -99;   // 上次有新词的时刻：自动放松的计时基准（2.6）
   const RELAX_FADE = 1.5, SENT_LIFE = 2, SPEECH_END_DELAY = 2, IDLE_LIFE = 3;
   let sentenceCount = 0, bornSentence = -1, lastSpeechEnd = -99;   // 跟句寿命（2.6 改造）
@@ -1067,11 +1078,11 @@ export async function createLive2DBody(base, opts, entry, kit) {
     return last[1];
   }
 
-  function applyChannel(t) { writeChannel(t, false); }
+  function applyChannel(t) { writeChannel(t, false); globalThis.__l2dChannel = [...channel.entries()].map(([k, v]) => k + ':' + v.kind + (v.keep ? '*' : '') + '→' + (typeof v.to === 'number' ? v.to.toFixed(1) : '?')); }
   /** 物理之后写的那一批（腰/胯这类物理输出参数）。写早了会被物理算回去。 */
   function applyChannelPost(t) { writeChannel(t, true); }
   function writeChannel(t, wantPost) {
-    if (!useChannels || channel.size === 0) return;
+    if (!useChannels || (channel.size === 0 && overlay.size === 0)) return;
     for (const [id, c] of channel) {
       const age = t - c.t0;
       // keep=true：表情通道。一直保持到被同参数的新词覆盖、或者「恢复」清空。
@@ -1123,6 +1134,18 @@ export async function createLive2DBody(base, opts, entry, kit) {
         model._model.setParameterValueByIndex(i, (c.base + c.amp * Math.sin((rel * c.freq + c.phase) * Math.PI * 2)) * k);
       } else {
         model._model.setParameterValueByIndex(i, c.from + (c.to - c.from) * k);
+      }
+    }
+    // 叠加层（2.8）：主通道写完后，把外力增量**加**到当前值上（rua 头反向叠在歪头词上 = 更歪）
+    if (overlay.size) {
+      for (const [k, o] of [...overlay]) {
+        if (!!o.post !== wantPost) continue;
+        const age = t - o.t0;
+        if (age > (o.dur ?? 30)) { overlay.delete(k); continue; }   // 兜底过期：正常由外力源 overlayClear
+        const i = paramIndex.get(o.pid);
+        if (i === undefined) { overlay.delete(k); continue; }
+        const kk = clamp(age / Math.max(1e-3, o.in ?? 0.2), 0, 1);  // 只淡入；淡出靠 overlayClear（松手即撤）
+        model._model.setParameterValueByIndex(i, model._model.getParameterValueByIndex(i) + (o.to ?? 0) * kk);
       }
     }
   }
@@ -1602,6 +1625,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
     get hits() { return currentHits(); },
     get anchors() { return currentAnchors(); },
     colors: { z: '#7fb0e8' },
+    // 2.8 叠加层：外力源（rua/触摸）在主通道结果之上相加——不动词表、不触发 face 清场
+    overlaySet,
+    overlayClear,
     // 渲染组级抖动（kit 渲染循环每帧调用）：情绪词的"浑身抖动"——
     // 对齐 kit 脸配方 fc.shake 的组级语义（整组一起抖，身体+头），参数级 wave 只抖头不够。
     // 时间用 kit 传入的 T（秒）——iframe 沙箱里 performance.now 不可用（踩过）。
@@ -1729,6 +1755,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       if (fo.parentNode !== petG) petG.appendChild(fo);
       if (!texturesReady) return;
       globalThis.__l2dModel = model;
+      globalThis.__l2dFigure = figure;   // 诊断/测试：harness 的 ?addp 走 overlaySet
       globalThis.__l2dFitState = { zoom: fitState.zoom, offset: fitState.offset, autoFit: fitState.autoFit, hasExtent: !!extent };
 
       const dt = clamp(frame.dt ?? 0.016, 0.001, 0.05);
