@@ -1195,7 +1195,8 @@
       "about": {
         "zh": "脸颊泛红，可以叠在别的表情上（原包 key7）"
       },
-      "seconds": 1
+      "seconds": 1,
+      "lasting": true
     },
     {
       "id": "restore",
@@ -1208,7 +1209,8 @@
       "about": {
         "zh": "清掉所有保持着的表情和姿势，回到平常的样子"
       },
-      "seconds": 1
+      "seconds": 1,
+      "lasting": true
     },
     {
       "id": "bitter-smile",
