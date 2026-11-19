@@ -203,29 +203,43 @@ const PATCHES = [
     file: 'petapp', id: 'typingHold',
     desc: '2.1 动作阻塞文字（打字在 typeHold 期暂停，anchors 触发同样阻塞）+ 2.2 打字速度解耦（20→12 字/秒，bubbleSpeed 只管停留）',
     detect: (s) => /typeHold/.test(s) && /dt \* 12 \* prefs\.bubbleSpeed/.test(s),
-    apply: (s) => s
-      .replace(
-        "  if (it.spoken !== text && !it.rush && !it.hushed) { it.spoken = text; speech.begin(text); }\n  // with speech, each pause mark waits its own time, letters type faster, and the voice makes the sound;\n  // estimateSeconds in src/script.ts mirrors these steps, this rate and the holds in stepDialog\n  const spoken = speech.active && !it.hushed;\n  it.acc += dt * 20 * prefs.bubbleSpeed * (it.rush ? RUSH : 1);",
-        `  if (T < (it.typeHold ?? 0)) return;   // 2.1 动作阻塞文字：动作演完才开口（气泡也这时候才出现，阻塞期不留空气泡）
+    apply: (s) => {
+      const out = s
+        .replace(
+          "  function typeText(it, text, dt, anchors) {\n  const p = bubble.querySelector('.b-text');\n  if (!p || it.shown >= text.length) return;",
+          `  function typeText(it, text, dt, anchors) {
+  // 2.1 动作阻塞文字 + 气泡延迟：这两条必须在 !p 守卫之前——阻塞期气泡还没开，
+  // .b-text 不存在，放在守卫后面会先 return 导致气泡永远开不出来（先有鸡还是先有蛋）。
+  if (T < (it.typeHold ?? 0)) return;
   if (!it.bubbleOpen) {
     it.bubbleOpen = true;
     if (text) { openBubble('say', '<p class="b-text"></p>'); sfx.pop(); }
     else bubble.hidden = true;
   }
-  if (it.spoken !== text && !it.rush && !it.hushed) { it.spoken = text; speech.begin(text); }
+  const p = bubble.querySelector('.b-text');
+  if (!p || it.shown >= text.length) return;`,
+        )
+        .replace(
+          "  if (it.spoken !== text && !it.rush && !it.hushed) { it.spoken = text; speech.begin(text); }\n  // with speech, each pause mark waits its own time, letters type faster, and the voice makes the sound;\n  // estimateSeconds in src/script.ts mirrors these steps, this rate and the holds in stepDialog\n  const spoken = speech.active && !it.hushed;\n  it.acc += dt * 20 * prefs.bubbleSpeed * (it.rush ? RUSH : 1);",
+          `  if (it.spoken !== text && !it.rush && !it.hushed) { it.spoken = text; speech.begin(text); }
   // with speech, each pause mark waits its own time, letters type faster, and the voice makes the sound;
   // estimateSeconds in src/script.ts mirrors these steps, this rate and the holds in stepDialog
   const spoken = speech.active && !it.hushed;
   it.acc += dt * 12 * prefs.bubbleSpeed * (it.rush ? RUSH : 1);   // 2.2 打字速度独立（他们 9 字/秒，中文折中 12）；bubbleSpeed 只管停留`,
-      )
-      .replace(
-        "    while (it.fired < anchors.length && anchors[it.fired].at <= it.shown) for (const a of anchors[it.fired++].actions) body?.do(a);",
-        `    while (it.fired < anchors.length && anchors[it.fired].at <= it.shown) {
-      const an = anchors[it.fired++];
-      for (const a of an.actions) body?.do(a);
-      if (an.wait) it.typeHold = T + an.wait;   // 2.1 锚点动作同样阻塞打字
-    }`,
-      ),
+        )
+        .replace(
+          "    while (it.fired < anchors.length && anchors[it.fired].at <= it.shown) for (const a of anchors[it.fired++].actions) body?.do(a);",
+          `    while (it.fired < anchors.length && anchors[it.fired].at <= it.shown) {
+    const an = anchors[it.fired++];
+    for (const a of an.actions) body?.do(a);
+    if (an.wait) it.typeHold = T + an.wait;   // 2.1 锚点动作同样阻塞打字
+  }`,
+        );
+      // 命中校验：replace 静默失败（锚点不匹配）会让补丁半打且无报错——此处必须 throw
+      if (!out.includes('先有鸡还是先有蛋')) throw new Error('typingHold：typeText 开头锚点未命中（原版结构变了）');
+      if (!out.includes('dt * 12 * prefs.bubbleSpeed')) throw new Error('typingHold：速度替换未命中');
+      return out;
+    },
   },
   {
     file: 'petapp', id: 'beatNotice',
