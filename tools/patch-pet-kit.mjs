@@ -180,7 +180,7 @@ const PATCHES = [
       )
       .replace(
         'for (const a of b.actions || []) { acts.push(a); lead = .45; }',
-        'for (const a of b.actions || []) { body?.do(a); lead = .45; }',
+        'for (const a of b.actions || []) { body?.do(a); lead = .45; }\n        if (b.wait) it.typeHold = T + lead + b.wait;   // 2.1 动作阻塞文字：motion 词演完再打字',
       )
       .replace(
         'while (it.fired < anchors.length && anchors[it.fired].at <= it.shown) acts.push(...anchors[it.fired++].actions);',
@@ -189,6 +189,26 @@ const PATCHES = [
       .replace(
         'for (const a of d.actions || []) acts.push(a);',
         'for (const a of d.actions || []) body?.do(a);',
+      ),
+  },
+  {
+    file: 'petapp', id: 'typingHold',
+    desc: '2.1 动作阻塞文字（打字在 typeHold 期暂停，anchors 触发同样阻塞）+ 2.2 打字速度解耦（20→12 字/秒，bubbleSpeed 只管停留）',
+    detect: (s) => /typeHold/.test(s) && /dt \* 12 \* prefs\.bubbleSpeed/.test(s),
+    apply: (s) => s
+      .replace(
+        "  const spoken = speech.active && !it.hushed;\n  it.acc += dt * 20 * prefs.bubbleSpeed * (it.rush ? RUSH : 1);",
+        `  const spoken = speech.active && !it.hushed;
+  if (T < (it.typeHold ?? 0)) return;   // 2.1 动作阻塞文字：beat 开头/锚点的 motion 词演完，文字才继续
+  it.acc += dt * 12 * prefs.bubbleSpeed * (it.rush ? RUSH : 1);   // 2.2 打字速度独立（他们 9 字/秒，中文折中 12）；bubbleSpeed 只管停留`,
+      )
+      .replace(
+        "    while (it.fired < anchors.length && anchors[it.fired].at <= it.shown) for (const a of anchors[it.fired++].actions) body?.do(a);",
+        `    while (it.fired < anchors.length && anchors[it.fired].at <= it.shown) {
+      const an = anchors[it.fired++];
+      for (const a of an.actions) body?.do(a);
+      if (an.wait) it.typeHold = T + an.wait;   // 2.1 锚点动作同样阻塞打字
+    }`,
       ),
   },
   {
