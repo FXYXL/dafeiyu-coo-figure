@@ -2,7 +2,7 @@
   "manifest": 2,
   "api": 2,
   "id": "deepseek-shenggong",
-  "version": "1.5.63",
+  "version": "1.5.64",
   "name": {
     "zh": "大肥鱼",
     "en": "DaFeiYu"
@@ -211,8 +211,8 @@
         ]
       },
       "about": {
-        "zh": "开心的表情",
-        "en": "Happy expression"
+        "zh": "眼睛弯成月牙，嘴角上扬——高兴",
+        "en": "眼睛弯成月牙，嘴角上扬——高兴"
       },
       "seconds": 0.9
     },
@@ -228,8 +228,8 @@
         ]
       },
       "about": {
-        "zh": "眨眼的表情",
-        "en": "Wink expression"
+        "zh": "调皮地眨一下眼",
+        "en": "调皮地眨一下眼"
       },
       "seconds": 0.9
     },
@@ -245,8 +245,8 @@
         ]
       },
       "about": {
-        "zh": "喜欢的表情",
-        "en": "Love expression"
+        "zh": "眼里冒爱心，看他哪里都顺眼",
+        "en": "眼里冒爱心，看他哪里都顺眼"
       },
       "seconds": 0.9
     },
@@ -262,8 +262,8 @@
         ]
       },
       "about": {
-        "zh": "害羞的表情",
-        "en": "Shy expression"
+        "zh": "脸颊泛红，眼神躲闪——害羞了",
+        "en": "脸颊泛红，眼神躲闪——害羞了"
       },
       "seconds": 0.9
     },
@@ -279,8 +279,8 @@
         ]
       },
       "about": {
-        "zh": "惊讶的表情",
-        "en": "Surprised expression"
+        "zh": "瞪大眼睛，嘴微微张开——猝不及防",
+        "en": "瞪大眼睛，嘴微微张开——猝不及防"
       },
       "seconds": 0.9
     },
@@ -296,8 +296,8 @@
         ]
       },
       "about": {
-        "zh": "生气的表情",
-        "en": "Angry expression"
+        "zh": "黑着脸气鼓鼓，生气了",
+        "en": "黑着脸气鼓鼓，生气了"
       },
       "seconds": 0.9
     },
@@ -313,8 +313,8 @@
         ]
       },
       "about": {
-        "zh": "难过的表情",
-        "en": "Sad expression"
+        "zh": "眼泪在眼眶里打转",
+        "en": "眼泪在眼眶里打转"
       },
       "seconds": 0.9
     },
@@ -330,8 +330,8 @@
         ]
       },
       "about": {
-        "zh": "困倦的表情",
-        "en": "Sleepy expression"
+        "zh": "眼皮打架，昏昏欲睡",
+        "en": "眼皮打架，昏昏欲睡"
       },
       "seconds": 0.9
     },
@@ -347,8 +347,8 @@
         ]
       },
       "about": {
-        "zh": "思考的表情",
-        "en": "Thinking expression"
+        "zh": "眯着眼抿着嘴，正在琢磨什么",
+        "en": "眯着眼抿着嘴，正在琢磨什么"
       },
       "seconds": 0.9
     },
@@ -364,8 +364,8 @@
         ]
       },
       "about": {
-        "zh": "得意的表情",
-        "en": "Smug expression"
+        "zh": "嘴角挂着得意的笑",
+        "en": "嘴角挂着得意的笑"
       },
       "seconds": 0.9
     },
@@ -381,8 +381,8 @@
         ]
       },
       "about": {
-        "zh": "嘟嘴的表情",
-        "en": "Pout expression"
+        "zh": "嘟起嘴，闹小脾气",
+        "en": "嘟起嘴，闹小脾气"
       },
       "seconds": 0.9
     },
@@ -398,8 +398,8 @@
         ]
       },
       "about": {
-        "zh": "担心的表情",
-        "en": "Worried expression"
+        "zh": "眉头轻皱，有点放心不下",
+        "en": "眉头轻皱，有点放心不下"
       },
       "seconds": 0.9
     },
@@ -415,8 +415,8 @@
         ]
       },
       "about": {
-        "zh": "坚定的表情",
-        "en": "Determined expression"
+        "zh": "抿着嘴，下定了决心",
+        "en": "抿着嘴，下定了决心"
       },
       "seconds": 0.9
     },
@@ -432,8 +432,8 @@
         ]
       },
       "about": {
-        "zh": "慌张的表情",
-        "en": "Flustered expression"
+        "zh": "慌了神，手足无措",
+        "en": "慌了神，手足无措"
       },
       "seconds": 0.9
     },
@@ -449,8 +449,8 @@
         ]
       },
       "about": {
-        "zh": "害怕的表情",
-        "en": "Scared expression"
+        "zh": "瞪大眼冒着冷汗，吓到了",
+        "en": "瞪大眼冒着冷汗，吓到了"
       },
       "seconds": 0.9
     },
@@ -466,8 +466,8 @@
         ]
       },
       "about": {
-        "zh": "兴奋的表情",
-        "en": "Excited expression"
+        "zh": "眼睛发亮，按捺不住的兴奋",
+        "en": "眼睛发亮，按捺不住的兴奋"
       },
       "seconds": 0.9
     },
@@ -483,8 +483,8 @@
         ]
       },
       "about": {
-        "zh": "哭的表情",
-        "en": "Cry expression"
+        "zh": "眼泪掉下来了，抽抽搭搭",
+        "en": "眼泪掉下来了，抽抽搭搭"
       },
       "seconds": 0.9
     },
@@ -500,8 +500,8 @@
         ]
       },
       "about": {
-        "zh": "困惑的表情",
-        "en": "Confused expression"
+        "zh": "眉头歪着，一头雾水",
+        "en": "眉头歪着，一头雾水"
       },
       "seconds": 0.9
     },
@@ -518,7 +518,8 @@
         ]
       },
       "about": {
-        "zh": "原厂部件开关，保持到被覆盖或恢复"
+        "zh": "眼睛变成一圈圈漩涡，晕了或彻底无语",
+        "en": "眼睛变成一圈圈漩涡，晕了或彻底无语"
       },
       "seconds": 3.5,
       "lasting": true
@@ -536,7 +537,8 @@
         ]
       },
       "about": {
-        "zh": "原厂部件开关，保持到被覆盖或恢复"
+        "zh": "脸上压下来一朵乌云，黑着脸",
+        "en": "脸上压下来一朵乌云，黑着脸"
       },
       "seconds": 3.5,
       "lasting": true
@@ -554,7 +556,8 @@
         ]
       },
       "about": {
-        "zh": "原厂部件开关，保持到被覆盖或恢复"
+        "zh": "咧嘴斜眼，屑屑的坏表情",
+        "en": "咧嘴斜眼，屑屑的坏表情"
       },
       "seconds": 3.5,
       "lasting": true
@@ -571,7 +574,8 @@
         ]
       },
       "about": {
-        "zh": "原厂部件开关，保持到被覆盖或恢复"
+        "zh": "戴上眼镜，认真或装正经",
+        "en": "戴上眼镜，认真或装正经"
       },
       "seconds": 3.5,
       "lasting": true
@@ -588,7 +592,8 @@
         ]
       },
       "about": {
-        "zh": "原厂部件开关，保持到被覆盖或恢复"
+        "zh": "戴单片眼镜，怀疑地打量",
+        "en": "戴单片眼镜，怀疑地打量"
       },
       "seconds": 3.5,
       "lasting": true
@@ -606,7 +611,8 @@
         ]
       },
       "about": {
-        "zh": "原厂部件开关，保持到被覆盖或恢复"
+        "zh": "头上扣了个钢盆",
+        "en": "头上扣了个钢盆"
       },
       "seconds": 3.5,
       "lasting": true
@@ -751,8 +757,8 @@
         ]
       },
       "about": {
-        "zh": "上半身往前靠，贴近镜头",
-        "en": "上半身往前靠，贴近镜头"
+        "zh": "上身朝你探过来贴近——他让你靠近，或者想做些亲密的小举动时，就这么凑过去",
+        "en": "上身朝你探过来贴近——他让你靠近，或者想做些亲密的小举动时，就这么凑过去"
       },
       "seconds": 2.4
     },
@@ -795,8 +801,8 @@
         ]
       },
       "about": {
-        "zh": "斜着探身凑近镜头",
-        "en": "斜着探身凑近镜头"
+        "zh": "斜着凑近，带点暧昧的调戏劲儿——主动勾他，或者他害羞了还在追问的时候用",
+        "en": "斜着凑近，带点暧昧的调戏劲儿——主动勾他，或者他害羞了还在追问的时候用"
       },
       "seconds": 2.4
     },
@@ -838,8 +844,8 @@
         ]
       },
       "about": {
-        "zh": "伸出一只手指向下点",
-        "en": "伸出一只手指向下点"
+        "zh": "竖起食指指着你，强调、警告或数落时用",
+        "en": "竖起食指指着你，强调、警告或数落时用"
       },
       "seconds": 4,
       "handish": true
@@ -887,7 +893,8 @@
         ]
       },
       "about": {
-        "zh": "原厂部件开关，保持到被覆盖或恢复"
+        "zh": "脸上转着加载中的小圈，正在缓冲",
+        "en": "脸上转着加载中的小圈，正在缓冲"
       },
       "seconds": 3.5,
       "lasting": true
@@ -1789,8 +1796,8 @@
         ]
       },
       "about": {
-        "zh": "前倾",
-        "en": "身体向前倾，保持"
+        "zh": "上身微微前倾，凑近的轻量版——他让你靠近、想凑得近一点又不至于贴上来的时候用",
+        "en": "上身微微前倾，凑近的轻量版——他让你靠近、想凑得近一点又不至于贴上来的时候用"
       },
       "seconds": 1.2
     },
@@ -2112,5 +2119,9 @@
   "sounds": {},
   "can": {
     "walk": true
+  },
+  "manual": {
+    "zh": "身体语言补充（词表外的语法）：\n修饰：词前可加四个修饰词——微 / 大调幅度（微≈一半、大≈1.5 倍），快 / 慢调节奏（快 = 加速、慢 = 放缓）；一次性的小动作后加「×2」「×3」重复（点头、摇头、眨眼、瞟一眼这类，保持型的别加）。\n方向：方向词默认朝左，后面加「:右」镜像，如「看右边:右」「瞟一眼:右」「狐疑:右」。\n叠加：脸红、冷汗、流泪、兔牙这类附加层可以互相叠着用；黑脸、圈圈眼、爱心眼、无语、狐疑这类整脸词一次一张脸，新的会顶掉旧的。\n组合：偷笑、傻眼、鬼点子、撒娇、警觉这些是一套配好的小剧场，直接用；基础词也可以自己拼，不同部位的词会同时生效（歪头 + 鼓腮 + 脸红）。\n节奏：一句话配 1~3 个词效果最好，想连着演一小段也没问题，自己看着安排；跟着打字走的小动作用 <词>，整段表演用【词】另起一个气泡，别每句话都塞动作。\n保持：表里标了「保持到下一个动作」的词会一直挂着，不过大多数过一会儿会自己放松淡掉，不用特意去收；想马上换掉就顶个新的上去，或者用「恢复」一口气清空。",
+    "en": "Body-language notes (grammar beyond the word table):\nModifiers: four prefixes — 微/大 for size (half / 1.5x), 快/慢 for tempo (faster / slower); add ×2 ×3 after one-shot small moves (nod, shake, blink, glance) to repeat.\nDirection: directional words face left by default; append :右 to mirror, e.g. 看右边:右, 瞟一眼:右.\nStacking: additive layers (blush, sweat, tears, bunny-teeth) stack freely; full-face words (dark-face, circle-eyes, heart-eyes, speechless, suspicious) take the whole face, the newest wins.\nCombos: 偷笑, 傻眼, 鬼点子, 撒娇, 警觉 are ready-made bits; base words can be mixed too — words for different parts run together (tilt + puff-cheek + blush).\nPacing: 1~3 words per line reads best, but feel free to chain a short sequence when the scene calls for it; use <word> for small moves while typing, 【word】 for a whole performance in a new bubble.\nHolding: words marked 保持到下一个动作 stay on, but most relax and fade on their own after a while — no need to clear them manually; to swap immediately, layer a new one on top, or use 恢复 to clear everything at once."
   }
 }
