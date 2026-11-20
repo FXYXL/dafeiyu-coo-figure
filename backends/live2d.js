@@ -327,10 +327,10 @@ export async function createLive2DBody(base, opts, entry, kit) {
     const fw = profile.faceWords?.[face];
     if (face !== prevFaceForWords) {
       prevFaceForWords = face;
-      // 基调切换：全部 state 通道条目让位（新情绪干净开始；face-big 的互斥让位在 actWord 里自然发生）
-      for (const [id, entry] of Object.entries(channel)) {
-        if (entry.keep) channel.delete(id);
-      }
+      // 基调切换【不再连坐清 keep】（2026-11-20 根因修复）：kit 表情词（shy 等）setExpr
+      // 会改变 face，触发这里把全部 keep 条目删掉——【eye-close, shy】的闭眼被连坐清掉
+      // （脸红影子经 faceWords 重写所以幸存，闭眼死了）。情绪换情绪的让位由互斥组管
+      // （决策记录定过的语义），faceLinked 影子由 actWord 开头清——这里清是多余且有害的。
       // 旧 exp3 联动的参数清零（退役兼容：历史切换可能留下的 keyN 残留归零）
       const oldExpParams = currentExpr ? exp3Params.get(currentExpr) : null;
       if (oldExpParams) for (const qid of oldExpParams) {
@@ -972,7 +972,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
       if (entry.faceLinked) channel.delete(id);
     }
     bornSentence = sentenceCount;   // 词出生时的句号（跟句寿命用）
-    bornAt = clockT;                // 词出生的时刻（闲置语境的限时用）    if (!useChannels || !channelWords.has(w)) return false;
+    bornAt = clockT;                // 词出生的时刻（闲置语境的限时用）
+    if (!useChannels || !channelWords.has(w)) return false;
     const def = paramActs[w];
     if (!def) return false;
     const now = clockT;
