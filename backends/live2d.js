@@ -1934,17 +1934,14 @@ export async function createLive2DBody(base, opts, entry, kit) {
   globalThis.__l2dCover = figure.__cover;
   globalThis.__l2dExpr = figure.__expr;
 
-  const ADDON_WORDS = new Set(['blush', 'sweat', 'tears', 'bunny-teeth']);   // 附加层：不跟气泡让位
   const onSpeechStart = () => { sentenceCount++; };
   const onSpeechEnd = () => { lastSpeechEnd = clockT; };
-  const onBeat = () => {
-    // 气泡边界：face-big + 单通道细节让位，附加层保留——「每个【】表情是这句话的脸」
-    for (const [wid, def] of Object.entries(paramActs)) {
-      if (!def?.state || ADDON_WORDS.has(wid)) continue;
-      for (const q of def.params ?? []) channel.delete(q.id);
-      for (const kk of def.keys ?? []) channel.delete(kk.id);
-    }
-  };
+  // onBeat（气泡边界）【不再批量清 state 词】（2026-11-20 根因修复，与 stepExpression
+  // 同族问题）：每个新 beat 都删全部 state 条目——【eye-close, shy】的闭眼在下一个
+  // beat 边界被连坐（blush 在 ADDON 白名单幸存 → 观感=脸红在闭眼没了）。
+  // 寿命统一归 2.6 放松管（跟句 2 句 / 闲置 3 秒），情绪换情绪由互斥组管，
+  // 手动清由【恢复】【放下手】管——这里不再有第三套更激进的寿命。
+  const onBeat = () => {};
   const body = kit.createBody(host, { figure, words, css: 'foreignObject{pointer-events:none}', onSpeechStart, onSpeechEnd, onBeat });
   const motionKind = profile.motion?.kind === 'stand' ? 'stand' : 'roam';
   if (SIMPLE && motionKind === 'stand') {
