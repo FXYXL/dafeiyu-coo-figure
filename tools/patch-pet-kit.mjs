@@ -28,6 +28,8 @@ const FILES = {
   frame: `${DIR}/web/figure-frame.js`,
   petapp: `${DIR}/web/pet-app.js`,
   script: `${DIR}/src/script.ts`,
+  packs: `${DIR}/src/packs.ts`,
+  world: `${DIR}/src/world.ts`,
   server: `${DIR}/src/server.ts`,
 };
 
@@ -305,6 +307,47 @@ const PATCHES = [
       return out;
     },
   },
+  // ===== packs.ts / world.ts：形象包自带身体说明书（阶段一，2026-11-20）=====
+  {
+    file: 'packs', id: 'manualManifest',
+    desc: 'figure.json 新增 manual 字段（{zh,en}，教修饰/方向/叠加这些词表外的语法）——manifest 白名单式构造，不加这层字段会被丢弃',
+    detect: (s) => /manual\?: Names/.test(s),
+    apply: (s) => s
+      .replace(
+        `  /** The words the bot may use while this body is on: every expression and motion it does. */
+  vocab: VocabWord[];`,
+        `  /** The words the bot may use while this body is on: every expression and motion it does. */
+  vocab: VocabWord[];
+  /** 形象包自带身体说明书（figure.json 的 manual 字段）：拼在 {{pet.vocab}} 词表后的语法补充，词表里没有的（修饰/方向/叠加节奏）。 */
+  manual?: Names;`,
+      )
+      .replace(
+        '    ...(raw.thumb ? { thumb: raw.thumb as string } : {}),',
+        `    ...(raw.thumb ? { thumb: raw.thumb as string } : {}),
+    ...(namesOf(raw.manual) ? { manual: namesOf(raw.manual)! } : {}),`,
+      ),
+  },
+  {
+    file: 'world', id: 'manualPrompt',
+    desc: '{{pet.vocab}} 渲染时把形象包 manual 拼到词表后面——说明书随形象走，换形象自动切换',
+    detect: (s) => /manualSuffix/.test(s),
+    apply: (s) => s
+      .replace(
+        `  private vocab(): VocabWord[] {`,
+        `  /** 形象包自带的身体说明书（figure.json `+"`manual`"+`）：拼在 {{pet.vocab}} 词表后的语法补充。 */
+  private manualSuffix(language: ModelLanguage): string {
+    const m = this.currentPack()?.manifest?.manual;
+    if (!m) return '';
+    const t = m[language] ?? m.zh ?? '';
+    return t ? '\\n\\n' + t : '';
+  }
+  private vocab(): VocabWord[] {`,
+      )
+      .replace(
+        `      'pet.vocab': vocabTable(this.vocab(), language),`,
+        `      'pet.vocab': vocabTable(this.vocab(), language) + this.manualSuffix(language),`,
+      ),
+  },
   // ===== pet-app.js =====
   {
     file: 'petapp', id: 'actBatch',
@@ -349,7 +392,7 @@ const PATCHES = [
   // 2.1 动作阻塞文字 + 气泡延迟：这两条必须在 !p 守卫之前——阻塞期气泡还没开，
   // .b-text 不存在，放在守卫后面会先 return 导致气泡永远开不出来（先有鸡还是先有蛋）。
   if (T < (it.typeHold ?? 0)) return;
-  if (!it.bubbleOpen) {
+  if (!it.bubbleOpen && it.kind === 'say') {   // 只管 say：ask 的气泡在开始时已用 ask 样式打开（带 .b-opts 按钮容器），用 say 重开会毁掉按钮（2026-11-20 更新气泡无按钮修复）
     it.bubbleOpen = true;
     if (text) { openBubble('say', '<p class="b-text"></p>'); sfx.pop(); }
     else bubble.hidden = true;

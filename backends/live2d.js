@@ -1404,10 +1404,10 @@ export async function createLive2DBody(base, opts, entry, kit) {
       const perfTarget = clockT < performingUntil ? 1 : 0;
       performingBlend += (perfTarget - performingBlend) * Math.min(1, (frame.dt ?? 0.016) * (perfTarget > performingBlend ? 7 : 3));
       const walking = mode === 'walk' || mode === 'run';
-      // 表演期间不攒走神：当作她一直看着你（k 顶满、计时刷新），词退场后跟随立刻可用
-      if (perfTarget) { gazeMoveAt = clockT; gazeWantSince = 0; gazeK = gazeKEye = gazeKHead = 1; }
       // 走路时头必须看前进方向，不吃表演期缩放
       const effLook = walking ? rawLook : [rawLook[0] * (1 - 0.85 * performingBlend), rawLook[1] * (1 - 0.85 * performingBlend)];
+      // 注意：表演期**不动**走神系统的内部状态——表演期的视线压低全靠 blend（0.15 残留 × 走神衰减 ≈ 0，
+      // 反正看着屏幕），词一结束 blend 放开，走神从原地继续，不会「先看一眼鼠标再走神失效」（2026-11-20 用户反馈）。
       const k = updateGazeInterest(effLook, Array.isArray(frame.pointer) ? frame.pointer : null, clockT, frame.dt ?? 0.016, idleLike);
       // 走路/跑步时头必须看向前进方向：kit 给的是 look=[3,0]，要是乘上走神残留的系数
       // （0.05）就等于没转，人会僵在原地看屏幕。这里直接用满值，但**不动内部状态** ——
