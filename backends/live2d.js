@@ -966,7 +966,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
     if (auditQ.length >= 6) auditFlush();
   };
   const _chDelete = channel.delete.bind(channel);
-  channel.delete = (id) => { audit('del ' + id + ' <' + ((new Error().stack ?? '').split('\n')[2] ?? '').trim().slice(0, 60) + '>'); return _chDelete(id); };
+  channel.delete = (id) => { if (channel.has(id)) audit('del ' + id + ' <' + ((new Error().stack ?? '').split('\n')[2] ?? '').trim().slice(0, 60) + '>'); return _chDelete(id); };   // 只记实际生效的删除——空删（枚举未命中的参数）不刷屏
   const _chClear = channel.clear.bind(channel);
   channel.clear = () => { audit('clear ALL'); return _chClear(); };
   // 2.7 虚拟参数表：通道里 id 不在模型参数表的条目（如 ViewSquash 整图压扁）不写模型，

@@ -2,7 +2,7 @@
   "manifest": 2,
   "api": 2,
   "id": "deepseek-shenggong",
-  "version": "1.13.48",
+  "version": "1.13.49",
   "name": {
     "zh": "大肥鱼",
     "en": "DaFeiYu"
@@ -1834,7 +1834,8 @@
         "zh": "傻眼",
         "en": "瞪大眼张着嘴冒冷汗"
       },
-      "seconds": 1.2
+      "seconds": 1.2,
+      "lasting": true
     },
     {
       "id": "gloating",
@@ -1876,7 +1877,8 @@
         "zh": "犯困",
         "en": "半睁着眼低头张着嘴打瞌睡"
       },
-      "seconds": 1.2
+      "seconds": 1.2,
+      "lasting": true
     },
     {
       "id": "touched",
@@ -1890,7 +1892,8 @@
         "zh": "感动",
         "en": "八字眉含泪微笑"
       },
-      "seconds": 1.2
+      "seconds": 1.2,
+      "lasting": true
     },
     {
       "id": "sly-idea",
@@ -1932,7 +1935,8 @@
         "zh": "警觉",
         "en": "站直皱眉看向一边"
       },
-      "seconds": 1.2
+      "seconds": 1.2,
+      "lasting": true
     },
     {
       "id": "wink-hold",
