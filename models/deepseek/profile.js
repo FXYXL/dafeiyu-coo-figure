@@ -912,7 +912,11 @@ export default {
   exclusiveGroups: {
     'face-big': ['dark-face', 'circle-eyes', 'heart-eyes', 'xx-eyes', 'wry-face', 'loading-face', 'pan-face', 'speechless', 'mad', 'aggrieved', 'guilty', 'bitter-smile', 'holding-up', 'guilty-look', 'act-cute', 'defiant', 'holding-tears', 'smug-face', 'perfunctory',
       // 日常情绪词通道化后进组：一个情绪一次一张脸（【开心】顶掉【害羞】从这里生效）
-      'blush', 'tears', 'sweat', 'happy', 'surprised', 'scared', 'thinking', 'determined', 'confused'],
+      'blush', 'tears', 'sweat', 'happy', 'surprised', 'scared', 'thinking', 'determined', 'confused',
+      // 组合情绪脸（2026-11-20 用户定：大跨度情绪脸该互斥，偷笑+感动叠加太怪）——
+      // state 词（傻眼/感动/警觉/犯困）每句让位；非 state 的表演词（偷笑/得瑟/抓狂…）
+      // 被新情绪触发时中途让位（情绪换情绪语义）
+      'happy-burst', 'snicker', 'dumbstruck', 'gloating', 'frantic', 'drowsy-combo', 'touched', 'sly-idea', 'rescued', 'alert-combo'],
   },
 
 
