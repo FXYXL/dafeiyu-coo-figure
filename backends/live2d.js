@@ -1023,14 +1023,22 @@ export async function createLive2DBody(base, opts, entry, kit) {
     };
     // 互斥组：新词属于某组时，同组其他词的参数先撤掉（换脸级表达自动让位）。
     // 「黑脸→屑屑眼」这类连续换表情，旧的不再叠加挂着。
+    // 互斥组：新词属于某组时，同组其他词的条目让位（换脸级表达自动让位）。
+    // 2026-11-20 修正：按条目的 src（来源词）判断——共享参数上「别人的」条目
+    // （如闭眼写的 ParamEyeLOpen）不连坐。此前按参数 id 裸删，face-big 成员
+    // （speechless 等 12 个）的 def 写了眼睛参数，blush 一触发闭眼就没了。
     for (const members of Object.values(profile.exclusiveGroups ?? {})) {
       if (!members.includes(w)) continue;
+      const memberSet = new Set(members);
       for (const other of members) {
         if (other === w) continue;
         const od = paramActs[other];
         if (!od) continue;
-        for (const q of od.params ?? []) channel.delete(q.id);
-        for (const kk of od.keys ?? []) channel.delete(kk.id);
+        for (const qid of [...(od.params ?? []).map((q) => q.id), ...(od.keys ?? []).map((k) => k.id)]) {
+          const cur = channel.get(qid);
+          if (cur?.src && !memberSet.has(cur.src)) continue;   // 别人的条目不连坐
+          channel.delete(qid);
+        }
       }
     }
     // 手部词：先把上一只手的参数撤掉，再写这一只（三只手不能同时抬）
@@ -1043,7 +1051,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
     const emo = (profile.emotionArc ?? {})[w] ?? null;
     for (const p of def.params ?? []) {
       const f0 = defVal(p.id);
-      channel.set(p.id, { kind: 'hold', from: f0, to: mir(p.id, f0 + ((p.to ?? 0) - f0) * effScale), t0: now, dur, in: inT, out: outT, keep: !!(def.state || def.keep), faceLinked: !!fromFace, emo, bornS: sentenceCount, bornT: clockT });
+      channel.set(p.id, { kind: 'hold', from: f0, to: mir(p.id, f0 + ((p.to ?? 0) - f0) * effScale), t0: now, dur, in: inT, out: outT, keep: !!(def.state || def.keep), faceLinked: !!fromFace, emo, bornS: sentenceCount, bornT: clockT, src: w });
     }
     // 波形动作（点头、摇头、甩草…）：正弦摆动叠在通道上。
     // 不支持这一种的话，点头永远只能走旧路，也就永远不能和别的东西叠加。
@@ -1061,7 +1069,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       dur,
       in: inT,
       out: outT,
-      bornS: sentenceCount, bornT: clockT,   // 条目独立生日（共享寿命钟的替代——后词不再重置别人的钟）
+      bornS: sentenceCount, bornT: clockT, src: w,   // 条目独立生日（共享寿命钟的替代——后词不再重置别人的钟）
     });
     for (const wv of def.waves ?? []) setWave(wv, false);
     // postWaves 写的是物理的输出参数（腰/胯），只能在 physics.evaluate() 之后写，
@@ -1089,7 +1097,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
         for (let r = 0; r < mod.repeat; r++) {
           for (const [t, v] of frames) out.push([(r * span + t) * mod.pace, mir(id, v) * effScale]);
         }
-        channel.set(id, { kind: 'keys', frames: out, t0: now, dur, emo, post, bornS: sentenceCount, bornT: clockT });
+        channel.set(id, { kind: 'keys', frames: out, t0: now, dur, emo, post, bornS: sentenceCount, bornT: clockT, src: w });
       }
     }
     console.info('[l2d] 通道记录', w, '静态', (def.params ?? []).length, '波形', (def.waves ?? []).length);
@@ -1972,8 +1980,11 @@ export async function createLive2DBody(base, opts, entry, kit) {
   const onBeat = () => {
     for (const [wid, def] of Object.entries(paramActs)) {
       if (!def?.state || ADDON_WORDS.has(wid) || !faceBigWords.has(wid)) continue;
-      for (const q of def.params ?? []) channel.delete(q.id);
-      for (const kk of def.keys ?? []) channel.delete(kk.id);
+      for (const qid of [...(def.params ?? []).map((q) => q.id), ...(def.keys ?? []).map((k) => k.id)]) {
+        const cur = channel.get(qid);
+        if (cur?.src && !faceBigWords.has(cur.src)) continue;   // 别人的条目不连坐（同互斥组守卫）
+        channel.delete(qid);
+      }
     }
   };
   const body = kit.createBody(host, { figure, words, css: 'foreignObject{pointer-events:none}', onSpeechStart, onSpeechEnd, onBeat });
