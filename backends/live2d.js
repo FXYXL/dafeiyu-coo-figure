@@ -1936,12 +1936,21 @@ export async function createLive2DBody(base, opts, entry, kit) {
 
   const onSpeechStart = () => { sentenceCount++; };
   const onSpeechEnd = () => { lastSpeechEnd = clockT; };
-  // onBeat（气泡边界）【不再批量清 state 词】（2026-11-20 根因修复，与 stepExpression
-  // 同族问题）：每个新 beat 都删全部 state 条目——【eye-close, shy】的闭眼在下一个
-  // beat 边界被连坐（blush 在 ADDON 白名单幸存 → 观感=脸红在闭眼没了）。
-  // 寿命统一归 2.6 放松管（跟句 2 句 / 闲置 3 秒），情绪换情绪由互斥组管，
-  // 手动清由【恢复】【放下手】管——这里不再有第三套更激进的寿命。
-  const onBeat = () => {};
+  // onBeat（气泡边界）：「每个【】表情是这句话的脸」——情绪脸（face-big 成员）在
+  // 新气泡边界让位（原机制保留，用途正当：黑脸→害羞这类跨句换脸）。
+  // 2026-11-20 修复：原来把【全部】state 词都清了——细节/姿态词（闭眼/半睁/歪头/
+  // 手型/视线）跟情绪是【叠加】关系（用户定过的语义），不该跟着情绪每句让位，
+  // 【闭眼,害羞】的闭眼就是这么被连坐的。现在只清 face-big 成员；
+  // 附加层（blush/sweat/tears/bunny-teeth，挂 2 句的贴图层）继续豁免。
+  const ADDON_WORDS = new Set(['blush', 'sweat', 'tears', 'bunny-teeth']);
+  const faceBigWords = new Set(profile.exclusiveGroups?.['face-big'] ?? []);
+  const onBeat = () => {
+    for (const [wid, def] of Object.entries(paramActs)) {
+      if (!def?.state || ADDON_WORDS.has(wid) || !faceBigWords.has(wid)) continue;
+      for (const q of def.params ?? []) channel.delete(q.id);
+      for (const kk of def.keys ?? []) channel.delete(kk.id);
+    }
+  };
   const body = kit.createBody(host, { figure, words, css: 'foreignObject{pointer-events:none}', onSpeechStart, onSpeechEnd, onBeat });
   const motionKind = profile.motion?.kind === 'stand' ? 'stand' : 'roam';
   if (SIMPLE && motionKind === 'stand') {
