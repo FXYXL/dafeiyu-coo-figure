@@ -960,6 +960,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
   let sentenceCount = 0, bornSentence = -1, lastSpeechEnd = -99;
   let currentTone = '';   // 2.3 tone：当前 beat 的语气（! = 感叹 / … = 省略）——pet-app 每 beat 下发   // 跟句寿命（2.6 改造）
   let bornAt = -99;   // 词出生时刻：闲置语境（随机动作）的限时基准
+  let performingUntil = -99;   // 3.9c 表演期：词活跃期间视线看向屏幕（用户：做表情/动作时看着我，别追鼠标）
+  let performingBlend = 0;   // 表演期视线曲线的混合系数（0=正常跟随鼠标 → 1=看向屏幕，双向缓动）
 
   /** kit 的 doWord 会先问这里。返回 true = 这个词我处理了，不要走 pulse。
    *  o（3.9）：kit 闲时调度的透传——o.idle = 闲时触发（登记收尾，走跑跳开始撤）、
@@ -1003,6 +1005,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
       idleChannelUntil = now + dur + 0.2;
       audit('idle-word ' + w);
     }
+    // 3.9c 表演期：词活跃期间视线看向屏幕。只算「演」的部分（dur），state 词的保持期
+    // 不算——挂着红脸跟鼠标不冲突，全算的话表演期拖到 life 尾，脸退完了视线还压着（2026-11-20 用户反馈残留太久）
+    performingUntil = now + dur + 0.5;
     const inT = Math.min(0.45, dur * 0.2);
     const outT = Math.min(0.6, dur * 0.28);
     // from 用参数的**默认值**，不是当前值 ——
@@ -1387,23 +1392,32 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // kit 那边是瞬时反号的，这边要是慢半拍，翻转那 0.2 秒 look 会短暂反号，
     // 表现就是头猛地往回抽一下再转回来。
     if (figure.noMirror && Number.isFinite(frame.facingNow)) rawLook = [rawLook[0] * frame.facingNow, rawLook[1]];
-    // 追一会儿会"走神"：光标停住不动、或者盯着超过几秒，跟随量慢慢收回中位。
-    // 分层回正：眼睛先回、头跟上、身体最后 —— 一起收会像"整块被拉回中位"。
+    // 3.9c 表演期视线：做表情/动作时看向屏幕而不是追鼠标（曲线版实现在下面 gazeCfg 分支里）。
     let look, lookEye, lookHead;
     if (!neutralPose && gazeCfg) {
       const mode = frame.mode ?? 'idle';
       const idleLike = mode === 'idle' || mode === 'look' || mode === 'sit';
-      const k = updateGazeInterest(rawLook, Array.isArray(frame.pointer) ? frame.pointer : null, clockT, frame.dt ?? 0.016, idleLike);
+      // 3.9c 表演期视线（2026-11-20 用户二次反馈，曲线版）：
+      // 做表情/动作时视线**逐渐回拉**到屏幕（比走神快：7/s，~0.4s 到位），全程保留一点点鼠标
+      // 影响（15%，不至于完全断开）；做完**逐渐交还**给鼠标（3/s，~1s 放回去）。
+      // 两个方向都是曲线——硬切换就是「突然正视」「突然跟上」的僵直感。
+      const perfTarget = clockT < performingUntil ? 1 : 0;
+      performingBlend += (perfTarget - performingBlend) * Math.min(1, (frame.dt ?? 0.016) * (perfTarget > performingBlend ? 7 : 3));
+      const walking = mode === 'walk' || mode === 'run';
+      // 表演期间不攒走神：当作她一直看着你（k 顶满、计时刷新），词退场后跟随立刻可用
+      if (perfTarget) { gazeMoveAt = clockT; gazeWantSince = 0; gazeK = gazeKEye = gazeKHead = 1; }
+      // 走路时头必须看前进方向，不吃表演期缩放
+      const effLook = walking ? rawLook : [rawLook[0] * (1 - 0.85 * performingBlend), rawLook[1] * (1 - 0.85 * performingBlend)];
+      const k = updateGazeInterest(effLook, Array.isArray(frame.pointer) ? frame.pointer : null, clockT, frame.dt ?? 0.016, idleLike);
       // 走路/跑步时头必须看向前进方向：kit 给的是 look=[3,0]，要是乘上走神残留的系数
       // （0.05）就等于没转，人会僵在原地看屏幕。这里直接用满值，但**不动内部状态** ——
       // 走完路回到待机，之前攒的走神会接着生效。
-      const walking = mode === 'walk' || mode === 'run';
       const kBody = walking ? 1 : k;
       const kEye = walking ? 1 : gazeKEye;
       const kHead = walking ? 1 : gazeKHead;
-      look = [rawLook[0] * kBody, rawLook[1] * kBody];
-      lookEye = [rawLook[0] * kEye, rawLook[1] * kEye];
-      lookHead = [rawLook[0] * kHead, rawLook[1] * kHead];
+      look = [effLook[0] * kBody, effLook[1] * kBody];
+      lookEye = [effLook[0] * kEye, effLook[1] * kEye];
+      lookHead = [effLook[0] * kHead, effLook[1] * kHead];
       gazeSway = walking ? 0 : 1 - k;   // 走路时头不自己游移
     } else {
       gazeSway = 0;
@@ -1847,6 +1861,14 @@ export async function createLive2DBody(base, opts, entry, kit) {
 
       const dt = clamp(frame.dt ?? 0.016, 0.001, 0.05);
       clockT += dt;
+      // 诊断（摸头冻结 bug）：draw 的墙上时钟间隙 >800ms 就打点——tick 断流或 iframe 被卡在这里现形。
+      // 用 Date.now()：本作用域的 performance 是物理引擎对象（line 411），且 iframe 沙箱里 window.performance.now 不可用（1713 行注释，踩过）。
+      {
+        const __w = Date.now();
+        const __g = __w - (globalThis.__l2dLastDrawW ?? __w);
+        if (__g > 800) { audit('frame-gap ' + Math.round(__g) + 'ms dt=' + dt.toFixed(3)); auditFlush(); }
+        globalThis.__l2dLastDrawW = __w;
+      }
 
       model._model.loadParameters();
       applyFrame(face, frame, dt, !extent);
