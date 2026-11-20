@@ -948,6 +948,23 @@ export async function createLive2DBody(base, opts, entry, kit) {
   // **增量**（to 即增量值，如 +14 = 在当前头角度上再加 14）——rua 头反向 + 歪头词 = 歪得更远。
   // key: `${src}:${pid}`——同 src 同参数重写覆盖，不同 src 相加。外力源负责 overlayClear。
   const overlay = new Map();
+  // 通道审计（2026-11-20 常驻）：每次 delete/clear 记一行（时间 + 参数 + 调用点），
+  // 凑 6 条经 /api/figure-log（image beacon，CSP img-src self 放行）进 core.log——
+  // 表情「莫名消失」类 bug 的一秒定位器。
+  const auditQ = [];
+  const auditFlush = () => {
+    if (!auditQ.length) return;
+    try { new Image().src = '/api/figure-log?m=' + encodeURIComponent(auditQ.join(' | ')); } catch { /* 诊断不致命 */ }
+    auditQ.length = 0;
+  };
+  const audit = (line) => {
+    auditQ.push(clockT.toFixed(1) + ' ' + line);
+    if (auditQ.length >= 6) auditFlush();
+  };
+  const _chDelete = channel.delete.bind(channel);
+  channel.delete = (id) => { audit('del ' + id + ' <' + ((new Error().stack ?? '').split('\n')[2] ?? '').trim().slice(0, 60) + '>'); return _chDelete(id); };
+  const _chClear = channel.clear.bind(channel);
+  channel.clear = () => { audit('clear ALL'); return _chClear(); };
   // 2.7 虚拟参数表：通道里 id 不在模型参数表的条目（如 ViewSquash 整图压扁）不写模型，
   // 存这里给 kit 消费（custom.squash() 读）——弹簧/锚点/阴影全白拿 kit 的 sq 系统。
   let dirSide = 1;   // 3.6 :方向修饰（1=默认/左，-1=右镜像）——baseWord 设定、actWord 镜像
@@ -990,7 +1007,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
     const toneEff = currentTone && !def.state && !def.reflex && !mod.explicit
       ? (currentTone === '!' ? { scale: 1.2, pace: 0.85 } : { scale: 0.85, pace: 1.25 })
       : null;
-    const effScale = mod.scale * (mod.explicit ? 1 : moodScale()) * (toneEff?.scale ?? 1);
+    // 手型词（hand）豁免 moodScale：手位是坐标不是幅度，情绪放大=把手送进身体里
+    const effScale = mod.scale * (mod.explicit || def.hand ? 1 : moodScale()) * (toneEff?.scale ?? 1);
     const keySpan = def.keys?.length ? Math.max(...def.keys.map((f) => f.t ?? 0)) : 0;
     const dur = (keySpan || (def.dur ?? 2.4)) * mod.pace * mod.repeat * (toneEff?.pace ?? 1);
     const inT = Math.min(0.45, dur * 0.2);
@@ -1025,7 +1043,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
     const emo = (profile.emotionArc ?? {})[w] ?? null;
     for (const p of def.params ?? []) {
       const f0 = defVal(p.id);
-      channel.set(p.id, { kind: 'hold', from: f0, to: mir(p.id, f0 + ((p.to ?? 0) - f0) * effScale), t0: now, dur, in: inT, out: outT, keep: !!(def.state || def.keep), faceLinked: !!fromFace, emo });
+      channel.set(p.id, { kind: 'hold', from: f0, to: mir(p.id, f0 + ((p.to ?? 0) - f0) * effScale), t0: now, dur, in: inT, out: outT, keep: !!(def.state || def.keep), faceLinked: !!fromFace, emo, bornS: sentenceCount, bornT: clockT });
     }
     // 波形动作（点头、摇头、甩草…）：正弦摆动叠在通道上。
     // 不支持这一种的话，点头永远只能走旧路，也就永远不能和别的东西叠加。
@@ -1043,6 +1061,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       dur,
       in: inT,
       out: outT,
+      bornS: sentenceCount, bornT: clockT,   // 条目独立生日（共享寿命钟的替代——后词不再重置别人的钟）
     });
     for (const wv of def.waves ?? []) setWave(wv, false);
     // postWaves 写的是物理的输出参数（腰/胯），只能在 physics.evaluate() 之后写，
@@ -1070,7 +1089,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
         for (let r = 0; r < mod.repeat; r++) {
           for (const [t, v] of frames) out.push([(r * span + t) * mod.pace, mir(id, v) * effScale]);
         }
-        channel.set(id, { kind: 'keys', frames: out, t0: now, dur, emo, post });
+        channel.set(id, { kind: 'keys', frames: out, t0: now, dur, emo, post, bornS: sentenceCount, bornT: clockT });
       }
     }
     console.info('[l2d] 通道记录', w, '静态', (def.params ?? []).length, '波形', (def.waves ?? []).length);
@@ -1144,10 +1163,16 @@ export async function createLive2DBody(base, opts, entry, kit) {
         // 自动放松（2.6 改造）：寿命按语境分——
         //   说话语境（最近 30 秒说过话）：跟句 2 句 或 说完话 2 秒，先到先退
         //   闲置语境（30 秒没说话，随机动作触发的）：限时 3 秒（对齐他们 mood.Seconds）
-        const lived = sentenceCount - bornSentence;              // 活了几句
-        const sinceEnd = lastSpeechEnd >= 0 ? clockT - lastSpeechEnd : 0;   // 说完多久
-        const bornAge = clockT - bornAt;                         // 出生多久
-        const speakingCtx = lastSpeechEnd >= 0 && sinceEnd < 30; // 最近说过话 = 说话语境
+        // 2026-11-20 修正：bornS/bornT 是条目自己的生日（此前共享变量——后一个词
+        // 会把全通道的寿命钟重置）；sinceEnd 只数「本条目出生之后的说完话」——
+        // 修复：消息 N 里出生的条目被拿消息 N-1 的说完时刻判定，回话慢于 2 秒
+        // 就出生即过期（闭眼+害羞案「时好时坏像顺序问题」的真身）。
+        const bornS = c.bornS ?? bornSentence;
+        const bornT = c.bornT ?? bornAt;
+        const lived = sentenceCount - bornS;                     // 活了几句
+        const bornAge = clockT - bornT;                          // 出生多久
+        const speakingCtx = lastSpeechEnd >= 0 && (clockT - lastSpeechEnd) < 30; // 最近说过话
+        const sinceEnd = lastSpeechEnd >= bornT ? clockT - lastSpeechEnd : 0;   // 说完多久（出生后的才算）
         // faceLinked 条目（face 联动的影子）：下一个词触发时让位（actWord 开头清），
         // 说完话 2 秒后自己渐退（他们文档的「说完过一会儿自己松掉」）；
         // 闲置语境（随机动作触发的影子）照旧限时 3 秒
@@ -1934,7 +1959,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
   globalThis.__l2dCover = figure.__cover;
   globalThis.__l2dExpr = figure.__expr;
 
-  const onSpeechStart = () => { sentenceCount++; };
+  const onSpeechStart = () => { sentenceCount++; auditFlush(); };   // 新句冲审计缓冲
   const onSpeechEnd = () => { lastSpeechEnd = clockT; };
   // onBeat（气泡边界）：「每个【】表情是这句话的脸」——情绪脸（face-big 成员）在
   // 新气泡边界让位（原机制保留，用途正当：黑脸→害羞这类跨句换脸）。

@@ -25,6 +25,7 @@ const FILES = {
   body: `${DIR}/web/kit/body.js`,
   petapp: `${DIR}/web/pet-app.js`,
   script: `${DIR}/src/script.ts`,
+  server: `${DIR}/src/server.ts`,
 };
 
 const PATCHES = [
@@ -395,6 +396,31 @@ function toneOf(text: string): string {
         );
       if ((out.match(/sumWait\(cur\.actions, vocab, !!cur\.text\.trim\(\)\) \* pace/g) || []).length !== 2) throw new Error('beatWaitTone：beats.push 锚点未命中（应 2 处）');
       if (!out.includes('actions: acts, wait: sumWait(acts, vocab, true)')) throw new Error('beatWaitTone：anchors.push 锚点未命中');
+      return out;
+    },
+  },
+  // ===== server.ts：figure 诊断日志通道 =====
+  {
+    file: 'server', id: 'figureLog',
+    desc: '/api/figure-log 诊断端点（形象页通道审计 → core.log）+ PACK_CSP 放行 img-src self（image beacon 通道）',
+    detect: (s) => s.includes('/api/figure-log'),
+    apply: (s) => {
+      const out = s
+        .replace(
+          `const PACK_CSP = "sandbox allow-scripts; default-src 'none'";`,
+          `const PACK_CSP = "sandbox allow-scripts; default-src 'none'; img-src 'self';";`,
+        )
+        .replace(
+          `    if (req.method === 'GET' && path === '/figure-frame') {`,
+          `    if (req.method === 'GET' && path === '/api/figure-log') {
+      // 形象页通道审计（image beacon：figure-frame CSP img-src self 放行）——写入插件日志（core.log）
+      console.warn('[figure]', url.searchParams.get('m') ?? '');
+      return json(res, 200, { ok: 1 });
+    }
+    if (req.method === 'GET' && path === '/figure-frame') {`,
+        );
+      if (!out.includes("/api/figure-log') {")) throw new Error('figureLog：路由锚点未命中');
+      if (!(out.match(/img-src 'self';/g) ?? []).length) throw new Error('figureLog：PACK_CSP 未改');
       return out;
     },
   },
