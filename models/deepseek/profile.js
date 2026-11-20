@@ -114,7 +114,7 @@ export default {
     '扣盆': 'pan-face',
     '挥手': 'wave',
     '招手': 'wave',
-    '点头': 'nod', '叹气': 'sigh', '大笑': 'laugh', '眼泪': 'tears', '挑一下眉': 'brow-raise-once', '歪一下头': 'tilt-once', '晃头': 'head-swing', '慢歪头': 'slow-tilt', '缩一下': 'cower', '吓一跳': 'startle', '左右张望': 'look-around', '摇摆一': 'sway-1', '剧场摇摆一': 'theater-sway-1', '剧场摇摆二': 'theater-sway-2', '慢摇': 'slow-sway', '摇摆二': 'dance', '看过来': 'face-front', '看你': 'face-front', '看左边': 'look-left', '看右边': 'look-right', '看上面': 'look-up', '看下面': 'look-down', '转头': 'turn-head', '前倾': 'lean-forward', '单眨眼': 'wink-hold', '眨单眼': 'wink-keep', '快眨左': 'wink-left', '快眨右': 'wink-right', '高兴': 'happy-burst', '偷笑': 'snicker', '傻眼': 'dumbstruck', '得瑟': 'gloating', '抓狂': 'frantic', '犯困': 'drowsy-combo', '感动': 'touched', '鬼点子': 'sly-idea', '得救': 'rescued', '警觉': 'alert-combo', '放下手': 'put-hand-down',
+    '点头': 'nod', '叹气': 'sigh', '大笑': 'laugh', '眼泪': 'tears', '挑一下眉': 'brow-raise-once', '歪一下头': 'tilt-once', '晃头': 'head-swing', '慢歪头': 'slow-tilt', '缩一下': 'cower', '吓一跳': 'startle', '左右张望': 'look-around', '摇摆一': 'sway-1', '剧场摇摆一': 'theater-sway-1', '剧场摇摆二': 'theater-sway-2', '慢摇': 'slow-sway', '摇摆二': 'dance', '看过来': 'face-front', '看你': 'face-front', '看左边': 'look-left', '看右边': 'look-right', '看上面': 'look-up', '看下面': 'look-down', '转头': 'turn-head', '前倾': 'lean-forward', '单眨眼': 'wink-hold', '眨单眼': 'wink-keep', '快眨左': 'wink-left', '快眨右': 'wink-right', '高兴': 'happy-burst', '偷笑': 'snicker', '傻眼': 'dumbstruck', '得瑟': 'gloating', '抓狂': 'frantic', '犯困': 'drowsy-combo', '感动': 'touched', '鬼点子': 'sly-idea', '得救': 'rescued', '警觉': 'alert-combo', '瞟一眼': 'glance', '竖手指': 'finger-point', '快眨单眼': 'wink-left', '放下手': 'put-hand-down',
     '摇头': 'shake',
     '鞠躬': 'bow',
     '转圈': 'spin',
@@ -652,6 +652,15 @@ export default {
       ],
       params: [] },
     // 左右张望（Body.cs:131）：眼珠 + 头同步左右各看一眼——1.9s
+    // 瞟一眼（Body.cs Look 系）：快速眼珠瞟一边停一拍再回来——一次性（默认左，
+    // :右 走 3.6 镜像）。偷笑组合里的「瞟一眼:左」就是它。
+    'glance': { dur: 0.8,
+      keys: [
+        { id: 'ParamEyeBallX', t: 0, v: 0 }, { id: 'ParamEyeBallX', t: 0.15, v: 0.85 },
+        { id: 'ParamEyeBallX', t: 0.55, v: 0.85 }, { id: 'ParamEyeBallX', t: 0.8, v: 0 },
+        { id: 'AngleX', t: 0, v: 0 }, { id: 'AngleX', t: 0.15, v: 5 },
+        { id: 'AngleX', t: 0.55, v: 5 }, { id: 'AngleX', t: 0.8, v: 0 },
+      ] },
     'look-around': { dur: 1.9,
       keys: [
         { id: 'ParamEyeBallX', t: 0, v: 0 }, { id: 'ParamEyeBallX', t: 0.15, v: 0.8 },

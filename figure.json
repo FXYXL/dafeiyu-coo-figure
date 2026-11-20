@@ -2,7 +2,7 @@
   "manifest": 2,
   "api": 2,
   "id": "deepseek-shenggong",
-  "version": "1.13.46",
+  "version": "1.13.47",
   "name": {
     "zh": "大肥鱼",
     "en": "DaFeiYu"
@@ -1978,6 +1978,20 @@
         "en": "把手放下"
       },
       "seconds": 1.2
+    },
+    {
+      "id": "glance",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "瞟一眼"
+        ]
+      },
+      "about": {
+        "zh": "眼珠快速瞟向一边停一拍再回来——心虚或偷看",
+        "en": "眼珠快速瞟向一边再回来"
+      },
+      "seconds": 0.8
     }
   ],
   "sounds": {},
