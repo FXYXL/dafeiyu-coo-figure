@@ -2,7 +2,7 @@
   "manifest": 2,
   "api": 2,
   "id": "deepseek-shenggong",
-  "version": "1.13.50",
+  "version": "1.13.52",
   "name": {
     "zh": "大肥鱼",
     "en": "DaFeiYu"
@@ -1996,6 +1996,102 @@
         "en": "眼珠快速瞟向一边再回来"
       },
       "seconds": 0.8
+    },
+    {
+      "id": "yawn",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "打哈欠",
+          "哈欠"
+        ]
+      },
+      "about": {
+        "zh": "打了个大大的哈欠：头微仰、眉挑起、眼睛慢慢闭上再睁开、嘴大张——一口气打完"
+      },
+      "seconds": 3.2
+    },
+    {
+      "id": "sneeze",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "打喷嚏",
+          "喷嚏"
+        ]
+      },
+      "about": {
+        "zh": "吸鼻子蓄力低头一缩，然后「阿嚏」一下仰头弹回来"
+      },
+      "seconds": 1.5
+    },
+    {
+      "id": "suspicious",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "狐疑",
+          "怀疑"
+        ]
+      },
+      "about": {
+        "zh": "单边挑眉+斜眼+眼珠瞟过去停一拍，抿着嘴——「嗯？」"
+      },
+      "seconds": 2.4
+    },
+    {
+      "id": "tongue-tilt",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "吐舌歪头"
+        ]
+      },
+      "about": {
+        "zh": "吐着舌头歪着头，眼睛弯弯的——俏皮"
+      },
+      "seconds": 1.2,
+      "lasting": true
+    },
+    {
+      "id": "wink-tongue",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "眨眼吐舌"
+        ]
+      },
+      "about": {
+        "zh": "单眨眼+歪头，同时舌头吐出来停一会再收回——鬼马"
+      },
+      "seconds": 1.4
+    },
+    {
+      "id": "hum",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "哼歌"
+        ]
+      },
+      "about": {
+        "zh": "哼着歌轻轻摇晃，嘴形跟着旋律开合，眼睛弯弯的"
+      },
+      "seconds": 4
+    },
+    {
+      "id": "brow-tilt",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "歪眉"
+        ]
+      },
+      "about": {
+        "zh": "左眉挑高右眉压低，一高一低——「嗯？」"
+      },
+      "seconds": 1,
+      "lasting": true
     }
   ],
   "sounds": {},

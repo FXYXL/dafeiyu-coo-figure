@@ -10,9 +10,11 @@
  *
  * 补丁清单（file: id）：
  *   body.js  : pointer / noMirror / noTurn / drowse          （1.11 时代）
- *   body.js  : wordBase / actWord / setTrans                  （表演系统 1.12~1.13）
- *   pet-app.js : actBatch（同帧下发）/ beatNotice（气泡通知）  （1.12~1.13）
- *   script.ts  : actModifier（修饰词放行）                     （1.12）
+ *   body.js  : wordBase / actWord / setTrans / wordExtras / kitHeartsMount / faceShakeHook （表演系统 1.12~1.13）
+ *   body.js  : busyTouch / idleWordPick / doWordOpts          （3.9 统一闲时调度 2026-11-20）
+ *   pet-app.js : actBatch（同帧下发）/ beatNotice（气泡通知）/ typingHold（动作阻塞文字）（1.12~1.13）
+ *   script.ts  : actModifier（修饰词放行）/ beatWaitTone（阻塞秒数+tone）（1.12~2.3）
+ *   server.ts  : figureLog（审计端点 + CSP）
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -100,7 +102,7 @@ const PATCHES = [
   {
     file: 'body', id: 'actWord',
     desc: '通道接管：动作交给形象包的 actWord（返回 true 则 kit 直接成功）',
-    detect: (s) => /custom\?\.actWord\?\.\(w\)/.test(s),
+    detect: (s) => /custom\?\.actWord\?\.\(w[,)]/.test(s),   // doWordOpts 打完后是 (w, null, o)——兼容两种，重跑幂等
     apply: (s) => s.replace(
       '    const base = custom?.baseWord?.(w);\n    if (base) w = base;',
       '    const base = custom?.baseWord?.(w);\n    if (base) w = base;\n    if (custom?.actWord?.(w)) return true;',
@@ -169,6 +171,64 @@ const PATCHES = [
       `    else if (pet.pulse?.kind === 'shiver') AX += Math.sin(T * 75) * 1.1 * envelope((T - pet.pulse.t0) / pet.pulse.dur, .08, .85);
     AX += custom?.faceShake?.(T) ?? 0;   // 通道情绪词的组级抖动（生气/害怕）——figure 实现见形象包`,
     ),
+  },
+  // ===== body.js：3.9 统一闲时调度（2026-11-20）=====
+  {
+    file: 'body', id: 'busyTouch',
+    desc: '3.9 忙闸门补「鼠标在碰我」：悬停在她身上或按住/拖动都算碰——busy 时 decide 不掷骰（乱走/换表情/做动作全停）。气泡/工具（holdRoam）/对话框（dialogOpen）原本就有；眨眼/呼吸是渲染层常驻不受影响',
+    detect: (s) => /const touching = pointer\.inside/.test(s),
+    apply: (s) => {
+      const out = s.replace(
+        "    const free = roam !== 'off' && T > hold && !opts.dialogOpen?.() && !still;",
+        `    // 3.9 忙闸门补「鼠标在碰我」：人正在跟她互动，她不该自己加戏。
+    // 气泡还在显示/有工具在跑（holdRoam 20）/对话框开着 kit 原本就有，这里只补触摸这一项。
+    const touching = pointer.inside && (press || hitPet(pointer));
+    const free = roam !== 'off' && T > hold && !opts.dialogOpen?.() && !still && !touching;`,
+      );
+      if (!out.includes('const touching = pointer.inside')) throw new Error('busyTouch：free 锚点未命中');
+      return out;
+    },
+  },
+  {
+    file: 'body', id: 'idleWordPick',
+    desc: '3.9 统一闲时调度：decide() 删 expr 硬编码六张脸，换 idle-word 选项——从形象包 idlePool() 按权重抽词走 doWord 正常入口（音效/爱心/挤压白拿），40~80 秒冷却',
+    detect: (s) => /pick === 'idle-word'/.test(s),
+    apply: (s) => {
+      const out = s
+        .replace(
+          "['sit', 6], ['expr', 12], ['wait', calm ? 30 : 10]]",
+          "['sit', 6], ['idle-word', T >= (pet.idleWordAt ?? 0) ? 12 : 0], ['wait', calm ? 30 : 10]]",
+        )
+        .replace(
+          "    else if (pick === 'expr') { setExpr(['happy', 'wink', 'love', 'sleepy', 'surprised', 'shy'][Math.floor(Math.random() * 6)]); pet.lastAct = 'expr'; }",
+          `    else if (pick === 'idle-word') {   // 3.9 统一闲时池：表情+小动作归形象包管（kit 原六张脸已收编进池子）
+      const pool = custom?.idlePool?.() ?? [];
+      const total = pool.reduce((a, m) => a + (m.w ?? 1), 0);
+      let r2 = Math.random() * total, pick2 = pool[pool.length - 1];
+      for (const m of pool) { r2 -= (m.w ?? 1); if (r2 <= 0) { pick2 = m; break; } }
+      const word = typeof pick2 === 'object' ? pick2.word : pick2;
+      pet.idleWordAt = T + rnd(40, 80);   // 冷却先记上：词被拒（busy）也不连着掷
+      if (word) doWord(word, { idle: true, life: pick2.life });
+      pet.lastAct = 'idle-word';
+    }`,
+        );
+      if (!out.includes("pick === 'idle-word'")) throw new Error('idleWordPick：expr 分支锚点未命中');
+      if (!out.includes("['idle-word', T >= (pet.idleWordAt ?? 0) ? 12 : 0]")) throw new Error('idleWordPick：opts2 锚点未命中');
+      return out;
+    },
+  },
+  {
+    file: 'body', id: 'doWordOpts',
+    desc: 'doWord 透传第二参：闲时调度 doWord(word, {idle, life}) → actWord(w, null, o)——o.idle 登记收尾（走跑跳开始按 src 撤）、o.life 心情挂更久',
+    detect: (s) => /actWord\?\.\(w, null, o\)/.test(s),
+    apply: (s) => {
+      const out = s
+        .replace('  function doWord(w) {', '  function doWord(w, o) {   // o：闲时调度透传（{idle:true, life:秒}），对话词不传')
+        .replace('    if (custom?.actWord?.(w)) {', '    if (custom?.actWord?.(w, null, o)) {');
+      if (!out.includes('function doWord(w, o)')) throw new Error('doWordOpts：doWord 签名锚点未命中');
+      if (!out.includes('actWord?.(w, null, o)')) throw new Error('doWordOpts：actWord 调用锚点未命中');
+      return out;
+    },
   },
   // ===== pet-app.js =====
   {

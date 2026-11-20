@@ -51,11 +51,46 @@ export default {
   // 待机时会随机切到这些手势（1=狗尾草 2=抚胸 3=竖食指），每个按自己的 dur 播一遍。
   // 对应 VTS 的 Auto Idle：闲置久了就自己换个姿势，不然一直一个姿势很死。
   // 甩草是波形动作，走的是同一套 applyActAt —— 待机里也会真的甩起来。
-  idlePoses: [
-    { word: 'chest-hand', movement: 2 },
-    { word: 'finger-point', movement: 3 },
-    { word: 'grass-hand', movement: 1 },
-    { word: 'swing', movement: 1 },
+  // idlePoses / idleMoods 已并入上面的 idleRepertoire（3.9 统一闲时池，触发归 kit decide()）。
+
+  // 3.9 统一闲时池（2026-11-20 用户定稿）：表情 + 动作一个池子，kit 的 decide() 按权重抽，
+  // 抽中后走 doWord 正常入口——音效/爱心/挤压白拿，参数绘制走通道（actWord）。
+  // kit 只管走/跑/跳/坐/张望；表情和小动作全部归这里。
+  // kind: face=挂着的心情（state 词，life=保持秒数，默认 idleMoodLife）/ act=一次性动作。
+  // w = 权重（3 高频 / 2 中 / 1 彩蛋）；kit 原六张随机脸已收编进来（中权重）。
+  idleMoodLife: 6,
+  idleRepertoire: [
+    // —— 表情类 ——
+    { word: 'tilt', kind: 'face', w: 3, life: 6 },
+    { word: 'dazed', kind: 'face', w: 3, life: 6 },
+    { word: 'happy', kind: 'face', w: 2, life: 5 },       // kit 六张脸收编
+    { word: 'wink', kind: 'face', w: 2 },                 // kit 原生脸（词表没有 wink 词，走 kit setExpr）
+    { word: 'heart-eyes', kind: 'face', w: 2, life: 5 },  // love → 有爱心粒子 + love 音效
+    { word: 'eye-half', kind: 'face', w: 2, life: 5 },    // sleepy → yawn 音效
+    { word: 'surprised', kind: 'face', w: 2 },            // surprised 音效
+    { word: 'blush', kind: 'face', w: 2, life: 5 },       // shy → shy 音效
+    { word: 'pout', kind: 'face', w: 2, life: 5 },
+    { word: 'smug-face', kind: 'face', w: 2, life: 5 },
+    { word: 'bunny-teeth', kind: 'face', w: 1, life: 5 }, // 以下彩蛋权重
+    { word: 'tongue-out', kind: 'face', w: 1, life: 5 },
+    { word: 'puff-cheek', kind: 'face', w: 1, life: 5 },
+    { word: 'tongue-tilt', kind: 'face', w: 1, life: 5 },
+    { word: 'wink-tongue', kind: 'face', w: 1 },
+    // —— 动作类 ——
+    { word: 'glance', kind: 'act', w: 2 },
+    { word: 'look-around', kind: 'act', w: 2 },
+    { word: 'head-swing', kind: 'act', w: 2 },
+    { word: 'slow-tilt', kind: 'act', w: 2 },
+    { word: 'hum', kind: 'act', w: 2 },
+    { word: 'sigh', kind: 'act', w: 1 },
+    { word: 'drowsy-combo', kind: 'act', w: 1, life: 5 },
+    { word: 'slow-sway', kind: 'act', w: 1 },
+    { word: 'theater-sway-1', kind: 'act', w: 1 },
+    { word: 'theater-sway-2', kind: 'act', w: 1 },
+    { word: 'grass-hand', kind: 'act', w: 2, life: 4 },
+    { word: 'chest-hand', kind: 'act', w: 2, life: 4 },
+    { word: 'finger-point', kind: 'act', w: 2, life: 4 },
+    { word: 'swing', kind: 'act', w: 1 },
   ],
 
   // 指针跟随身体：光标左右 → 躯干跟着倾。walk 是走路时的倾斜方向（负号=朝行进方向倒，
@@ -218,6 +253,18 @@ export default {
     '紧闭眼': 'xx-eyes',
     '使劲闭眼': 'xx-eyes',
     '兔牙': 'bunny-teeth',
+    // —— 3.8 俏皮搞怪批（2026-11-20）——
+    '打哈欠': 'yawn',
+    '哈欠': 'yawn',
+    '打喷嚏': 'sneeze',
+    '喷嚏': 'sneeze',
+    '狐疑': 'suspicious',
+    '怀疑': 'suspicious',
+    '吐舌歪头': 'tongue-tilt',
+    '眨眼吐舌': 'wink-tongue',
+    '哼歌': 'hum',
+    '歪眉': 'brow-tilt',
+    '挑一边眉': 'brow-tilt',
   },
 
   paramActs: {
@@ -904,6 +951,104 @@ export default {
         { id: 'ParamMouthOpenY', to: 0.3 },
         { id: 'key13', to: 1 },   // 冷汗（kit 旧脸配方 sweat:true 的对应）
       ] },
+
+    // ── 3.8 俏皮搞怪批（2026-11-20，用户挑的七条）——
+    // 全部按他们家组合词的工序做：params 静态部件 + keys 时间轴，keys 与 params 不放同参数。
+    // 打哈欠（新组合）：头微仰 + 眉挑起 + 眼慢慢闭上再睁开 + 嘴大张（哈欠是吸气，ViewSquash 负=拉长，
+    //   与他们家叹气的吸气段同号）——3.2s 一口气
+    'yawn': { dur: 3.2,
+      keys: [
+        { id: 'AngleY', t: 0, v: 0 }, { id: 'AngleY', t: 0.8, v: 6 },
+        { id: 'AngleY', t: 1.4, v: 9 }, { id: 'AngleY', t: 2.4, v: 5 }, { id: 'AngleY', t: 3.2, v: 0 },
+        { id: 'BrowInnerUp', t: 0, v: 0 }, { id: 'BrowInnerUp', t: 0.8, v: 0.55 },
+        { id: 'BrowInnerUp', t: 1.6, v: 0.35 }, { id: 'BrowInnerUp', t: 3.2, v: 0 },
+        { id: 'ParamEyeLOpen', t: 0, v: 1 }, { id: 'ParamEyeLOpen', t: 0.9, v: 0.5 },
+        { id: 'ParamEyeLOpen', t: 1.5, v: 0.15 }, { id: 'ParamEyeLOpen', t: 2.3, v: 0.1 }, { id: 'ParamEyeLOpen', t: 3.2, v: 1 },
+        { id: 'ParamEyeROpen', t: 0, v: 1 }, { id: 'ParamEyeROpen', t: 0.9, v: 0.5 },
+        { id: 'ParamEyeROpen', t: 1.5, v: 0.15 }, { id: 'ParamEyeROpen', t: 2.3, v: 0.1 }, { id: 'ParamEyeROpen', t: 3.2, v: 1 },
+        { id: 'ParamMouthOpenY', t: 0.6, v: 0 }, { id: 'ParamMouthOpenY', t: 1.5, v: 0.7 },
+        { id: 'ParamMouthOpenY', t: 2.3, v: 0.4 }, { id: 'ParamMouthOpenY', t: 3.0, v: 0 }, { id: 'ParamMouthOpenY', t: 3.2, v: 0 },
+        { id: 'JawOpen', t: 0.6, v: 0 }, { id: 'JawOpen', t: 1.5, v: 0.35 },
+        { id: 'JawOpen', t: 2.3, v: 0.15 }, { id: 'JawOpen', t: 3.2, v: 0 },
+        { id: 'ViewSquash', t: 0, v: 0 }, { id: 'ViewSquash', t: 1.2, v: -0.02 },
+        { id: 'ViewSquash', t: 2.0, v: -0.015 }, { id: 'ViewSquash', t: 3.2, v: 0 },
+      ],
+      params: [] },
+    // 打喷嚏（新组合）：蓄力（低头缩一下）→ 爆发（仰头+嘴大张+眼闭紧+眉挑）→ 回落小回弹——1.5s
+    'sneeze': { dur: 1.5,
+      keys: [
+        { id: 'ViewSquash', t: 0, v: 0 }, { id: 'ViewSquash', t: 0.4, v: 0.06 },
+        { id: 'ViewSquash', t: 0.6, v: -0.07 }, { id: 'ViewSquash', t: 0.95, v: 0.03 }, { id: 'ViewSquash', t: 1.3, v: 0 }, { id: 'ViewSquash', t: 1.5, v: 0 },
+        { id: 'AngleY', t: 0, v: 0 }, { id: 'AngleY', t: 0.4, v: -9 },
+        { id: 'AngleY', t: 0.6, v: 11 }, { id: 'AngleY', t: 0.95, v: 5 }, { id: 'AngleY', t: 1.3, v: 0 }, { id: 'AngleY', t: 1.5, v: 0 },
+        { id: 'ParamEyeLOpen', t: 0, v: 1 }, { id: 'ParamEyeLOpen', t: 0.4, v: 0 },
+        { id: 'ParamEyeLOpen', t: 0.85, v: 0 }, { id: 'ParamEyeLOpen', t: 1.25, v: 1 }, { id: 'ParamEyeLOpen', t: 1.5, v: 1 },
+        { id: 'ParamEyeROpen', t: 0, v: 1 }, { id: 'ParamEyeROpen', t: 0.4, v: 0 },
+        { id: 'ParamEyeROpen', t: 0.85, v: 0 }, { id: 'ParamEyeROpen', t: 1.25, v: 1 }, { id: 'ParamEyeROpen', t: 1.5, v: 1 },
+        { id: 'ParamMouthOpenY', t: 0, v: 0 }, { id: 'ParamMouthOpenY', t: 0.4, v: 0.3 },
+        { id: 'ParamMouthOpenY', t: 0.6, v: 0.85 }, { id: 'ParamMouthOpenY', t: 0.95, v: 0.25 }, { id: 'ParamMouthOpenY', t: 1.3, v: 0 }, { id: 'ParamMouthOpenY', t: 1.5, v: 0 },
+        { id: 'BrowInnerUp', t: 0, v: 0 }, { id: 'BrowInnerUp', t: 0.6, v: 0.85 },
+        { id: 'BrowInnerUp', t: 1.0, v: 0.5 }, { id: 'BrowInnerUp', t: 1.5, v: 0 },
+      ],
+      params: [] },
+    // 狐疑（新组合）：单边挑眉（左挑右不动，一边高一边低才像"嗯？"）+ 斜眼 + 眼珠瞟过去停一拍
+    //   + 头微转同方向 + 抿一下嘴——2.4s（:右 走 3.6 镜像，眼珠/头自动换边）
+    'suspicious': { dur: 2.4,
+      keys: [
+        { id: 'ParamEyeBallX', t: 0, v: 0 }, { id: 'ParamEyeBallX', t: 0.5, v: 0.85 },
+        { id: 'ParamEyeBallX', t: 1.8, v: 0.85 }, { id: 'ParamEyeBallX', t: 2.4, v: 0 },
+        { id: 'AngleX', t: 0, v: 0 }, { id: 'AngleX', t: 0.5, v: 5 },
+        { id: 'AngleX', t: 1.8, v: 5 }, { id: 'AngleX', t: 2.4, v: 0 },
+        { id: 'ParamBrowLY', t: 0, v: 0 }, { id: 'ParamBrowLY', t: 0.4, v: 0.6 },
+        { id: 'ParamBrowLY', t: 2.0, v: 0.6 }, { id: 'ParamBrowLY', t: 2.4, v: 0 },
+        { id: 'BrowInnerUp', t: 0, v: 0 }, { id: 'BrowInnerUp', t: 0.4, v: 0.35 },
+        { id: 'BrowInnerUp', t: 2.0, v: 0.35 }, { id: 'BrowInnerUp', t: 2.4, v: 0 },
+      ],
+      params: [
+        { id: 'REyeSquint', to: 0.9 }, { id: 'LEyeSquint', to: 0.9 },
+        { id: 'ParamEyeLOpen', to: 0.65 }, { id: 'ParamEyeROpen', to: 0.65 },
+        { id: 'MouthPressLipOpen', to: -0.4 },
+      ] },
+    // 吐舌歪头（新组合）：吐舌原样 + 歪头收小（14，舌头当主角）+ 眼睛弯弯——保持型
+    'tongue-tilt': { state: true, dur: 1.2, params: [
+      { id: 'TongueOut', to: 1 }, { id: 'ParamMouthOpenY', to: 0.35 },
+      { id: 'AngleZ', to: 14 },
+      { id: 'EyeSmile', to: 0.7 }, { id: 'ParamEyeLOpen', to: 0.6 }, { id: 'ParamEyeROpen', to: 0.6 },
+    ] },
+    // 眨眼吐舌（新组合，Body.cs:76-77 快眨单眼套件 + 吐舌）：左眼闭 0.76s + 歪头 12 同步
+    //   + 舌头跟着出来停一会再收回——1.4s
+    'wink-tongue': { dur: 1.4,
+      keys: [
+        { id: 'ParamEyeLOpen', t: 0, v: 1 }, { id: 'ParamEyeLOpen', t: 0.14, v: 0 },
+        { id: 'ParamEyeLOpen', t: 0.9, v: 0 }, { id: 'ParamEyeLOpen', t: 1.4, v: 1 },
+        { id: 'ParamEyeROpen', t: 0, v: 1 }, { id: 'ParamEyeROpen', t: 0.14, v: 0.45 },
+        { id: 'ParamEyeROpen', t: 0.9, v: 0.45 }, { id: 'ParamEyeROpen', t: 1.4, v: 1 },
+        { id: 'EyeSmile', t: 0, v: 0.45 }, { id: 'EyeSmile', t: 0.14, v: 1 },
+        { id: 'EyeSmile', t: 0.9, v: 1 }, { id: 'EyeSmile', t: 1.4, v: 0.45 },
+        { id: 'AngleZ', t: 0, v: 0 }, { id: 'AngleZ', t: 0.14, v: 12 },
+        { id: 'AngleZ', t: 0.9, v: 12 }, { id: 'AngleZ', t: 1.4, v: 0 },
+        { id: 'TongueOut', t: 0, v: 0 }, { id: 'TongueOut', t: 0.3, v: 1 },
+        { id: 'TongueOut', t: 1.0, v: 1 }, { id: 'TongueOut', t: 1.4, v: 0 },
+        { id: 'ParamMouthOpenY', t: 0, v: 0 }, { id: 'ParamMouthOpenY', t: 0.3, v: 0.3 },
+        { id: 'ParamMouthOpenY', t: 1.0, v: 0.3 }, { id: 'ParamMouthOpenY', t: 1.4, v: 0 },
+      ],
+      params: [] },
+    // 哼歌（新组合）：嘴形跟着旋律小幅开合 + 重心慢摆（PositionX 物理驱动）+ 头同拍轻点
+    //   + 哼歌时眼睛弯弯——4s 一段
+    'hum': { dur: 4.0,
+      waves: [
+        { id: 'ParamMouthForm', amp: 0.3, freq: 0.9, base: 0.3 },
+        { id: 'PositionX', amp: 5, freq: 0.45 },
+        { id: 'AngleZ', amp: 4, freq: 0.45, phase: 0.12 },
+        { id: 'AngleY', amp: 3, freq: 0.9, phase: 0.3 },
+      ],
+      params: [
+        { id: 'EyeSmile', to: 0.8 }, { id: 'ParamEyeLOpen', to: 0.6 }, { id: 'ParamEyeROpen', to: 0.6 },
+      ] },
+    // 歪眉（新组合）：左眉高右眉低（一高一低才是"嗯?"脸）——保持型
+    'brow-tilt': { state: true, dur: 1.0, params: [
+      { id: 'ParamBrowLY', to: 0.7 }, { id: 'ParamBrowRY', to: -0.45 },
+    ] },
   },
 
   // 互斥组：组内一个词激活时，同组其他词自动让位（参数撤掉）。
@@ -916,7 +1061,9 @@ export default {
       // 组合情绪脸（2026-11-20 用户定：大跨度情绪脸该互斥，偷笑+感动叠加太怪）——
       // state 词（傻眼/感动/警觉/犯困）每句让位；非 state 的表演词（偷笑/得瑟/抓狂…）
       // 被新情绪触发时中途让位（情绪换情绪语义）
-      'happy-burst', 'snicker', 'dumbstruck', 'gloating', 'frantic', 'drowsy-combo', 'touched', 'sly-idea', 'rescued', 'alert-combo'],
+      'happy-burst', 'snicker', 'dumbstruck', 'gloating', 'frantic', 'drowsy-combo', 'touched', 'sly-idea', 'rescued', 'alert-combo',
+      // 3.8 狐疑：整脸级的"嗯？"（斜眼+单边挑眉+抿嘴），跟别的情绪脸叠加会怪
+      'suspicious'],
   },
 
 

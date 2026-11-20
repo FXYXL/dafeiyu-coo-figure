@@ -733,28 +733,22 @@ export async function createLive2DBody(base, opts, entry, kit) {
     addP('PositionZ', bfState.up);     // 前后 → ParamBodyAngleZ
   }
 
-  // ---------- 待机小动作（模拟 VTS 的 Auto Idle）----------
-  // VTS 空闲一段时间会随机播一个热键动作；模型的 IDLE.motion3 本身只驱动
-  // 泪花/冒汗这类特效参数，不含手臂。所以"待机换手"要自己做：
-  // 隔 25~50 秒从 profile.idlePoses 里随机抽一个手势播一遍。
-  let idlePoseUntil = 0;
-  // 待机换手的节奏（秒）。想调频率就改这四个数：
-  //   IDLE_FIRST  = 首次触发的起点，+ JITTER 是随机浮动 → 20~40 秒
-  //   IDLE_GAP    = 之后每次的间隔，+ JITTER → 25~50 秒
-  const IDLE_FIRST = 20, IDLE_FIRST_JITTER = 20;
-  const IDLE_GAP = 25, IDLE_GAP_JITTER = 25;
-  const idleGap = () => IDLE_GAP + Math.random() * IDLE_GAP_JITTER;
-  let idlePoseNext = IDLE_FIRST + Math.random() * IDLE_FIRST_JITTER;
-  let idlePoseOn = 0;
-  let idlePoseWord = null;
-  let idlePoseStart = 0;
+  // ---------- 待机小动作（3.9 统一闲时调度）----------
+  // 触发归 kit 的 decide()（idle-word 选项 → doWord 正常入口，音效/爱心/挤压白拿），
+  // 后端只管两件事：① 闲时词的通道收尾（走跑跳开始按 src 撤）；② idlePool() 把池子交给 kit。
+  // 旧的 idlePoses/idleMoods 两套后端计时器已退役（3.8/3.7 时代），applyActAt 那套
+  // 直写包络保留——旧路径手势（frame.gesture 非 channel 词）还在用它。
+  let idlePoseWord = null;   // 仅剩 clearIdlePose/actWord 手部分支引用，恒为 null（旧机制残留）
+  // 闲时词收尾登记：actWord 的 o.idle 进来时记下是谁、放到什么时候
+  let idleChannelWord = null;
+  let idleChannelUntil = 0;
+  const idleModeOk = (mode) => mode === 'idle' || mode === 'look' || mode === 'sit';
 
   function setMovement(n) {
     for (const k of [1, 2, 3]) {
       const i = paramIndex.get('Movement' + k);
       if (i !== undefined) model._model.setParameterValueByIndex(i, k === n ? 1 : 0);
     }
-    idlePoseOn = n;
   }
 
   /** 结束待机手势：部件开关和手臂参数必须一起归零。
@@ -811,33 +805,15 @@ export async function createLive2DBody(base, opts, entry, kit) {
     }
   }
 
-  function applyIdlePose(t, busy) {
-    const poses = profile.idlePoses ?? [];
-    if (!poses.length) return;
-    if (busy) {                       // 有正式动作时让位，别抢
-      if (idlePoseOn || idlePoseWord) clearIdlePose();
-      return;
-    }
-    // 待机换手和主动触发走同一套动作定义、同一份节奏包络，只是"谁叫的"不同。
-    if (idlePoseWord) {
-      const act = paramActs[idlePoseWord];
-      const dur = act?.dur ?? 4;
-      const tt = t - idlePoseStart;
-      if (tt >= dur) {
-        clearIdlePose();
-        idlePoseNext = t + idleGap();
-        return;
+  /** 闲时词收尾（每帧）：走跑跳开始（或兜底超时）把闲时词写的通道条目按 src 撤掉。
+   *  触发在 kit 的 decide()，标记由 actWord 的第三参 o.idle 登记。 */
+  function stepIdleWords(t, mode) {
+    if (idleChannelWord && (!idleModeOk(mode) || t > idleChannelUntil)) {
+      const w = idleChannelWord;
+      idleChannelWord = null;
+      for (const [id, c] of Object.entries(channel)) {
+        if (c.src === w) channel.delete(id);
       }
-      applyActAt(act, tt);
-      return;
-    }
-    if (t > idlePoseNext) {
-      const pick = poses[Math.floor(Math.random() * poses.length)];
-      const word = typeof pick === 'object' ? pick.word : null;
-      if (!word || !paramActs[word]) { idlePoseNext = t + idleGap(); return; }
-      idlePoseWord = word;
-      idlePoseStart = t;
-      idlePoseOn = typeof pick === 'object' ? pick.movement : pick;
     }
   }
 
@@ -875,6 +851,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
   // （音效、配表情、busy 生命周期都照走 act()），同时把"轻重、快慢、几下"记在 pendingMod，
   // 等 actWord 用它缩放关键帧 / 波形。
   let pendingMod = null;
+  let pendingLife = null;   // 闲时心情/闲时动作给的保持秒数（actWord 读一次就清，null=按默认 IDLE_LIFE）
   let lastEngine = null;          // 上一帧的表情数值，用来让动作幅度跟着情绪走
   const wordAlias = profile.wordAlias ?? {};
   const MOD_SCALE = { '微': 0.5, '大': 1.5 };
@@ -984,8 +961,10 @@ export async function createLive2DBody(base, opts, entry, kit) {
   let currentTone = '';   // 2.3 tone：当前 beat 的语气（! = 感叹 / … = 省略）——pet-app 每 beat 下发   // 跟句寿命（2.6 改造）
   let bornAt = -99;   // 词出生时刻：闲置语境（随机动作）的限时基准
 
-  /** kit 的 doWord 会先问这里。返回 true = 这个词我处理了，不要走 pulse。 */
-  function actWord(w, fromFace) {
+  /** kit 的 doWord 会先问这里。返回 true = 这个词我处理了，不要走 pulse。
+   *  o（3.9）：kit 闲时调度的透传——o.idle = 闲时触发（登记收尾，走跑跳开始撤）、
+   *  o.life = 挂着的秒数（心情词比默认 3 秒久）。对话词不传 o，行为不变。 */
+  function actWord(w, fromFace, o) {
     lastWordAt = clockT;
     // face 联动词（blush/tears/sweat/heart-eyes）的退场：下一个任何词触发就让位。
     // 「【害羞】→ 下一句【嘟嘴】，脸红影子不该跨句挂着」——情绪影子跟着最近的表达走。
@@ -1004,6 +983,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 修饰：AI 写的「微/大/快/慢/×几」；没写就按当前情绪给个默认幅度
     const mod = pendingMod ?? { scale: 1, pace: 1, repeat: 1, explicit: false };
     pendingMod = null;
+    // 闲时触发（心情/随机动作）带来的保持秒数：读一次就清，正常对话词拿不到就是 undefined
+    const life = o?.life ?? pendingLife;
+    pendingLife = null;
     // 2.3 tone（他们 Body.cs:335/360/365）：beat 末尾 ！/… 影响一次性动作的幅度与速度——
     //   ！→ 放大 1.2 倍、加速（时长 ×0.85）；… → 收着 0.85、放慢（×1.25）。
     //   只作用一次性动作（state 保持型不吃，Hold 型表情不是"演"的）；reflex 反射词豁免；
@@ -1015,6 +997,12 @@ export async function createLive2DBody(base, opts, entry, kit) {
     const effScale = mod.scale * (mod.explicit || def.hand ? 1 : moodScale()) * (toneEff?.scale ?? 1);
     const keySpan = def.keys?.length ? Math.max(...def.keys.map((f) => f.t ?? 0)) : 0;
     const dur = (keySpan || (def.dur ?? 2.4)) * mod.pace * mod.repeat * (toneEff?.pace ?? 1);
+    // 3.9 闲时词登记：走跑跳开始（或兜底超时）由 stepIdleWords 按 src 撤掉通道条目
+    if (o?.idle) {
+      idleChannelWord = w;
+      idleChannelUntil = now + dur + 0.2;
+      audit('idle-word ' + w);
+    }
     const inT = Math.min(0.45, dur * 0.2);
     const outT = Math.min(0.6, dur * 0.28);
     // from 用参数的**默认值**，不是当前值 ——
@@ -1055,7 +1043,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
     const emo = (profile.emotionArc ?? {})[w] ?? null;
     for (const p of def.params ?? []) {
       const f0 = defVal(p.id);
-      channel.set(p.id, { kind: 'hold', from: f0, to: mir(p.id, f0 + ((p.to ?? 0) - f0) * effScale), t0: now, dur, in: inT, out: outT, keep: !!(def.state || def.keep), faceLinked: !!fromFace, emo, bornS: sentenceCount, bornT: clockT, src: w });
+      channel.set(p.id, { kind: 'hold', from: f0, to: mir(p.id, f0 + ((p.to ?? 0) - f0) * effScale), t0: now, dur, in: inT, out: outT, keep: !!(def.state || def.keep), faceLinked: !!fromFace, emo, bornS: sentenceCount, bornT: clockT, src: w, life: life ?? undefined });
     }
     // 波形动作（点头、摇头、甩草…）：正弦摆动叠在通道上。
     // 不支持这一种的话，点头永远只能走旧路，也就永远不能和别的东西叠加。
@@ -1189,13 +1177,15 @@ export async function createLive2DBody(base, opts, entry, kit) {
         // faceLinked 条目（face 联动的影子）：下一个词触发时让位（actWord 开头清），
         // 说完话 2 秒后自己渐退（他们文档的「说完过一会儿自己松掉」）；
         // 闲置语境（随机动作触发的影子）照旧限时 3 秒
+        // 3.8：条目可以带自己的寿命（idleMoods 的心情挂更久），没有就用默认 3 秒
+        const idleLife = c.life ?? IDLE_LIFE;
         const expired = c.faceLinked
           ? speakingCtx
             ? sinceEnd > SPEECH_END_DELAY
-            : bornAge > IDLE_LIFE
+            : bornAge > idleLife
           : speakingCtx
             ? (bornSentence >= 0 && lived >= SENT_LIFE) || sinceEnd > SPEECH_END_DELAY
-            : bornAge > IDLE_LIFE;
+            : bornAge > idleLife;
         if (expired) {
           if (!c.relaxStart) c.relaxStart = clockT;
           const fade = clamp((clockT - c.relaxStart) / RELAX_FADE, 0, 1);
@@ -1741,6 +1731,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // kit 的 doWord 会先问这里：返回 true 表示这个词形象自己处理（通道叠加），
     // 不走 kit 的单槽 pulse。白名单外的词返回 false，保持旧行为。
     actWord,
+    // 3.9 统一闲时池：kit decide() 的 idle-word 选项从这里拿词表（{word,kind,w,life}），
+    // 抽中后走 doWord(word, {idle, life}) 回到 actWord——音效/爱心/挤压在 kit 那头照发。
+    idlePool() { return profile.idleRepertoire ?? []; },
     // kit 在 doWord 最前面调用：剥修饰 + 中文转 id，返回基础词
     baseWord,
     // Live2D 只有一个正面，镜像会把左右手整体换边（手里的狗尾草从右手换到左手），
@@ -1863,7 +1856,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       applyCleanParams();
       applyIdlePhysics(clockT);
       applyBodyFollow(dt, frame.mode, frame.facing);   // 必须在物理之前：写的是 PositionX/Z 这类物理输入
-      applyIdlePose(clockT, !!frame.gesture);
+      stepIdleWords(clockT, frame.mode);
       applyParamActs(frame);
       applySchemeParams();
       // 基准只存 role + 状态。动作、表情、物理都是"每帧重算"的输出，
