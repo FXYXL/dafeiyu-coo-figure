@@ -58,10 +58,11 @@ export default {
   // kit 只管走/跑/跳/坐/张望；表情和小动作全部归这里。
   // kind: face=挂着的心情（state 词，life=保持秒数，默认 idleMoodLife）/ act=一次性动作。
   // w = 权重（3 高频 / 2 中 / 1 彩蛋）；kit 原六张随机脸已收编进来（中权重）。
+  // 2026-11-20 测试反馈调整：动作类整体上调（用户：随机动作难触发）、tilt 换 tilt-look（放缓+减幅）。
   idleMoodLife: 6,
   idleRepertoire: [
     // —— 表情类 ——
-    { word: 'tilt', kind: 'face', w: 3, life: 6 },
+    { word: 'tilt-look', kind: 'face', w: 3 },            // 歪头瞧（一次性，替代原 tilt 挂脸）
     { word: 'dazed', kind: 'face', w: 3, life: 6 },
     { word: 'happy', kind: 'face', w: 2, life: 5 },       // kit 六张脸收编
     { word: 'wink', kind: 'face', w: 2 },                 // kit 原生脸（词表没有 wink 词，走 kit setExpr）
@@ -77,20 +78,20 @@ export default {
     { word: 'tongue-tilt', kind: 'face', w: 1, life: 5 },
     { word: 'wink-tongue', kind: 'face', w: 1 },
     // —— 动作类 ——
-    { word: 'glance', kind: 'act', w: 2 },
-    { word: 'look-around', kind: 'act', w: 2 },
-    { word: 'head-swing', kind: 'act', w: 2 },
-    { word: 'slow-tilt', kind: 'act', w: 2 },
-    { word: 'hum', kind: 'act', w: 2 },
-    { word: 'sigh', kind: 'act', w: 1 },
-    { word: 'drowsy-combo', kind: 'act', w: 1, life: 5 },
-    { word: 'slow-sway', kind: 'act', w: 1 },
+    { word: 'glance', kind: 'act', w: 3 },
+    { word: 'look-around', kind: 'act', w: 3 },
+    { word: 'head-swing', kind: 'act', w: 3 },
+    { word: 'slow-tilt', kind: 'act', w: 3 },
+    { word: 'hum', kind: 'act', w: 3 },
+    { word: 'sigh', kind: 'act', w: 2 },
+    { word: 'drowsy-combo', kind: 'act', w: 2, life: 5 },
+    { word: 'slow-sway', kind: 'act', w: 2 },
     { word: 'theater-sway-1', kind: 'act', w: 1 },
     { word: 'theater-sway-2', kind: 'act', w: 1 },
-    { word: 'grass-hand', kind: 'act', w: 2, life: 4 },
-    { word: 'chest-hand', kind: 'act', w: 2, life: 4 },
-    { word: 'finger-point', kind: 'act', w: 2, life: 4 },
-    { word: 'swing', kind: 'act', w: 1 },
+    { word: 'grass-hand', kind: 'act', w: 4, life: 4 },   // 手部词上调（用户点名难触发）
+    { word: 'chest-hand', kind: 'act', w: 4, life: 4 },
+    { word: 'finger-point', kind: 'act', w: 4, life: 4 },
+    { word: 'swing', kind: 'act', w: 2 },
   ],
 
   // 指针跟随身体：光标左右 → 躯干跟着倾。walk 是走路时的倾斜方向（负号=朝行进方向倒，
@@ -117,7 +118,7 @@ export default {
   // 走神只靠鼠标唤回：光标停住 3.6 秒（或盯 8 秒）后再酝酿 1.5 秒开始飘，
   // 一直飘到鼠标动为止（span: 0 = 不过期；想加保质期就写秒数，比如 120~180）。
   // fade = 收回速度（越大越快，0.6 大约两秒收干净）；resume = 回神速度（0.9 比收回稍快，像人反应过来）
-  gazeFollow: { idleSec: 3.6, holdSec: 8, onset: 1.5, fade: 0.5, resume: 40, movePx: 3, span: 0, spanJitter: 0, wake: 1.2 },
+  gazeFollow: { idleSec: 3.6, holdSec: 8, onset: 1.5, fade: 0.5, resume: 10, movePx: 3, span: 0, spanJitter: 0, wake: 1.2 },
 
   idlePhysics: {
     // 只写"源头参数"。ParamBodyAngleX / HipAngleX / ParamBodyAngleZ 本身是物理的
@@ -265,6 +266,8 @@ export default {
     '哼歌': 'hum',
     '歪眉': 'brow-tilt',
     '挑一边眉': 'brow-tilt',
+    '歪头瞧': 'tilt-look',
+    '歪头看看': 'tilt-look',
   },
 
   paramActs: {
@@ -807,8 +810,10 @@ export default {
     ] },
     // 鬼点子（挑眉+坏笑+眼珠一转+竖手指）：Movement3 是竖食指部件显示档——
     // keys 竖起 0.3s、末段渐隐收回（默认手自动露出，不残留）——2.6s
-    'sly-idea': { dur: 2.6,
-      keys: [
+    // hand: true + reflex: true（2026-11-20 用户二次反馈手指戳进身体）：手位是坐标不是幅度——
+    // 没有 hand 豁免时 keys 被 moodScale/语气缩放（！=×1.2），0.705 变 0.85 手臂就抬过头戳进身体。
+    // 两个豁免齐上 effScale 恒为 1，竖手指姿势与正牌 finger-point 完全一致。
+    'sly-idea': { dur: 2.6, hand: true, reflex: true, keys: [
         { id: 'ParamEyeBallX', t: 0, v: 0 }, { id: 'ParamEyeBallX', t: 0.2, v: 0.8 },
         { id: 'ParamEyeBallX', t: 0.5, v: -0.8 }, { id: 'ParamEyeBallX', t: 0.8, v: 0.4 },
         { id: 'ParamEyeBallX', t: 1.2, v: 0 },
@@ -817,6 +822,13 @@ export default {
         { id: 'Movement1', t: 0, v: 0 }, { id: 'Movement1', t: 2.6, v: 0 },
         { id: 'Param40', t: 0.4, v: 1 }, { id: 'Param40', t: 2.2, v: 1 }, { id: 'Param40', t: 2.6, v: 0 },
         { id: 'Param41', t: 0.4, v: 0.705 }, { id: 'Param41', t: 2.2, v: 0.705 }, { id: 'Param41', t: 2.6, v: 0 },
+        // 2026-11-20 用户反馈：手指戳进身体——sly-idea 只搬了三个手参数，比 finger-point
+        // 少了 Param39（手肘）/Param42（手腕俯仰）/Param43（手腕偏摆）/Param56（手型确认），
+        // 手型不完整渲染成半截。补齐，包络与 Movement3 同拍（0.4 起、2.6 收）。
+        { id: 'Param39', t: 0.4, v: 0.322 }, { id: 'Param39', t: 2.2, v: 0.322 }, { id: 'Param39', t: 2.6, v: 0 },
+        { id: 'Param42', t: 0.4, v: -0.05 }, { id: 'Param42', t: 2.2, v: -0.05 }, { id: 'Param42', t: 2.6, v: 0 },
+        { id: 'Param43', t: 0.4, v: -0.164 }, { id: 'Param43', t: 2.2, v: -0.164 }, { id: 'Param43', t: 2.6, v: 0 },
+        { id: 'Param56', t: 0.4, v: 1 }, { id: 'Param56', t: 2.2, v: 1 }, { id: 'Param56', t: 2.6, v: 0 },
       ],
       params: [
         { id: 'ParamBrowLY', to: 0.6 }, { id: 'ParamBrowRY', to: 0.6 }, { id: 'BrowInnerUp', to: 0.4 },
@@ -1049,6 +1061,15 @@ export default {
     'brow-tilt': { state: true, dur: 1.0, params: [
       { id: 'ParamBrowLY', to: 0.7 }, { id: 'ParamBrowRY', to: -0.45 },
     ] },
+    // 歪头瞧（2026-11-20 用户测试反馈：闲时歪头要放缓、幅度减半、歪过去和歪回来感觉不一样）：
+    // 歪过去 0.7s 干脆地歪到 16 度再回落 settle 到 14（一点弹性）→ 停住瞧 1.2s → 1.6s 慢慢歪回来
+    // （回正是歪过去时间的两倍，渐渐回正）——一次性 3.8s。对话保持型 tilt（28 度）不动。
+    'tilt-look': { dur: 3.8,
+      keys: [
+        { id: 'AngleZ', t: 0, v: 0 }, { id: 'AngleZ', t: 0.7, v: 16 }, { id: 'AngleZ', t: 1.0, v: 14 },
+        { id: 'AngleZ', t: 2.2, v: 14 }, { id: 'AngleZ', t: 3.8, v: 0 },
+      ],
+      params: [] },
   },
 
   // 互斥组：组内一个词激活时，同组其他词自动让位（参数撤掉）。

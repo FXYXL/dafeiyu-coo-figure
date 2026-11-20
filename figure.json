@@ -2,7 +2,7 @@
   "manifest": 2,
   "api": 2,
   "id": "deepseek-shenggong",
-  "version": "1.13.52",
+  "version": "1.13.53",
   "name": {
     "zh": "大肥鱼",
     "en": "DaFeiYu"
@@ -2092,6 +2092,21 @@
       },
       "seconds": 1,
       "lasting": true
+    },
+    {
+      "id": "tilt-look",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "歪头瞧",
+          "歪头看看"
+        ]
+      },
+      "about": {
+        "zh": "好奇地歪过头去瞧一瞧，带一点弹性停住，再慢慢歪回来——比歪头轻、比歪一下头慢",
+        "en": "好奇地歪过头去瞧一瞧，带一点弹性停住，再慢慢歪回来——比歪头轻、比歪一下头慢"
+      },
+      "seconds": 3.8
     }
   ],
   "sounds": {},

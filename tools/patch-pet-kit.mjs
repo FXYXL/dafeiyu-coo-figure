@@ -25,6 +25,7 @@ const argDir = process.argv.find((a) => a.startsWith('--dir='));
 const DIR = (argDir ? argDir.slice(6).replace(/[\\/]+$/, '') : 'D:/Coopanion/resources/app/node_modules/cortico-world-desktop-pet');
 const FILES = {
   body: `${DIR}/web/kit/body.js`,
+  frame: `${DIR}/web/figure-frame.js`,
   petapp: `${DIR}/web/pet-app.js`,
   script: `${DIR}/src/script.ts`,
   server: `${DIR}/src/server.ts`,
@@ -191,13 +192,13 @@ const PATCHES = [
   },
   {
     file: 'body', id: 'idleWordPick',
-    desc: '3.9 统一闲时调度：decide() 删 expr 硬编码六张脸，换 idle-word 选项——从形象包 idlePool() 按权重抽词走 doWord 正常入口（音效/爱心/挤压白拿），40~80 秒冷却',
+    desc: '3.9 统一闲时调度：decide() 删 expr 硬编码六张脸，换 idle-word 选项（权重 25，用户 2026-11-20 定：让我们自己的内容占比 ~26%）——从形象包 idlePool() 按权重抽词走 doWord 正常入口（音效/爱心/挤压白拿），25~50 秒冷却',
     detect: (s) => /pick === 'idle-word'/.test(s),
     apply: (s) => {
       const out = s
         .replace(
           "['sit', 6], ['expr', 12], ['wait', calm ? 30 : 10]]",
-          "['sit', 6], ['idle-word', T >= (pet.idleWordAt ?? 0) ? 12 : 0], ['wait', calm ? 30 : 10]]",
+          "['sit', 6], ['idle-word', T >= (pet.idleWordAt ?? 0) ? 25 : 0], ['wait', calm ? 30 : 10]]",
         )
         .replace(
           "    else if (pick === 'expr') { setExpr(['happy', 'wink', 'love', 'sleepy', 'surprised', 'shy'][Math.floor(Math.random() * 6)]); pet.lastAct = 'expr'; }",
@@ -207,13 +208,29 @@ const PATCHES = [
       let r2 = Math.random() * total, pick2 = pool[pool.length - 1];
       for (const m of pool) { r2 -= (m.w ?? 1); if (r2 <= 0) { pick2 = m; break; } }
       const word = typeof pick2 === 'object' ? pick2.word : pick2;
-      pet.idleWordAt = T + rnd(40, 80);   // 冷却先记上：词被拒（busy）也不连着掷
+      pet.idleWordAt = T + rnd(25, 50);   // 冷却先记上：词被拒（busy）也不连着掷。2026-11-20 用户反馈随机动作难触发，40~80 → 25~50（对齐旧待机换手节奏）
       if (word) doWord(word, { idle: true, life: pick2.life });
       pet.lastAct = 'idle-word';
     }`,
         );
       if (!out.includes("pick === 'idle-word'")) throw new Error('idleWordPick：expr 分支锚点未命中');
-      if (!out.includes("['idle-word', T >= (pet.idleWordAt ?? 0) ? 12 : 0]")) throw new Error('idleWordPick：opts2 锚点未命中');
+      if (!out.includes("['idle-word', T >= (pet.idleWordAt ?? 0) ? 25 : 0]")) throw new Error('idleWordPick：opts2 锚点未命中');
+      return out;
+    },
+  },
+  {
+    file: 'body', id: 'calmPace',
+    desc: '3.9a 「多待着」节奏放缓（2026-11-20 用户反馈几乎一直在动）：calm 掷骰间隔 2~4s → 5~10s（原节奏的 2.5 倍；6~14 试过太安静），wait 权重 30→40',
+    detect: (s) => /calm \? rnd\(5, 10\) : rnd\(2, 4\)/.test(s),
+    apply: (s) => {
+      const out = s
+        .replace(
+          "if (pet.mode === 'idle' && T >= pet.nextAt) pet.nextAt = T + rnd(2, 4);",
+          "if (pet.mode === 'idle' && T >= pet.nextAt) pet.nextAt = T + (calm ? rnd(5, 10) : rnd(2, 4));   // 3.9a calm 掷骰放缓：原节奏的 2.5 倍（6~14 试过太安静，2026-11-20 用户定）",
+        )
+        .replace("['wait', calm ? 30 : 10]]", "['wait', calm ? 40 : 10]]   // 3.9a 多待着：发呆权重上调");
+      if (!out.includes('calm ? rnd(5, 10) : rnd(2, 4)')) throw new Error('calmPace：nextAt 锚点未命中');
+      if (!out.includes("['wait', calm ? 40 : 10]]")) throw new Error('calmPace：wait 权重锚点未命中');
       return out;
     },
   },
@@ -227,6 +244,64 @@ const PATCHES = [
         .replace('    if (custom?.actWord?.(w)) {', '    if (custom?.actWord?.(w, null, o)) {');
       if (!out.includes('function doWord(w, o)')) throw new Error('doWordOpts：doWord 签名锚点未命中');
       if (!out.includes('actWord?.(w, null, o)')) throw new Error('doWordOpts：actWord 调用锚点未命中');
+      return out;
+    },
+  },
+  // ===== figure-frame.js：帧间隙探测（摸头冻结 bug 定位，2026-11-20）=====
+  {
+    file: 'frame', id: 'tickGapLog',
+    desc: '诊断：iframe 收到 tick 的墙上时钟间隙 >800ms 时打点——主线程卡（tick 断流）和 iframe 自身卡都在这里现形，配合 rAF-gap/后端 frame-gap 三层定位',
+    detect: (s) => /tick-gap/.test(s),
+    apply: (s) => {
+      const out = s.replace(
+        `    } else if (m.t === 'tick') {
+      body.step(m.dt, m.draw);`,
+        `    } else if (m.t === 'tick') {
+      const __w = Date.now(), __g = __w - (globalThis.__lastTickW ?? __w);   // 诊断：tick 断流探测（摸头冻结定位）。Date.now：iframe 沙箱里 performance.now 不可用（形象包踩过）
+      if (__g > 800) { try { new Image().src = '/api/figure-log?m=' + encodeURIComponent('tick-gap ' + Math.round(__g) + 'ms'); } catch { /* 诊断不致命 */ } }
+      globalThis.__lastTickW = __w;
+      const __s = Date.now();
+      body.step(m.dt, m.draw);
+      const __sd = Date.now() - __s;   // 诊断：step 自身耗时——tick-gap 伴随 step-slow = 形象代码卡；只有 tick-gap = 帧没送到（上层/IPC）
+      if (__sd > 300) { try { new Image().src = '/api/figure-log?m=' + encodeURIComponent('step-slow ' + __sd + 'ms dt=' + (typeof m.dt === 'number' ? m.dt.toFixed(3) : m.dt)); } catch { /* 诊断不致命 */ } }`,
+      );
+      if (!out.includes('tick-gap')) throw new Error('tickGapLog：tick 锚点未命中');
+      return out;
+    },
+  },
+  // ===== pet-app.js：主线程 rAF 探测 + 触摸时间戳 =====
+  {
+    file: 'petapp', id: 'rafGapLog',
+    desc: '诊断：pet 页 rAF 间隙 >800ms 时打点——主线程被同步工作卡住（呼吸/浮动全停的画面定住）在这里现形',
+    detect: (s) => /rAF-gap/.test(s),
+    apply: (s) => {
+      const out = s.replace(
+        "runFrames(frame, { refreshed: () => { if (windowShown) lastFrameAt = performance.now(); } });",
+        `runFrames(frame, {
+  refreshed: (now) => {
+    const __g = now - (globalThis.__lastRF ?? now);   // 诊断：主线程卡顿探测（摸头冻结定位）
+    if (windowShown && __g > 800) { try { new Image().src = '/api/figure-log?m=' + encodeURIComponent('rAF-gap ' + Math.round(__g) + 'ms'); } catch { /* 诊断不致命 */ } }
+    globalThis.__lastRF = now;
+    if (windowShown) lastFrameAt = performance.now();
+  } });`,
+      );
+      if (!out.includes('rAF-gap')) throw new Error('rafGapLog：runFrames 锚点未命中');
+      return out;
+    },
+  },
+  {
+    file: 'petapp', id: 'touchMark',
+    desc: '诊断：触摸事件上报时刻打点（对齐冻结时间线用）',
+    detect: (s) => /'touch ' \+ /.test(s),
+    apply: (s) => {
+      const out = s.replace(
+        `  } else if (kind === 'touch') {
+    send({ t: 'touch', ...d });`,
+        `  } else if (kind === 'touch') {
+    try { new Image().src = '/api/figure-log?m=' + encodeURIComponent('touch ' + (d?.kind ?? '?') + ' @' + new Date().toTimeString().slice(0, 8)); } catch { /* 诊断不致命 */ }   // 诊断：对齐时间线
+    send({ t: 'touch', ...d });`,
+      );
+      if (!out.includes("'touch ' + ")) throw new Error('touchMark：onBody touch 锚点未命中');
       return out;
     },
   },
