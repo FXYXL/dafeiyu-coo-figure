@@ -856,7 +856,11 @@ export async function createLive2DBody(base, opts, entry, kit) {
   // 试点阶段只放白名单（profile.channelWords）里的词走这条新路，其余词继续交给 kit 的 pulse。
   // 出问题把 profile.useChannels 改成 false，整条新路关掉，回到旧行为。
   const useChannels = profile.useChannels === true;
-  const channelWords = new Set(profile.channelWords ?? []);
+  // 通道词表【自动派生】（2026-11-20）：paramActs 的键就是通道词的精确定义——
+  // 手工白名单已经三次静默咬人（新词忘同步 → actWord 第一道守卫拒之门外 →
+  // 有回执没动作）。并与旧名单取并集：kit 原生词（wave/bow 等历史残留）无害，
+  // actWord 后续的 paramActs 检查会把它们正常交还 kit。
+  const channelWords = new Set([...Object.keys(paramActs), ...(profile.channelWords ?? [])]);
   // 手部动作互斥：三只手共用 Movement1/2/3 这几个开关和一部分手臂参数。
   // 同时抬两只手不是"多一只手"，是网格打架 —— 所以新的手部词进来时，
   // 先把上一只手在通道里写的参数全部撤掉。
@@ -990,7 +994,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
     }
     bornSentence = sentenceCount;   // 词出生时的句号（跟句寿命用）
     bornAt = clockT;                // 词出生的时刻（闲置语境的限时用）
-    if (!useChannels || !channelWords.has(w)) return false;
+    if (!useChannels || !channelWords.has(w)) { audit('reject ' + w + ' (通道守卫)'); return false; }
     const def = paramActs[w];
     if (!def) return false;
     const now = clockT;
@@ -1100,6 +1104,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
         channel.set(id, { kind: 'keys', frames: out, t0: now, dur, emo, post, bornS: sentenceCount, bornT: clockT, src: w });
       }
     }
+    audit('write ' + w);
     console.info('[l2d] 通道记录', w, '静态', (def.params ?? []).length, '波形', (def.waves ?? []).length);
     // 返回 false：姿态由通道画，但**生命周期交还给 kit**。
     // 早先这里返回 true 把 doWord 整个截胡，结果 kit 的 act() 从没执行，
