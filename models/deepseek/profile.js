@@ -103,6 +103,7 @@ export default {
     { word: 'chest-hand', kind: 'act', w: 4, life: 4 },
     { word: 'finger-point', kind: 'act', w: 4, life: 4 },
     { word: 'swing', kind: 'act', w: 2 },
+    { word: 'skit', kind: 'act', w: 1 },   // 彩蛋小剧场（纯动作版，见 profile.skits）
   ],
 
   // 指针跟随身体：光标左右 → 躯干跟着倾。walk 是走路时的倾斜方向（负号=朝行进方向倒，
@@ -309,8 +310,40 @@ export default {
     'alert-combo': ['face-front', 'stand-straight', 'brow-knit', 'look-left'],                       // 警觉 = 正视 站直 皱眉 看左边
   },
 
-  paramActs: {
-    // —— 静态姿态（进入 → 保持 → 退出）——
+  // ---------- 彩蛋小剧场（纯动作版）----------
+  // 他们的 skits.txt 是「台词 + 动作」脚本；文字气泡我们拿不到通道（kit 的 onEvent 只有
+  // arrived / interrupted / touch / mode / done），所以这里只演动作和表情，
+  // say: true 的剧本用假口型（ParamMouthOpenY 走帧，不出声）。
+  // 闲时池里加一条 { word: 'skit' } 就会被随机抽到；任何新词 / 说话 / 走路 / 拖动都会硬打断。
+  skits: [
+    {
+      id: 'detective', dur: 6.6, life: 8,
+      // 名侦探：挑眉 → 眯眼打量 → 瞟一眼左边 → 晃头 → 坏笑 → 点头
+      steps: [
+        { at: 0.0, w: 'brow-up' },
+        { at: 0.9, w: 'squint' },
+        { at: 1.9, w: 'glance', side: 1 },
+        { at: 3.0, w: 'head-swing' },
+        { at: 4.6, w: 'smirk' },
+        { at: 5.4, w: 'nod' },
+      ],
+    },
+    {
+      id: 'doze', dur: 7.4, life: 9,
+      // 学习打瞌睡：半睁 → 低头 → 慢眨眼 → 点头打盹 → 惊醒瞪眼 → 左右张望
+      steps: [
+        { at: 0.0, w: 'eye-half' },
+        { at: 0.5, w: 'head-down' },
+        { at: 1.4, w: { w: 'blink', pace: 1.7 } },
+        { at: 2.4, w: 'nod' },
+        { at: 4.0, w: { w: 'blink', pace: 1.7 } },
+        { at: 5.2, w: 'eye-wide' },
+        { at: 5.6, w: 'look-around' },
+      ],
+    },
+  ],
+
+  paramActs: {    // —— 静态姿态（进入 → 保持 → 退出）——
     // 探身贴近镜头：负值往前靠，物理会联动身体透视（最像 VTS 里的前倾）
     'lean-in':   { params: [{ id: 'LeanInput', to: -30 }] },
     'lean-back': { params: [{ id: 'LeanInput', to: 9 }] },   // 对齐 Body.cs 后仰 LeanInput 9（原 30 大 3 倍）,
@@ -1190,142 +1223,6 @@ export default {
 
   // 简易模式不播 motion，但 motion 里的 PartOpacity 是“中性姿势”的一部分：
   // 少了它，hiyori 这类模型会同时显示 PartArmA / PartArmB（四只手）。
-  parts: { base: {} },
-  // 多轴方案：figure.json 的 axes 选中项会拼成 scheme，这里声明每个选项要写死的参数。
-  // 关闭态也要显式写 0，否则从"打开"切回"默认"时旧值会留在参数里。
-  schemes: {
-    // 每个选项都要把受控参数写全：切回不带配件的选项时，旧值必须显式归零，
-    // 否则参数会停留在上一次的状态（模型不会自己复位）。
-    body: {
-      default: { params: { Clothes2: 0 } },
-      type1: { fit: { zoom: 1.449, offset: [0, -0.992], autoFit: false }, params: { Clothes2: 0.4 } },
-      type2: { fit: { zoom: 3.97, offset: [0, -5.0], autoFit: false }, params: { Clothes2: 1 } },
-    },
-
-    shake: { dur: 1.34,
-      // 两连摇头（Body.cs:103 Repeat 展开）：左 -11 停顿右 11，再一轮
-      keys: [
-        { id: 'AngleX', t: 0, v: 0 }, { id: 'AngleX', t: 0.17, v: -11 }, { id: 'AngleX', t: 0.45, v: 11 },
-        { id: 'AngleX', t: 0.73, v: -11 }, { id: 'AngleX', t: 1.01, v: 11 }, { id: 'AngleX', t: 1.34, v: 0 },
-      ] },
-    // 跳舞：腰扭 + 头摆 + 歪头 + 身体前后，四条不同频率叠起来才像在跳
-    // 扭腰：腰 + 头 + 歪头 + 身体前后，四条不同频率叠起来才像在跳
-    // （不能叫 dance：kit 里 dance 走 setMode，不给 pulse，拿不到进度）
-    wiggle: {
-      dur: 3.6,
-      waves: [
-        { id: 'ParamBodyAngleZ', amp: 17, freq: 2 },
-        { id: 'AngleZ', amp: 11, freq: 2, phase: 0.12 },
-        { id: 'AngleX', amp: 9, freq: 1, phase: 0.35 },
-        { id: 'LeanInput', amp: -9, freq: 2, phase: 0.25 },
-      ],
-    },
-    tilt:        { params: [{ id: 'AngleZ', to: 28 }] },
-
-    // —— 波形动作（连续摆动）——
-    // 点头：头上下点几下
-    nod:   { dur: 1.06,
-      // 两连点头（Body.cs:102 Repeat 展开）：点到 -10 停顿回 1，再点一次——顿挫感
-      keys: [
-        { id: 'AngleY', t: 0, v: 0 }, { id: 'AngleY', t: 0.17, v: -10 }, { id: 'AngleY', t: 0.4, v: 1 },
-        { id: 'AngleY', t: 0.63, v: -10 }, { id: 'AngleY', t: 0.86, v: 1 }, { id: 'AngleY', t: 1.06, v: 0 },
-      ] },
-    // 摇头：头左右摇
-    shake: { dur: 1.34,
-      // 两连摇头（Body.cs:103 Repeat 展开）：左 -11 停顿右 11，再一轮
-      keys: [
-        { id: 'AngleX', t: 0, v: 0 }, { id: 'AngleX', t: 0.17, v: -11 }, { id: 'AngleX', t: 0.45, v: 11 },
-        { id: 'AngleX', t: 0.73, v: -11 }, { id: 'AngleX', t: 1.01, v: 11 }, { id: 'AngleX', t: 1.34, v: 0 },
-      ] },
-    // 跳舞：腰扭 + 头摆 + 歪头 + 身体前后，四条不同频率叠起来才像在跳
-    // 扭腰：腰 + 头 + 歪头 + 身体前后，四条不同频率叠起来才像在跳
-    // （不能叫 dance：kit 里 dance 走 setMode，不给 pulse，拿不到进度）
-    wiggle: {
-      dur: 3.6,
-      waves: [
-        { id: 'ParamBodyAngleZ', amp: 17, freq: 2 },
-        { id: 'AngleZ', amp: 11, freq: 2, phase: 0.12 },
-        { id: 'AngleX', amp: 9, freq: 1, phase: 0.35 },
-        { id: 'LeanInput', amp: -9, freq: 2, phase: 0.25 },
-      ],
-    },
-    'wiggle': {
-      dur: 3.6,
-      // 腰的左右摆：物理输出参数，postWaves 必须写在 physics.evaluate() 之后
-      postWaves: [
-        { id: 'ParamBodyAngleZ', amp: 13, freq: 0.7 },
-        { id: 'HipAngleX', amp: 11, freq: 0.7, phase: 0.12 },
-        { id: 'HipAngleZ', amp: 8, freq: 0.7, phase: 0.15 },
-        { id: 'ParamBodyAngleRZ', amp: 7, freq: 0.7, phase: 0.06 },
-      ],
-      waves: [
-        { id: 'ParamBodyAngleZ', amp: 8, freq: 0.7 },
-        { id: 'AngleZ', amp: 6, freq: 0.7, phase: 0.12 },
-        { id: 'AngleX', amp: 4, freq: 0.35, phase: 0.35 },
-        { id: 'LeanInput', amp: -3, freq: 0.7, phase: 0.25 },
-      ],
-    },
-    'bitter-smile': { state: true, dur: 1.2, params: [
-      { id: 'ParamMouthForm', to: 0.7 },
-      { id: 'ParamBrowLY', to: 0.45 }, { id: 'ParamBrowRY', to: 0.45 },
-      { id: 'ParamBrowLAngle', to: -0.55 }, { id: 'ParamBrowRAngle', to: -0.55 },
-    ] },
-    'holding-up': { state: true, dur: 1.2, params: [
-      { id: 'ParamMouthForm', to: 0.7 },
-      { id: 'ParamBrowLY', to: 0.45 }, { id: 'ParamBrowRY', to: 0.45 },
-      { id: 'ParamBrowLAngle', to: -0.55 }, { id: 'ParamBrowRAngle', to: -0.55 },
-      { id: 'key7', to: 1 },
-    ] },
-    'guilty-look': { state: true, dur: 1.2, params: [
-      { id: 'ParamEyeLOpen', to: 0.45 }, { id: 'ParamEyeROpen', to: 0.45 }, { id: 'EyeSmile', to: 0 },
-      { id: 'ParamBrowLY', to: 0.45 }, { id: 'ParamBrowRY', to: 0.45 },
-      { id: 'ParamBrowLAngle', to: -0.55 }, { id: 'ParamBrowRAngle', to: -0.55 },
-      { id: 'key7', to: 1 }, { id: 'ParamMouthForm', to: -0.6 },
-    ] },
-    'act-cute': { dur: 1.2 },   // 组合词：零件见 profile.combos（对应 Body.cs:220 的 Combos）
-    'defiant': { state: true, dur: 1.2, params: [
-      { id: 'ParamBrowLY', to: -0.7 }, { id: 'ParamBrowRY', to: -0.7 },
-      { id: 'ParamBrowLAngle', to: -0.9 }, { id: 'ParamBrowRAngle', to: -0.9 },
-      { id: 'ParamMouthForm', to: -0.6 },
-      { id: 'ParamEyeLOpen', to: 0.45 }, { id: 'ParamEyeROpen', to: 0.45 }, { id: 'EyeSmile', to: 0 },
-    ] },
-    'holding-tears': { state: true, dur: 1.2, params: [
-      { id: 'ParamEyeLOpen', to: 1 }, { id: 'ParamEyeROpen', to: 1 }, { id: 'EyeSmile', to: 0 },
-      { id: 'ParamBrowLY', to: 0.45 }, { id: 'ParamBrowRY', to: 0.45 },
-      { id: 'ParamBrowLAngle', to: -0.55 }, { id: 'ParamBrowRAngle', to: -0.55 },
-      { id: 'ParamMouthForm', to: -0.6 },
-    ] },
-    'smug-face': { state: true, dur: 1.2, params: [
-      { id: 'EyeSmile', to: 1 },
-      { id: 'ParamBrowLY', to: 0.7 }, { id: 'ParamBrowRY', to: 0.7 },
-      { id: 'ParamBrowLAngle', to: 0 }, { id: 'ParamBrowRAngle', to: 0 },
-      { id: 'ParamMouthForm', to: 0.7 },
-    ] },
-    'perfunctory': { state: true, dur: 1.2, params: [
-      { id: 'ParamEyeLOpen', to: 0.45 }, { id: 'ParamEyeROpen', to: 0.45 }, { id: 'EyeSmile', to: 0 },
-      { id: 'ParamMouthForm', to: 0.7 },
-    ] },
-    'circle-eyes': { state: true, dur: 1.0, params: [
-      { id: 'key3', to: 1 }, { id: 'key4', to: 0 }, { id: 'key5', to: 0 }, { id: 'key6', to: 0 },
-    ] },
-    'heart-eyes':  { state: true, dur: 1.0, params: [
-      { id: 'key3', to: 0 }, { id: 'key4', to: 1 }, { id: 'key5', to: 0 }, { id: 'key6', to: 0 },
-    ] },
-    'xx-eyes':     { state: true, dur: 1.0, params: [
-      { id: 'key3', to: 0 }, { id: 'key4', to: 0 }, { id: 'key5', to: 1 }, { id: 'key6', to: 0 },
-    ] },
-    'wry-face':    { state: true, dur: 1.0, params: [
-      { id: 'key3', to: 0 }, { id: 'key4', to: 0 }, { id: 'key5', to: 0 }, { id: 'key6', to: 1 },
-    ] },
-    'dark-face':   { state: true, dur: 1.0, params: [{ id: 'key1', to: 1 }] },
-    'tears':       { state: true, dur: 1.0, params: [{ id: 'key2', to: 1 }] },
-    'loading-face':{ state: true, dur: 1.0, params: [{ id: 'key8', to: 1 }] },
-    'bunny-teeth': { state: true, dur: 1.0, params: [{ id: 'key9', to: 1 }] },
-    'pan-face':    { state: true, dur: 1.0, params: [{ id: 'key10', to: 1 }] },
-    'glasses-face':{ state: true, dur: 1.0, params: [{ id: 'key11', to: 1 }] },
-    'monocle-face':{ state: true, dur: 1.0, params: [{ id: 'key12', to: 1 }] },
-
-  },
 
 
 

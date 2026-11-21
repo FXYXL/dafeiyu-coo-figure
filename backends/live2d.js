@@ -1144,10 +1144,53 @@ export async function createLive2DBody(base, opts, entry, kit) {
    *  和他们的解析顺序一致（先展开，再对每个 token 认修饰）。 */
   const combos = profile.combos ?? {};
 
+  // ---------- 彩蛋小剧场（纯动作 + 假口型）----------
+  // 他们的 skits.txt 是「台词 + 动作」脚本。文字气泡我们拿不到通道（kit 的 onEvent 只有
+  // arrived/interrupted/touch/mode/done，pet-app 也只接这五种），所以这里只演动作和表情；
+  // 剧本写 say:true 时用假口型（张嘴节奏走帧，不出声），她真说话时两路取 max 合并。
+  // 触发：闲时池里的一条 { word: 'skit' }；打断：任何新词 / 开口说话 / 走路拖拽，硬切。
+  const skits = profile.skits ?? [];
+  let skit = null;   // { def, t, done:Set }
+  function startSkit() {
+    if (!skits.length) return false;
+    const def = skits[Math.floor(Math.random() * skits.length)];
+    skit = { def, t: 0, done: new Set() };
+    audit('skit-start ' + def.id);
+    return true;
+  }
+  function stopSkit(why) {
+    if (!skit) return;
+    audit('skit-stop ' + skit.def.id + ' ' + why);
+    skit = null;
+  }
+  /** 每帧推进剧本：到点的 step 走 applyOneWord（和散词同一条写入路径，通道/轨道/手部全都走）。 */
+  function stepSkit(dt) {
+    if (!skit) return;
+    skit.t += dt;
+    for (let n = 0; n < skit.def.steps.length; n++) {
+      const s = skit.def.steps[n];
+      if (skit.t < (s.at ?? 0) || skit.done.has(n)) continue;
+      skit.done.add(n);
+      const part = typeof s.w === 'string' ? { w: s.w } : s.w;
+      pendingMod = { scale: part.scale ?? 1, pace: part.pace ?? 1, repeat: part.repeat ?? 1, explicit: true };
+      dirSide = part.side ?? 1;
+      applyOneWord(part.w, null, {}, { group: 'skit-' + skit.def.id, life: skit.def.life });
+    }
+    if (skit.t > (skit.def.dur ?? 6)) stopSkit('done');
+  }
+  /** 假口型：剧本 say:true 才动嘴。两条正弦交叉，听起来像在念但没声音。 */
+  function skitTalk() {
+    if (!skit?.def.say) return 0;
+    const t = skit.t;
+    return clamp(0.45 + 0.5 * Math.sin(t * 13.1) * Math.sin(t * 3.7 + 1.1), 0, 1);
+  }
+
   /** kit 的 doWord 入口。组合词在这里展开成一串基础词，同一帧各走各的通道；
    *  寿命（bornS/bornT）与气泡顶替按**组合词本身**（group）记，不按展开出来的基础词 ——
    *  否则「感动」的四个零件会被当成四个独立词，各活各的、各被顶替各的。 */
   function actWord(w, fromFace, o) {
+    if (w === 'skit') return startSkit();
+    stopSkit('word');   // 任何新词都打断彩蛋
     lastWordAt = clockT;
     // face 联动词（blush/tears/sweat/heart-eyes）的退场：下一个任何词触发就让位。
     // 「【害羞】→ 下一句【嘟嘴】，脸红影子不该跨句挂着」——情绪影子跟着最近的表达走。
@@ -1689,7 +1732,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 4) 口型（main.cpp:622-630 原样）：张嘴快（rate 30）/ 闭嘴慢（rate 16），
     //    并且写完做 max(当前值, mouth) —— 只增不减，呼吸和表情不会把嘴关上。
     const gap = face.gap?.[0] ?? 50;
-    const talk = neutralPose ? 0 : clamp(frame.talk ?? 0, 0, 1);
+    const talk = neutralPose ? 0 : clamp(Math.max(frame.talk ?? 0, skitTalk()), 0, 1);
     const talkOpen = clamp((gap - 44) / 22 + talk * 0.35, 0, 1);
     const mouthTarget = neutralPose ? 0 : clamp(Math.max(talkOpen, (engine?.mouthOpen ?? 0) * 0.85), 0, 1);
     mouthS += (mouthTarget - mouthS) * (1 - Math.exp(-dt * (mouthTarget > mouthS ? 30 : 16)));
@@ -2282,7 +2325,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
       const dt = clamp((_dtNow - (globalThis.__dtLast ?? _dtNow)) / 1000, 0.001, 0.05);
       globalThis.__dtLast = _dtNow;
       clockT += dt;
-      frameDt = dt;   // 通道的指数缓动（LID_TAU）用真实帧间隔
+      frameDt = dt;
+      if (skit && frame.mode !== 'idle' && frame.mode !== 'look' && frame.mode !== 'sit') stopSkit('mode:' + frame.mode);
+      stepSkit(dt);   // 通道的指数缓动（LID_TAU）用真实帧间隔
       // 诊断（摸头冻结 bug）：draw 的墙上时钟间隙 >800ms 就打点——tick 断流或 iframe 被卡在这里现形。
       // 用 Date.now()：本作用域的 performance 是物理引擎对象（line 411），且 iframe 沙箱里 window.performance.now 不可用（1713 行注释，踩过）。
       {
@@ -2465,7 +2510,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
   globalThis.__l2dCover = figure.__cover;
   globalThis.__l2dExpr = figure.__expr;
 
-  const onSpeechStart = () => { sentenceCount++; auditFlush(); };   // 新句冲审计缓冲
+  const onSpeechStart = () => { sentenceCount++; stopSkit('speech'); auditFlush(); };   // 新句冲审计缓冲
   const onSpeechEnd = () => { lastSpeechEnd = clockT; };
   // onBeat（气泡边界）：「每个【】表情是这句话的脸」——情绪脸（face-big 成员）在
   // 新气泡边界让位（原机制保留，用途正当：黑脸→害羞这类跨句换脸）。
