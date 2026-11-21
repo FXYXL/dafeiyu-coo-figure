@@ -2188,13 +2188,16 @@ export async function createLive2DBody(base, opts, entry, kit) {
       const roll = virtualParams.get('ViewRoll')?.v ?? 0;
       return tilt + lean + roll;
     },
-    // 整图平移：他们的 ViewX/ViewY（main.cpp:649 的 bodyX/bodyY）。单位是 NDC ——
-    // 1 = 半个屏宽/半屏高（他们矩阵里 bodyX 直接加在 -1..1 的投影坐标上）。
-    // 舞蹈里 ViewX 只有 ±0.02（≈1% 屏宽），就是整个画面跟着拍子轻轻左右蹭。
+    // 整图平移：他们的 ViewX/ViewY（main.cpp:649 的 bodyX/bodyY），原本是 NDC（1 = 半个屏宽）。
+    // 我们的形象只占窗口宽 43%（他们 94%），用屏宽当基准会显得位移大一倍 ——
+    // 所以这里按**形象自身的半宽/半高**换算：返回值的 1 = 半个形象宽，kit 再乘 kx/ky 变成像素。
+    // 视觉比例就和他们一致（同样是「形象宽的 1%」），曲线数值一个没改。
     groupMove() {
-      const x = virtualParams.get('ViewX')?.v ?? 0;
-      const y = virtualParams.get('ViewY')?.v ?? 0;
-      return x || y ? { x, y } : null;
+      const vx = virtualParams.get('ViewX')?.v ?? 0;
+      const vy = virtualParams.get('ViewY')?.v ?? 0;
+      if (!vx && !vy) return null;
+      const [x0, y0, x1, y1] = currentExtent();
+      return { x: vx * (x1 - x0) / 2, y: vy * (y1 - y0) / 2 };
     },
     // 2.8 叠加层：外力源（rua/触摸）在主通道结果之上相加——不动词表、不触发 face 清场
     overlaySet,

@@ -73,16 +73,20 @@ const PATCHES = [
   },
   {
     file: 'body', id: 'groupMove',
-    desc: '整图平移：figure.groupMove() 的 NDC 位移加到组变换（他们 main.cpp:649 的 bodyX/bodyY）',
-    detect: (s) => /custom\?\.groupMove/.test(s),
-    apply: (s) => s.replace(
-      '    pet.xf = { AX, AY, ax, ay, kx, ky, rot };',
-      '    // figure.groupMove：整图平移（NDC，1 = 半个屏宽）。他们 main.cpp:649 的 bodyX/bodyY 就是这一层\n'
-      + '    const mv = custom?.groupMove?.(pet.mode);\n'
-      + '    if (mv) { AX += (mv.x ?? 0) * W / 2; AY += (mv.y ?? 0) * H / 2; }\n'
-      + '    pet.xf = { AX, AY, ax, ay, kx, ky, rot };',
-    ),
-  },
+    desc: '整图平移：figure.groupMove() 的位移乘模型缩放加到组变换（他们 main.cpp:649 的 bodyX/bodyY）',
+    detect: (s) => /custom\?\.groupMove/.test(s) && /\* kx; AY \+=/.test(s),
+    apply: (s) => {
+      // 幂等：先去掉任何旧版本（NDC 那版留下的是 * W / 2）
+      let out = s.replace(/\n?    \/\/ figure\.groupMove[^\n]*\n    const mv = custom\?\.groupMove\?\.\(pet\.mode\);\n    if \(mv\) \{[^\n]*\}\n/g, '\n');
+      return out.replace(
+        '    pet.xf = { AX, AY, ax, ay, kx, ky, rot };',
+        '    // figure.groupMove：整图平移（figure 返回值的 1 = 半个形象宽/高），乘模型自身缩放变像素。\n'
+        + '    const mv = custom?.groupMove?.(pet.mode);\n'
+        + '    if (mv) { AX += (mv.x ?? 0) * kx; AY += (mv.y ?? 0) * ky; }\n'
+        + '    pet.xf = { AX, AY, ax, ay, kx, ky, rot };',
+      );
+    },
+  },,
   {
     file: 'body', id: 'noTurn',
     desc: 'noMirror 的形象不做 facing 翻转（待机转身 + 张望动作两处）',
