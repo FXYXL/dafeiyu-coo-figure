@@ -881,6 +881,128 @@ function toneOf(text: string): string {
       return out;
     },
   },
+  // ===== 2026-11-21 对齐 DeepFish：每改一处都必须登记在这里（否则 Coo 更新就丢） =====
+  {
+    file: 'body', id: 'noBrSquash',
+    desc: '去掉 canvas 呼吸正弦 br（整图一上一下的真凶）：呼吸交给 figure 的 ParamBreath 走物理，kit 不再叠一层',
+    detect: (s) => /const sy = \(1 - pet\.sq\)/.test(s) && !/1 \+ \.016 \* br/.test(s),
+    apply: (s) => {
+      let out = s;
+      out = out.replace(/(const sx = \(1 \+ pet\.sq \* \.7\) \* \(1 - \.05 \* pet\.stretch\)) \* \(1 - \.009 \* br\);/, '$1;');
+      out = out.replace(/(const sy = \(1 - pet\.sq\) \* \(1 \+ \.09 \* pet\.stretch\)) \* \(1 \+ \.016 \* br\);/, '$1;');
+      if (out === s) return null;
+      return out;
+    },
+  },
+  {
+    file: 'body', id: 'blinkBd',
+    desc: '眨眼总时长 .16 → .3（对齐 SDK CubismEyeBlink 的 0.1 降 + 0.05 停 + 0.15 升）',
+    detect: (s) => /const bd = \.3 \+ \.3 \* pet\.drowse/.test(s),
+    apply: (s) => {
+      const out = s.replace('const bd = .16 + .3 * pet.drowse', 'const bd = .3 + .3 * pet.drowse');
+      return out === s ? null : out;
+    },
+  },
+  {
+    file: 'body', id: 'trackPos',
+    desc: '鼠标跟随从「方向」改成「位置」（PetWindow.cs:948 的 /500 /400）：原来鼠标在左任意位置头都只转固定 5 度，穿中心还会猛甩',
+    detect: (s) => /\(pointer\.x - head\.x\) \/ 500/.test(s),
+    apply: (s) => {
+      const out = s.replace(
+        /      const k = Math\.min\(1, pm \/ 120\);\r?\n      return \[pdx[\s\S]*?\];/,
+        [
+          '      // 2026-11-21 完全对齐 DeepFish（PetWindow.cs 940行）：',
+          '      //   x = clamp((cursor.X - headX) / 500, -1, 1)',
+          '      //   y = clamp((headY - cursor.Y) / 400, -1, 1)',
+          '      // 他们用**固定像素 500/400**（几乎半个屏幕的范围）——鼠标越远影响越大。之前用形象宽/头半径都太窄，稍远就饱和。',
+          '      const _px0 = Math.max(-1, Math.min(1, (pointer.x - head.x) / 500));',
+          '      const _py0 = Math.max(-1, Math.min(1, (head.y - pointer.y) / 400));',
+          '      return [_px0 * 5 * pet.facing, _py0 * 4];',
+        ].join('\n'),
+      );
+      return out === s ? null : out;
+    },
+  },
+  {
+    file: 'body', id: 'rightClickRua',
+    desc: '右键 = rua、左键 = 拖拽（和 DeepFish 一样左拖右摸）：crash 链（按头→拖拽→松手摔）从根断掉，不再靠头区判断分叉',
+    detect: (s) => /p\.button === 2/.test(s),
+    apply: (s) => {
+      const out = s.replace(
+        /    const rz0 = zoneAt\(p\);[\s\S]*?\n    press = \{/,
+        [
+          '    // 2026-11-21 用户定：右键 = rua（和 DeepFish 一样左拖右摸）。彻底和拖拽分开——crash 链断掉。',
+          '    // 右键永远 press=null，不进 grab/drop，摸哪都行（不再判头区，头区只影响手感分区）。',
+          "    if (p.button === 2) {",
+          "      if (pet.mode === 'walk' || pet.mode === 'run') setMode('idle');",
+          '      press = null;',
+          '      pointer.samples = [{ t: now(p), x: p.x, y: p.y }];',
+          '      ruaDown = true; rua = null; ruaLast = { x: p.x, y: p.y, t: now(p) };',
+          '      ruaVel = { x: 0, y: 0 }; ruaTravel = 0; ruaHeadTime = 0; ruaDeepTime = 0;',
+          '      ruaMax = 0; ruaTier = 0; ruaStillAt = 0; ruaMelted = false;',
+          '      return true;',
+          '    }',
+          '    // 左键 = 拖拽/戳（原版）',
+          '    press = {',
+        ].join('\n'),
+      );
+      return out === s ? null : out;
+    },
+  },
+  {
+    file: 'body', id: 'blinkFrame',
+    desc: 'frame 加 blinkAge/blinkDur（figure 用 SDK 眨眼时需要年龄/时长；kit 只给曲线值不够）',
+    detect: (s) => /blinkAge: pet\.blinkAge/.test(s),
+    apply: (s) => {
+      const out = s.replace('t: T, blink, eyeClose,', 't: T, blink, blinkAge: pet.blinkAge, blinkDur: bd, eyeClose,');
+      return out === s ? null : out;
+    },
+  },
+  {
+    file: 'body', id: 'velY',
+    desc: '垂直速度 velY + frame 传 velX/velY（figure 的拖拽惯性 sway 要用；原来只有 velX）',
+    detect: (s) => /velY: pet\.velY/.test(s),
+    apply: (s) => {
+      let out = s
+        .replace('prevA: null, velX: 0,', 'prevA: null, prevAY: null, velX: 0, velY: 0,')
+        .replace(
+          "    const AX = pet.mode === 'drag' ? pet.dx : pet.x;\n    if (pet.prevA != null) pet.velX = lerp(pet.velX, (AX - pet.prevA) / dt, .25);",
+          "    const AX = pet.mode === 'drag' ? pet.dx : pet.x;\n    const AY = pet.mode === 'drag' ? pet.dy : pet.y;\n    if (pet.prevA != null) pet.velX = lerp(pet.velX, (AX - pet.prevA) / dt, .25);\n    // 2026-11-21 垂直速度（拖拽惯性 sway 要它；和 velX 同法）\n    if (pet.prevAY != null) pet.velY = lerp(pet.velY, (AY - pet.prevAY) / dt, .25);",
+        )
+        .replace('    pet.prevA = AX;', '    pet.prevA = AX;\n    pet.prevAY = AY;')
+        .replace('swing: pet.swing,', 'swing: pet.swing, velX: pet.velX, velY: pet.velY,');
+      return out === s ? null : out;
+    },
+  },
+  {
+    file: 'petapp', id: 'rightButton',
+    desc: '右键放行 + button 透传（原来 e.button !== 0 直接 return，右键被丢掉，rua 没法用右键）',
+    detect: (s) => /e\.button !== 0 && e\.button !== 2/.test(s),
+    apply: (s) => {
+      let out = s
+        .replace("stage.addEventListener('pointerdown', (e) => {\n  if (e.button !== 0) return;", "stage.addEventListener('pointerdown', (e) => {\n  if (e.button !== 0 && e.button !== 2) return;   // 2026-11-21：右键放行（rua 用，和 DeepFish 一样左拖右摸）")
+        .replace(
+          'const p = { x: e.clientX, y: e.clientY, t: e.timeStamp };',
+          'const p = { x: e.clientX, y: e.clientY, t: e.timeStamp, button: e.button };',
+        );
+      return out === s ? null : out;
+    },
+  },
+  {
+    file: 'script', id: 'actModifierSuffix',
+    desc: '修饰词正则：×3 与 :左/:右 都是后缀（原来只剥前缀，带参数的词全被 dropped）',
+    detect: (s) => /\.replace\(\/\[×xX\]\\d\+\$\/, ''\)/.test(s),
+    apply: (s) => {
+      const out = s.replace(
+        "const bare = w.replace(/^[微大快慢轻猛]+/, '').replace(/^[×xX]\\d+/, '');",
+        [
+          "// 2026-11-21 修：×3 是后缀（原来 ^ 匹配开头永远剥不掉）、:左/:右 方向后缀也没剥 → 带参数词全被 dropped。",
+          "    const bare = w.replace(/^[微大快慢轻猛]+/, '').replace(/[×xX]\\d+$/, '').replace(/[:：](左|右)$/, '');",
+        ].join('\n'),
+      );
+      return out === s ? null : out;
+    },
+  },
 ];
 
 const mode = process.argv.includes('--check') ? 'check'
