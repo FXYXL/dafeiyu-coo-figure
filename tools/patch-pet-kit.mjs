@@ -25,9 +25,11 @@ const argDir = process.argv.find((a) => a.startsWith('--dir='));
 const DIR = (argDir ? argDir.slice(6).replace(/[\\/]+$/, '') : 'D:/Coopanion/resources/app/node_modules/cortico-world-desktop-pet');
 const FILES = {
   body: `${DIR}/web/kit/body.js`,
+  host: `${DIR}/web/body-host.js`,
   frame: `${DIR}/web/figure-frame.js`,
   petapp: `${DIR}/web/pet-app.js`,
   script: `${DIR}/src/script.ts`,
+  mtext: `${DIR}/src/model-text.ts`,
   packs: `${DIR}/src/packs.ts`,
   world: `${DIR}/src/world.ts`,
   server: `${DIR}/src/server.ts`,
@@ -185,10 +187,23 @@ const PATCHES = [
         "    const free = roam !== 'off' && T > hold && !opts.dialogOpen?.() && !still;",
         `    // 3.9 忙闸门补「鼠标在碰我」：人正在跟她互动，她不该自己加戏。
     // 气泡还在显示/有工具在跑（holdRoam 20）/对话框开着 kit 原本就有，这里只补触摸这一项。
-    const touching = pointer.inside && (press || hitPet(pointer));
+    const touching = pointer.inside && (press || ruaDown || hitPet(pointer));
     const free = roam !== 'off' && T > hold && !opts.dialogOpen?.() && !still && !touching;`,
       );
       if (!out.includes('const touching = pointer.inside')) throw new Error('busyTouch：free 锚点未命中');
+      return out;
+    },
+  },
+  {
+    file: 'host', id: 'ruaTouchGate',
+    desc: '4.2 rua 事件放行：body-host 的 touchGate 是 kind 白名单（TOUCHES），rua-start/rua-tier/rua-still/rua-end/stroke 全不在里面 → 整条事件被 continue 丢掉（交互文本全没的真因）。放行前缀 rua- 与 stroke',
+    detect: (s) => /startsWith\('rua-'\)/.test(s),
+    apply: (s) => {
+      const out = s.replace(
+        '      if (!TOUCHES.has(kind)) return false;',
+        `      if (kind.startsWith('rua-') || kind === 'stroke') return true;   // 4.2：摸头/分区事件不走指针时间窗白名单（TOUCHES 里没有，曾被整条丢掉）\n      if (!TOUCHES.has(kind)) return false;`,
+      );
+      if (!out.includes("startsWith('rua-')")) throw new Error('ruaTouchGate：TOUCHES 锚点未命中');
       return out;
     },
   },
@@ -248,6 +263,269 @@ const PATCHES = [
       if (!out.includes('actWord?.(w, null, o)')) throw new Error('doWordOpts：actWord 调用锚点未命中');
       return out;
     },
+  },
+  // ===== body.js：4.2 rua 摸头（2026-11-20，参考他们家 PetWindow.Touch.cs）=====
+  {
+    file: 'body', id: 'ruaHead',
+    desc: '4.2 rua 摸头状态机：分区判定（figure.touchZones）→ 按住头区 = rua（不抓起）；速度平滑/计时/档位（3s 脸红、8s 眉眼软、20s 融化）/单闭眼侧判/融化渐变，每帧 frame.rua 传形象画视觉；其他分区划过摸一下（带分区的事件）；开始/升档/持续心跳/结束四类事件',
+    detect: (s) => /function stepRua/.test(s),
+    apply: (s) => {
+      let out = s
+        .replace(
+          '  let press = null, strokeAcc = 0, petCool = 0;',
+          `  let press = null, strokeAcc = 0, petCool = 0;
+  // ===== 4.2 rua 摸头（参考他们家 PetWindow.Touch.cs）=====
+  let ruaDown = false, ruaLast = null, ruaVel = { x: 0, y: 0 }, ruaTravel = 0;
+  let ruaHeadTime = 0, ruaDeepTime = 0, ruaMax = 0, ruaTier = 0, ruaStillAt = 0, ruaMelted = false;
+  let rua = null;   // 活跃时每帧传给形象：{ ux, uy, side, face, seconds, melt, moving, fx }`,
+        )
+        .replace(
+          `  function hitPet(p) {
+    return hits().some((c) => Math.hypot(p.x - c.x, p.y - c.y) < c.r);
+  }`,
+          `  function hitPet(p) {
+    return hits().some((c) => Math.hypot(p.x - c.x, p.y - c.y) < c.r);
+  }
+  /** 4.2 摸摸分区：figure 提供 touchZones（256 逻辑坐标椭圆），返回踩中的第一个 id 或 null。 */
+  function zoneAt(p) {
+    const zones = custom?.touchZones?.();
+    if (!Array.isArray(zones)) return null;
+    const xf = pet.xf ?? {};
+    const kx = xf.kx ?? S, ky = xf.ky ?? S;   // 用模型自身缩放（含用户形象缩放），不再用 stage S——半径和中心同一坐标系
+    return zones.find((z) => {
+      const c = toStage(z.x, z.y);
+      const dx = (p.x - c.x) / (z.rx * kx), dy = (p.y - c.y) / (z.ry * ky);
+      return dx * dx + dy * dy <= 1;
+    })?.id ?? null;
+  }
+  /** rua 每次移动的推进：速度指数平滑、计时衰减、档位与事件（照抄他们 StepStroke 的节奏）。 */
+  function stepRua(p) {
+    const t = now(p);
+    const dt = Math.max(.016, (t - ((ruaLast && ruaLast.t) || t)) / 1000);
+    const dx = p.x - ruaLast.x, dy = p.y - ruaLast.y;
+    const raw = { x: dx / dt, y: dy / dt };
+    ruaTravel += Math.hypot(dx, dy);
+    ruaLast = { x: p.x, y: p.y, t };
+    ruaVel.x += (raw.x - ruaVel.x) * (1 - Math.exp(-dt / .06));
+    ruaVel.y += (raw.y - ruaVel.y) * (1 - Math.exp(-dt / .06));
+    const speed = Math.hypot(ruaVel.x, ruaVel.y);
+    const zone = zoneAt(p);
+    const onHead = zone === 'head' || zone === 'face';
+    const engaged = ruaTravel > 8;   // 真的移动了才算在摸（防按下误触）
+    const moving = engaged && onHead && speed > 40;
+    if (moving) { ruaHeadTime += dt; ruaDeepTime += dt; }
+    else { ruaHeadTime = Math.max(0, ruaHeadTime - dt * .25); ruaDeepTime = Math.max(0, ruaDeepTime - (onHead ? dt * .1 : dt)); }
+    ruaMax = Math.max(ruaMax, ruaHeadTime);
+    if (!ruaMelted && ruaDeepTime >= 20) ruaMelted = true;
+    const head = (custom?.touchZones?.() ?? []).find((z) => z.id === 'head') ?? { x: 128, y: 50, rx: 74, ry: 40 };
+    const c = toStage(head.x, head.y);
+    const xf2 = pet.xf ?? {};
+    const hkx = xf2.kx ?? S, hky = xf2.ky ?? S;   // 动态头盒：半径用模型自身缩放（形象可缩放/拖拽拉伸都跟着走）
+    const ux = Math.max(-1.3, Math.min(1.3, (p.x - c.x) / (head.rx * hkx * .35)));   // 2026-11-20：增益 2.86——脸上摸范围小，原来 ux 才 0.2 头只动 2 度
+    if (t - (globalThis.__ruaDbg ?? 0) > 2000) { globalThis.__ruaDbg = t; try { new Image().src = '/api/figure-log?m=' + encodeURIComponent('rua p=' + Math.round(p.x) + ',' + Math.round(p.y) + ' c=' + Math.round(c.x) + ',' + Math.round(c.y) + ' ux=' + ux.toFixed(2) + ' uy=' + uy.toFixed(2) + ' on=' + onHead + ' S=' + S.toFixed(2)); } catch {} }
+    const uy = Math.max(-1.3, Math.min(1.3, (p.y - c.y) / (head.ry * hky)));
+    if (engaged && !rua) { rua = { ux: 0, uy: 0, side: 0, face: false, seconds: 0, melt: 0, moving: false, fx: 0 }; onEvent('touch', { kind: 'rua-start' }); }
+    if (!rua) return;
+    // 单闭哪只眼：手越过头的左右两侧才闭，进出各有一道门槛（带滞后，别在交界处来回抖）
+    if (rua.side === 0) rua.side = ux > .35 ? 1 : ux < -.35 ? -1 : 0;
+    else if (rua.side > 0 && ux < .22) rua.side = 0;
+    else if (rua.side < 0 && ux > -.22) rua.side = 0;
+    rua.ux = ux; rua.uy = uy; rua.on = engaged && onHead;   // 后端弹簧的开关（他们 amp 同口径）
+    rua.face = zone === 'face' && rua.side === 0;
+    rua.seconds = Math.round(ruaHeadTime * 10) / 10;
+    rua.melt = Math.round(Math.min(1, Math.max(0, (ruaDeepTime - 17) / 3)) * 30) / 30;
+    rua.moving = moving;
+    rua.fx = Math.max(-1, Math.min(1, ruaVel.x / 600));
+    // 档位：3s 轻摸（脸红）→ 8s 温柔（眉眼软）→ 20s 融化；升档发事件；8s 后每 2.5s 一次「还在摸」
+    const tier = rua.melt >= 1 ? 3 : ruaHeadTime >= 8 ? 2 : ruaHeadTime >= 3 ? 1 : 0;
+    if (tier > ruaTier) {
+      ruaTier = tier;
+      onEvent('touch', { kind: 'rua-tier', tier, seconds: Math.max(rua.seconds, ruaMax) });   // 用峰值：headTime 会衰减，直接发会倒退
+      ruaStillAt = t + 2500;
+    } else if (ruaTier >= 2 && t > ruaStillAt) {
+      ruaStillAt = t + 2500;
+      onEvent('touch', { kind: 'rua-still', tier: ruaTier, seconds: Math.max(rua.seconds, ruaMax) });   // 峰值，防倒退
+    }
+  }
+  /** rua 结算：按总时长四档发结束事件（失落 <3s / 不舍 3~8 / 腻歪 8~20 / 融化 20+）。返回是否真的结束了一场 rua。 */
+  function endRua() {
+    if (!ruaDown) return false;
+    ruaDown = false;
+    const held = Math.round(ruaMax * 10) / 10;
+    const tier = ruaMelted ? 3 : held >= 8 ? 2 : held >= 3 ? 1 : 0;
+    onEvent('touch', { kind: 'rua-end', tier, seconds: held });
+    rua = null; ruaMax = 0; ruaTier = 0; ruaMelted = false;
+    press = null;   // press 一并清掉：残留会让下一次移动被当成拖拽（2026-11-20 用户实测）
+    petCool = Math.max(petCool, 3);   // 抑制原生划过摸头反应：否则 setExpr(shy) 半眯眼残留（2026-11-20）
+    return true;
+  }`,
+        )
+        .replace(
+          `  function pointerDown(p) {
+    Object.assign(pointer, { x: p.x, y: p.y, inside: true });
+    if (!hitPet(p)) return false;
+    press = { x: p.x, y: p.y, t: now(p) };
+    pointer.samples = [{ t: now(p), x: p.x, y: p.y }];
+    // caught while falling or flying: held at once, since the body would fall on while the pointer moved the drag threshold
+    if (pet.mode === 'air') grab();
+    return true;
+  }`,
+          `  function pointerDown(p) {
+    Object.assign(pointer, { x: p.x, y: p.y, inside: true });
+    if (!hitPet(p)) return false;
+    const rz0 = zoneAt(p);
+    try { new Image().src = '/api/figure-log?m=' + encodeURIComponent('down zone=' + (rz0 ?? 'none') + ' p=' + Math.round(p.x) + ',' + Math.round(p.y)); } catch {}   // 诊断
+    // 4.2 rua：按在头部附近一律进 rua、**绝不抓起**——crash 刷屏的根因是按头掉进拖拽→松手摔。
+    // 宽松头区（2.2 倍椭圆）兜底：即使 touchZones 坐标偏了，也不会摔人，只是手感差。
+    let headish = rz0 === 'head' || rz0 === 'face';
+    if (!headish) {
+      const hz = (custom?.touchZones?.() ?? []).find((z) => z.id === 'head');
+      if (hz) {
+        const c0 = toStage(hz.x, hz.y), xf0 = pet.xf ?? {};
+        const kx0 = xf0.kx ?? S, ky0 = xf0.ky ?? S;
+        const dx0 = (p.x - c0.x) / (hz.rx * kx0 * 2.2), dy0 = (p.y - c0.y) / (hz.ry * ky0 * 2.2);
+        headish = dx0 * dx0 + dy0 * dy0 <= 1;
+      }
+    }
+    if (headish) {
+      if (pet.mode === 'walk' || pet.mode === 'run') setMode('idle');
+      press = null;   // 头区绝不 press：抓起→拖拽→松手 throw/drop→落地 crash 就是这条链
+      pointer.samples = [{ t: now(p), x: p.x, y: p.y }];
+      ruaDown = true; rua = null; ruaLast = { x: p.x, y: p.y, t: now(p) };
+      ruaVel = { x: 0, y: 0 }; ruaTravel = 0; ruaHeadTime = 0; ruaDeepTime = 0;
+      ruaMax = 0; ruaTier = 0; ruaStillAt = 0; ruaMelted = false;
+      return true;
+    }
+    press = { x: p.x, y: p.y, t: now(p) };
+    pointer.samples = [{ t: now(p), x: p.x, y: p.y }];
+    // caught while falling or flying: held at once, since the body would fall on while the pointer moved the drag threshold
+    if (pet.mode === 'air') { grab(); return true; }
+    return true;
+  }`,
+        )
+        .replace(
+          `    pointer.vx = lerp(pointer.vx, velocity().x, .35);
+
+    if (press && pet.mode !== 'drag' && Math.hypot(p.x - press.x, p.y - press.y) > 6) grab();`,
+          `    pointer.vx = lerp(pointer.vx, velocity().x, .35);
+
+    // 4.2 rua：按住头区期间走 rua 推进，指针本体隐藏（页面上的手接管），绝不转成拖拽
+    if (ruaDown) { stepRua(p); return (pet.cursor = 'grab'); }   // 4.2：沿用原有手形（用户：不要换指针）
+    if (press && pet.mode !== 'drag' && Math.hypot(p.x - press.x, p.y - press.y) > 6) grab();`,
+        )
+        .replace(
+          `        else setExpr(Math.random() < .5 ? 'love' : 'shy');
+        onEvent('touch', { kind: 'pet', asleep: pet.mode === 'sleep' });`,
+          `        else setExpr(Math.random() < .5 ? 'love' : 'shy');
+        // 4.2 分区：摸到哪个区发哪个区（头区划过仍是 pet 轻摸），文本由 World 组装
+        const rz = zoneAt(p);
+        onEvent('touch', rz && rz !== 'head' ? { kind: 'stroke', zone: rz } : { kind: 'pet', asleep: pet.mode === 'sleep' });`,
+        )
+        .replace(
+          `  function pointerUp(p) {
+    pet.cursor = '';
+    if (!press) return;`,
+          `  function pointerUp(p) {
+    pet.cursor = '';
+    if (ruaDown) { endRua(); return; }   // 4.2 头区 rua：press 是 null（防 crash），必须在 !press 判断前清 ruaDown——否则 rua 永不结束（用户实测「脱手还是 rua 状态」）
+    if (!press) return;`,
+        )
+        .replace(
+          `  function pointerLeave() { if (!press) pointer.inside = false; }`,
+          `  function pointerLeave() { if (!press) pointer.inside = false; }   // 4.2：rua 出窗不结算（头贴窗口边，摸出去很正常）——headTime 冻结、回窗继续`,
+        )
+        .replace(
+          `      facingNow: pet.facing,`,
+          `      facingNow: pet.facing,
+      // 4.2 rua 摸头的实时状态（null = 没在摸）：形象据此画「头朝手的反方向 + 表情档位」
+      rua: rua ? { on: rua.on !== false, ux: rua.ux, uy: rua.uy, side: rua.side, face: rua.face, seconds: rua.seconds, melt: rua.melt, moving: rua.moving, fx: rua.fx } : null,   // on：弹簧开关（必须透传，漏了头就不动）`,
+        );
+      for (const probe of ['function stepRua', "kind: 'rua-start'", 'endRua()', "kind: 'stroke', zone", 'rua: rua ?', 'headish', 'down zone=', '头区绝不 press']) {
+        if (!out.includes(probe)) throw new Error('ruaHead：锚点未命中 ' + probe);
+      }
+      return out;
+    },
+  },
+  // ===== world.ts：4.2 rua 事件直达（不进聚合）=====
+  {
+    file: 'world', id: 'crashDedup',
+    desc: 'crash/drop 文本去重：8 秒内同一条「重重落地，摔晕了一会儿」不重复 push（rua 误入拖拽时刷屏的兜底）',
+    detect: (s) => /__lastCrashText/.test(s),
+    apply: (s) => {
+      const out = s.replace(
+        "      case 'crash': text = m.crashed; break;",
+        "      case 'crash': { const now = Date.now(); try { new Image().src = '/api/figure-log?m=' + encodeURIComponent('crash-src kind=crash t=' + JSON.stringify(t).slice(0, 80)); } catch {} if (this.__lastCrashText && now - this.__lastCrashText < 8000) return; this.__lastCrashText = now; text = m.crashed; break; }   // 4.2 去重 + 源头打点",
+      );
+      if (!out.includes('__lastCrashText')) throw new Error('crashDedup：锚点未命中');
+      return out;
+    },
+  },
+  {
+    file: 'world', id: 'ruaEvents',
+    desc: 'rua 事件（开始/升档/持续心跳/结束）立即直达给 AI，不走 2.5s 触摸聚合——文本只描述状态（谁在摸/多久/什么档位），她的回应自己组织',
+    detect: (s) => /rua-start' \|\| kind === 'rua-tier'/.test(s),
+    apply: (s) => s
+      .replace(
+        `  private onTouch(msg: PageMessage): void {
+    if (!this.cfg.touch.enabled) return;
+    const kind = String(msg.kind);
+    if (kind === 'grab') return;`,
+        `  private onTouch(msg: PageMessage): void {
+    if (!this.cfg.touch.enabled) return;
+    const kind = String(msg.kind);
+    if (kind === 'grab') return;
+    // 4.2 rua：开始/升档/持续心跳/结束各立即直达，不进 2.5s 聚合（摸头状态要实时）。
+    // 文本只描述状态事实（谁在摸/摸了多久/她现在什么表情档位），她的回应完全自己组织。
+    if (kind === 'rua-start' || kind === 'rua-tier' || kind === 'rua-still' || kind === 'rua-end') {
+      // 残留的 drop/crash 聚合静默丢弃——flushTouch 会把它刷成「重重落地，摔晕了一会儿」
+      // （rua 期间刷屏的真因：之前拖拽/掉落的 touch 对象还挂着 timer）
+      if (this.touch) { clearTimeout(this.touch.timer); this.touch = null; }
+      const u = this.userName, m = this.t;
+      const tier = Number(msg.tier) || 0, seconds = Number(msg.seconds) || 0;
+      const text = kind === 'rua-start' ? m.ruaStart(u)
+        : kind === 'rua-tier' ? m.ruaTier(u, tier)
+        : kind === 'rua-still' ? m.ruaStill(u, seconds)
+        : m.ruaEnd(u, tier, seconds);
+      void this.push('desktop-pet.touch', 'desktop-pet.touch', m.touch(text), 'flush',
+        { meta: { touch: { kind, tier, seconds } } });
+      return;
+    }`,
+      )
+      .replace(
+        `      case 'crash': text = m.crash; break;`,
+        `      case 'crash': text = m.crash; break;
+      case 'stroke': text = m.stroked(u, t.zone ?? 'head'); break;   // 4.2 分区摸一下`,
+      )
+      .replace(
+        `      x: typeof msg.x === 'number' ? msg.x : null,`,
+        `      x: typeof msg.x === 'number' ? msg.x : null,
+      zone: typeof msg.zone === 'string' ? msg.zone : null,`,
+      ),
+  },
+  // ===== model-text.ts：4.2 rua 事件文本（状态描述，非台词——她的回应自己想）=====
+  {
+    file: 'mtext', id: 'ruaText',
+    desc: 'rua 事件文本模板（zh+en）：状态事实——谁在摸/摸了多久/她的表情档位（脸红/眉眼软/腻歪/融化），开始条带「先文字后表情」提示',
+    detect: (s) => /ruaStart:/.test(s),
+    apply: (s) => s
+      .replace(
+        '  petted: (user: string, n: number) => (n > 1 ? `${user}摸了你好几下` : `${user}摸了摸你的头`),',
+        `  petted: (user: string, n: number) => (n > 1 ? \`\${user}摸了你好几下\` : \`\${user}摸了摸你的头\`),
+  ruaStart: (user: string) => \`\${user}开始摸你的头啦，手还在头上没有停下。想说什么就先用文字说，不用急着发表情或动作——摸着的时候它们会被轻轻接住\`,
+  stroked: (user: string, zone: string) => \`\${user}摸了摸你的\${({ face: '脸', chest: '胸口', tail: '尾巴', skirt: '裙子', legs: '腿' } as Record<string, string>)[zone] ?? zone}\`,
+  ruaStill: (user: string, seconds: number) => \`\${user}的手还留在你头上，还在继续摸（已经摸了约 \${Math.round(seconds)} 秒）\`,
+  ruaTier: (user: string, tier: number) => \`\${user}还在摸你的头\${tier >= 3 ? '，摸了好久好久，整个人都在慢慢融化' : tier === 2 ? '，摸得很温柔，眉眼都软下来了（已经脸红+眼睛眯起来了）' : '，轻轻地摸（脸已经红了）'}（rua 进行中）\`,
+  ruaEnd: (user: string, tier: number, seconds: number) => \`\${user}停手了，这次摸了你的头约 \${Math.round(seconds)} 秒\${tier >= 3 ? '，摸了好久好久，整个人都融化掉了' : tier === 2 ? '，被摸得整个人腻歪腻歪的' : tier === 1 ? '，有点不舍得' : '，就轻轻摸了一下下'}\`,`,
+      )
+      .replace(
+        '  petted: (user, n) => (n > 1 ? `${user} patted you several times` : `${user} patted your head`),',
+        `  petted: (user, n) => (n > 1 ? \`\${user} patted you several times\` : \`\${user} patted your head\`),
+  ruaStart: (user: string) => \`\${user} started stroking your head, the hand is still there. Say what you want in words first — expressions and moves are gently held back while being stroked\`,
+  stroked: (user: string, zone: string) => \`\${user} stroked your \${({ face: 'face', chest: 'chest', tail: 'tail', skirt: 'skirt', legs: 'legs' } as Record<string, string>)[zone] ?? zone}\`,
+  ruaStill: (user: string, seconds: number) => \`\${user}\'s hand is still on your head (about \${Math.round(seconds)}s now)\`,
+  ruaTier: (user: string, tier: number) => \`\${user} keeps stroking your head\${tier >= 3 ? ' for a long long time — you are melting' : tier === 2 ? ' tenderly, your brows softening (cheeks flushed, eyes squeezed shut)' : ' gently (your cheeks are flushed)'} (rua ongoing)\`,
+  ruaEnd: (user: string, tier: number, seconds: number) => \`\${user} stopped after about \${Math.round(seconds)}s of head pats\${tier >= 3 ? ' — you melted completely' : tier === 2 ? ' — you are all gooey and content' : tier === 1 ? ' — you feel a bit reluctant it ended' : ' — just a light little pat'}\`,`,
+      )
   },
   // ===== figure-frame.js：帧间隙探测（摸头冻结 bug 定位，2026-11-20）=====
   {

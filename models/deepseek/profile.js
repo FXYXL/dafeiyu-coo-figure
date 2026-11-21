@@ -52,6 +52,16 @@ export default {
   // 对应 VTS 的 Auto Idle：闲置久了就自己换个姿势，不然一直一个姿势很死。
   // 甩草是波形动作，走的是同一套 applyActAt —— 待机里也会真的甩起来。
   // idlePoses / idleMoods 已并入上面的 idleRepertoire（3.9 统一闲时池，触发归 kit decide()）。
+  // 4.2 摸摸分区（256 逻辑坐标椭圆：中心 x,y + 半轴 rx,ry）——坐标是估计值，实验后调。
+  // head/face 按住 = 完整 rua 模式；其他分区划过 = 摸一下（一次性事件，简单版）。
+  touchZones: [
+    { id: 'head', x: 128, y: 50, rx: 74, ry: 40 },
+    { id: 'face', x: 128, y: 102, rx: 70, ry: 20 },
+    { id: 'chest', x: 128, y: 145, rx: 58, ry: 30 },
+    { id: 'skirt', x: 128, y: 192, rx: 66, ry: 26 },
+    { id: 'legs', x: 128, y: 230, rx: 52, ry: 24 },
+    { id: 'tail', x: 192, y: 165, rx: 40, ry: 42 },
+  ],
 
   // 3.9 统一闲时池（2026-11-20 用户定稿）：表情 + 动作一个池子，kit 的 decide() 按权重抽，
   // 抽中后走 doWord 正常入口——音效/爱心/挤压白拿，参数绘制走通道（actWord）。
@@ -285,27 +295,73 @@ export default {
     // Movement1/2/3 不是骨骼，是"切换哪只手显示"的开关：
     // 1=狗尾草、2=抚胸、3=竖食指。参数一开，对应手臂就替换掉默认手。
     // 必须把另外两个显式归零，否则切回来时会叠在一起。
-    // 这三个动作原本靠播原生 motion，但那几段动画的轨迹是"举起→放下"，
-    // 播完手已经落回身侧，看起来像没做。改成直接写 motion 峰值那一帧的参数，
-    // 参数层自己保持 → 手会一直举着，退出段再平滑放回。
-    'finger-point': { hand: true, state: true, dur: 4, params: [
-      { id: 'Movement1', to: 0 }, { id: 'Movement3', to: 1 },
-      { id: 'Param40', to: 1 }, { id: 'Param39', to: 0.322 },
-      { id: 'Param41', to: 0.705 }, { id: 'Param42', to: -0.05 },
-      { id: 'Param43', to: -0.164 }, { id: 'Param56', to: 1 },
-    ] },
-    'chest-hand': { hand: true, state: true, dur: 4, params: [
-      { id: 'Movement2', to: 1 },
-      { id: 'Param62', to: 0.034 }, { id: 'Param59', to: 0.509 },
-      { id: 'Param60', to: 0.879 }, { id: 'Param61', to: 0.2 },
-      { id: 'Param56', to: 1 },
-    ] },
-    'grass-hand': { hand: true, state: true, dur: 4, params: [
-      { id: 'Movement1', to: 1 }, { id: 'Movement3', to: 0 },
-      { id: 'Param36', to: 0.062 }, { id: 'Param39', to: 0.2 },
-      { id: 'Param41', to: -0.762 }, { id: 'Param42', to: 0.266 },
-      { id: 'Param56', to: 1 },
-    ] },
+    // 2026-11-20：三个词全部换回原厂动画时间轴（motions/pointIn|raise|grassIn 解码成 keys）——
+    // 当年"动画播完手落回身侧像没做"是因为播完整 motion；现在 keys 播入场段（含到位回弹）
+    // 停在终值挂着（state 保持），手感=他们家。
+    // 2026-11-20 重做：原厂入场动画时间轴搬回（motions/pointIn.js 解码）——含到位回弹
+    // （Param41 0.708→0.698、Param42 -0.058→0.026→0、Param43 -0.164→0.066→0）。
+    // 当年注释说动画"播完手落回身侧像没做"是因为播的是完整 motion；现在 keys 播完入场段
+    // 停在终值挂着（state 保持），手感=他们家。互斥归零（Movement1）留 params。
+    'finger-point': { hand: true, state: true, dur: 4, keys: [
+      { id: 'Movement3', t: 0, v: 0 }, { id: 'Movement3', t: 0.35, v: 0 }, { id: 'Movement3', t: 0.37, v: 1 },
+      { id: 'Param40', t: 0, v: 0 }, { id: 'Param40', t: 0.38, v: 0 }, { id: 'Param40', t: 0.67, v: 1 },
+      { id: 'Param36', t: 0, v: 0 }, { id: 'Param36', t: 0.87, v: 0.004 }, { id: 'Param36', t: 1.05, v: -0.004 }, { id: 'Param36', t: 1.17, v: 0 },
+      { id: 'Param39', t: 0, v: 0 }, { id: 'Param39', t: 0.87, v: 0.322 },
+      { id: 'Param41', t: 0, v: 0 }, { id: 'Param41', t: 0.03, v: 0 }, { id: 'Param41', t: 0.90, v: 0.708 },
+      { id: 'Param41', t: 1.08, v: 0.698 }, { id: 'Param41', t: 1.20, v: 0.702 },
+      { id: 'Param42', t: 0, v: 0 }, { id: 'Param42', t: 0.07, v: 0 }, { id: 'Param42', t: 0.93, v: -0.058 },
+      { id: 'Param42', t: 1.12, v: 0.026 }, { id: 'Param42', t: 1.23, v: 0 },
+      { id: 'Param43', t: 0, v: 0 }, { id: 'Param43', t: 0.10, v: 0 }, { id: 'Param43', t: 0.95, v: -0.164 },
+      { id: 'Param43', t: 1.15, v: 0.066 }, { id: 'Param43', t: 1.25, v: 0 },
+      { id: 'Param56', t: 0, v: 1 },
+    ],
+      exit: { dur: 1.25, keys: [
+        { id: 'Movement3', t: 0, v: 1 }, { id: 'Movement3', t: 0.65, v: 1 }, { id: 'Movement3', t: 0.67, v: 0 },
+        { id: 'Param40', t: 0, v: 1 }, { id: 'Param40', t: 0.33, v: 1 }, { id: 'Param40', t: 0.67, v: 0 },
+        { id: 'Param39', t: 0, v: 0.32 }, { id: 'Param39', t: 0.03, v: 0.32 }, { id: 'Param39', t: 1.07, v: 0 },
+        { id: 'Param41', t: 0, v: 0.7 }, { id: 'Param41', t: 0.07, v: 0.7 }, { id: 'Param41', t: 0.38, v: 0.762 },
+        { id: 'Param41', t: 1.10, v: -0.008 }, { id: 'Param41', t: 1.22, v: 0 }, { id: 'Param41', t: 1.25, v: 0 },
+        { id: 'Param42', t: 0, v: 0 }, { id: 'Param42', t: 0.10, v: 0 }, { id: 'Param42', t: 0.42, v: -0.102 },
+        { id: 'Param42', t: 1.13, v: 0.136 }, { id: 'Param42', t: 1.25, v: 0 },
+        { id: 'Param43', t: 0, v: 0 }, { id: 'Param43', t: 0.12, v: 0 }, { id: 'Param43', t: 0.43, v: -0.14 },
+        { id: 'Param43', t: 1.15, v: 0 },
+      ] },
+    params: [{ id: 'Movement1', to: 0 }] },
+    'chest-hand': { hand: true, state: true, dur: 4, keys: [
+      // motions/raise.js（默认手切举手 1.13s）：Param59 0→0.516(0.8s)→回落 0.476——
+      // 「手到位置了有点回弹」就是这个；终态 0.476/0.86 就是"放在下巴附近"的位置
+      { id: 'Movement2', t: 0, v: 0 }, { id: 'Movement2', t: 0.32, v: 0 }, { id: 'Movement2', t: 0.33, v: 1 },
+      { id: 'Param59', t: 0, v: 0 }, { id: 'Param59', t: 0.03, v: 0 }, { id: 'Param59', t: 0.80, v: 0.516 }, { id: 'Param59', t: 1.10, v: 0.476 },
+      { id: 'Param60', t: 0, v: 0 }, { id: 'Param60', t: 0.07, v: 0 }, { id: 'Param60', t: 0.83, v: 0.88 }, { id: 'Param60', t: 1.13, v: 0.86 },
+      { id: 'Param61', t: 0, v: 0 }, { id: 'Param61', t: 0.08, v: 0 }, { id: 'Param61', t: 0.85, v: 0.2 }, { id: 'Param61', t: 1.13, v: 0.002 },
+      { id: 'Param62', t: 0, v: 0 }, { id: 'Param62', t: 0.77, v: 0.034 },
+      { id: 'Param56', t: 0, v: 1 },
+    ],
+      exit: { dur: 1.05, keys: [
+        { id: 'Movement2', t: 0, v: 1 }, { id: 'Movement2', t: 0.53, v: 1 }, { id: 'Movement2', t: 0.55, v: 0 },
+        { id: 'Param62', t: 0, v: 0.03 }, { id: 'Param62', t: 0.82, v: -0.03 }, { id: 'Param62', t: 1.05, v: 0 },
+        { id: 'Param59', t: 0, v: 0.48 }, { id: 'Param59', t: 0.82, v: -0.048 }, { id: 'Param59', t: 1.05, v: 0 },
+        { id: 'Param60', t: 0, v: 0.86 }, { id: 'Param60', t: 0.82, v: -0.008 }, { id: 'Param60', t: 1.05, v: 0 },
+        { id: 'Param61', t: 0, v: 0 }, { id: 'Param61', t: 0.82, v: 0.062 }, { id: 'Param61', t: 1.05, v: 0.001 },
+      ] },
+    params: [{ id: 'Movement1', to: 0 }, { id: 'Movement3', to: 0 }] },
+    'grass-hand': { hand: true, state: true, dur: 4, keys: [
+      // motions/grassIn.js（1.23s）：Param41 -0.766→-0.732 回弹、Param42 -0.586→0.266→0 大幅回弹（手腕甩一下）
+      { id: 'Movement1', t: 0, v: 0 }, { id: 'Movement1', t: 0.27, v: 0 }, { id: 'Movement1', t: 0.28, v: 1 },
+      { id: 'Param36', t: 0, v: 0 }, { id: 'Param36', t: 0.28, v: 0.053 }, { id: 'Param36', t: 0.83, v: 0.068 }, { id: 'Param36', t: 1.15, v: 0.04 }, { id: 'Param36', t: 1.23, v: 0.04 },
+      { id: 'Param39', t: 0, v: 0 }, { id: 'Param39', t: 0.83, v: 0.2 },
+      { id: 'Param41', t: 0, v: 0 }, { id: 'Param41', t: 0.03, v: 0 }, { id: 'Param41', t: 0.32, v: 0.007 }, { id: 'Param41', t: 0.87, v: -0.766 }, { id: 'Param41', t: 1.18, v: -0.732 },
+      { id: 'Param42', t: 0, v: 0 }, { id: 'Param42', t: 0.07, v: 0 }, { id: 'Param42', t: 0.35, v: -0.586 }, { id: 'Param42', t: 0.90, v: 0.266 }, { id: 'Param42', t: 1.22, v: 0 },
+      { id: 'Param56', t: 0, v: 1 },
+    ],
+      exit: { dur: 1.13, keys: [
+        { id: 'Movement1', t: 0, v: 1 }, { id: 'Movement1', t: 0.33, v: 1 }, { id: 'Movement1', t: 0.90, v: 1 }, { id: 'Movement1', t: 0.92, v: 0 },
+        { id: 'Param36', t: 0, v: 0.04 }, { id: 'Param36', t: 0.35, v: 0.068 }, { id: 'Param36', t: 0.92, v: 0.053 }, { id: 'Param36', t: 1.13, v: 0.001 },
+        { id: 'Param39', t: 0, v: 0.2 }, { id: 'Param39', t: 0.35, v: 0.2 }, { id: 'Param39', t: 1.13, v: 0 },
+        { id: 'Param41', t: 0, v: -0.732 }, { id: 'Param41', t: 0.35, v: -0.766 }, { id: 'Param41', t: 0.92, v: 0.007 }, { id: 'Param41', t: 1.13, v: 0 },
+        { id: 'Param42', t: 0, v: 0 }, { id: 'Param42', t: 0.35, v: 0.266 }, { id: 'Param42', t: 0.92, v: -0.586 }, { id: 'Param42', t: 1.13, v: -0.009 },
+      ] },
+    params: [{ id: 'Movement3', to: 0 }] },
 
     // 甩草：真的把手挥起来。
     // 关键不是"参数对不对"，是"时间轴对不对"：桌宠给的 gesture 进度 k 会卡在中途
@@ -327,12 +383,19 @@ export default {
         { id: 'AngleX', amp: 3, freq: 0.53, phase: 0.4 },
       ] },
 
-    // —— 脸部小动作（参数直驱，实测鼓腮最明显）——    // 放下手（Body.cs HandDown）：手型档全归 0——狗尾草/竖手指/抚胸残留的自救词
-    'put-hand-down': { hand: true, state: true, dur: 1.2, params: [
-      { id: 'Movement1', to: 0 }, { id: 'Movement2', to: 0 }, { id: 'Movement3', to: 0 },
+    // —— 脸部小动作（参数直驱，实测鼓腮最明显）——    // 放下手（Body.cs HandDown）：收手动画（motions/lower.js 举手切默认手 1.02s，含反向回弹
+    // Param59 0.48→-0.048→0）+ 狗尾草/竖手指的静态归零。keys/params 不放同参数。
+    'put-hand-down': { hand: true, state: true, dur: 1.05, keys: [
+      { id: 'Movement2', t: 0, v: 1 }, { id: 'Movement2', t: 0.53, v: 1 }, { id: 'Movement2', t: 0.55, v: 0 }, { id: 'Movement2', t: 1.05, v: 0 },
+      { id: 'Param56', t: 0, v: 1 }, { id: 'Param56', t: 1.05, v: 1 },
+      { id: 'Param62', t: 0, v: 0.03 }, { id: 'Param62', t: 0.82, v: -0.03 }, { id: 'Param62', t: 1.05, v: 0 },
+      { id: 'Param59', t: 0, v: 0.48 }, { id: 'Param59', t: 0.82, v: -0.048 }, { id: 'Param59', t: 1.05, v: 0 },
+      { id: 'Param60', t: 0, v: 0.86 }, { id: 'Param60', t: 0.82, v: -0.008 }, { id: 'Param60', t: 1.05, v: 0 },
+      { id: 'Param61', t: 0, v: 0 }, { id: 'Param61', t: 0.82, v: 0.062 }, { id: 'Param61', t: 1.05, v: 0.001 },
+    ], params: [
+      { id: 'Movement1', to: 0 }, { id: 'Movement3', to: 0 },
       { id: 'Param36', to: 0 }, { id: 'Param39', to: 0 }, { id: 'Param40', to: 0 }, { id: 'Param41', to: 0 },
-      { id: 'Param42', to: 0 }, { id: 'Param43', to: 0 }, { id: 'Param56', to: 0 },
-      { id: 'Param59', to: 0 }, { id: 'Param60', to: 0 }, { id: 'Param61', to: 0 }, { id: 'Param62', to: 0 },
+      { id: 'Param42', to: 0 }, { id: 'Param43', to: 0 },
     ] },
     'puff-cheek': { state: true, dur: 1.2, params: [{ id: 'CheeckPuff', to: 1 }] },
     'pout-lips':  { state: true, dur: 1.2, params: [{ id: 'Mouthpucker', to: 1 }] },
@@ -817,17 +880,20 @@ export default {
         { id: 'ParamEyeBallX', t: 0, v: 0 }, { id: 'ParamEyeBallX', t: 0.2, v: 0.8 },
         { id: 'ParamEyeBallX', t: 0.5, v: -0.8 }, { id: 'ParamEyeBallX', t: 0.8, v: 0.4 },
         { id: 'ParamEyeBallX', t: 1.2, v: 0 },
-        { id: 'Movement3', t: 0, v: 0 }, { id: 'Movement3', t: 0.4, v: 1 },
+        // 2026-11-20 二次重做：竖手指段换原厂 pointIn 时间轴（平移 +0.4s 与 Movement3 同拍）——
+        // 带到位回弹（Param41 0.708→0.698、Param42/43 微回弹），不再用静态峰值
+        { id: 'Movement3', t: 0, v: 0 }, { id: 'Movement3', t: 0.75, v: 0 }, { id: 'Movement3', t: 0.77, v: 1 },
         { id: 'Movement3', t: 2.2, v: 1 }, { id: 'Movement3', t: 2.6, v: 0 },
         { id: 'Movement1', t: 0, v: 0 }, { id: 'Movement1', t: 2.6, v: 0 },
-        { id: 'Param40', t: 0.4, v: 1 }, { id: 'Param40', t: 2.2, v: 1 }, { id: 'Param40', t: 2.6, v: 0 },
-        { id: 'Param41', t: 0.4, v: 0.705 }, { id: 'Param41', t: 2.2, v: 0.705 }, { id: 'Param41', t: 2.6, v: 0 },
-        // 2026-11-20 用户反馈：手指戳进身体——sly-idea 只搬了三个手参数，比 finger-point
-        // 少了 Param39（手肘）/Param42（手腕俯仰）/Param43（手腕偏摆）/Param56（手型确认），
-        // 手型不完整渲染成半截。补齐，包络与 Movement3 同拍（0.4 起、2.6 收）。
-        { id: 'Param39', t: 0.4, v: 0.322 }, { id: 'Param39', t: 2.2, v: 0.322 }, { id: 'Param39', t: 2.6, v: 0 },
-        { id: 'Param42', t: 0.4, v: -0.05 }, { id: 'Param42', t: 2.2, v: -0.05 }, { id: 'Param42', t: 2.6, v: 0 },
-        { id: 'Param43', t: 0.4, v: -0.164 }, { id: 'Param43', t: 2.2, v: -0.164 }, { id: 'Param43', t: 2.6, v: 0 },
+        { id: 'Param40', t: 0.4, v: 0 }, { id: 'Param40', t: 0.78, v: 0 }, { id: 'Param40', t: 1.07, v: 1 },
+        { id: 'Param40', t: 2.2, v: 1 }, { id: 'Param40', t: 2.6, v: 0 },
+        { id: 'Param41', t: 0.43, v: 0 }, { id: 'Param41', t: 1.30, v: 0.708 }, { id: 'Param41', t: 1.48, v: 0.698 },
+        { id: 'Param41', t: 1.60, v: 0.702 }, { id: 'Param41', t: 2.2, v: 0.702 }, { id: 'Param41', t: 2.6, v: 0 },
+        { id: 'Param39', t: 0.4, v: 0 }, { id: 'Param39', t: 1.27, v: 0.322 }, { id: 'Param39', t: 2.2, v: 0.322 }, { id: 'Param39', t: 2.6, v: 0 },
+        { id: 'Param42', t: 0.47, v: 0 }, { id: 'Param42', t: 1.33, v: -0.058 }, { id: 'Param42', t: 1.52, v: 0.026 },
+        { id: 'Param42', t: 1.63, v: 0 }, { id: 'Param42', t: 2.6, v: 0 },
+        { id: 'Param43', t: 0.50, v: 0 }, { id: 'Param43', t: 1.35, v: -0.164 }, { id: 'Param43', t: 1.55, v: 0.066 },
+        { id: 'Param43', t: 1.65, v: 0 }, { id: 'Param43', t: 2.6, v: 0 },
         { id: 'Param56', t: 0.4, v: 1 }, { id: 'Param56', t: 2.2, v: 1 }, { id: 'Param56', t: 2.6, v: 0 },
       ],
       params: [
@@ -1058,6 +1124,85 @@ export default {
         { id: 'EyeSmile', to: 0.8 }, { id: 'ParamEyeLOpen', to: 0.6 }, { id: 'ParamEyeROpen', to: 0.6 },
       ] },
     // 歪眉（新组合）：左眉高右眉低（一高一低才是"嗯?"脸）——保持型
+    // ── 4.2 摸后档位（2026-11-20，Behavior.cs 摸后失落/不舍/腻歪/融化 配方照抄转换）——
+    // rua 松手 1.5 秒后由后端按档位内部触发（不进 vocab，AI 不直接用）。FaceAngleY/X→AngleY/X 同号、
+    // FaceAngleZ→AngleZ 原号、FaceAngleX 摆动反号（他们正=屏幕左，我们正=屏幕右）。脸红一路带到档位里。
+    'post-stroke-1': { dur: 3.4,   // 摸后失落：眉毛上挑+抿嘴+瘪嘴+眼神下垂，头轻轻摆
+      keys: [
+        { id: 'AngleZ', t: 0, v: 0 }, { id: 'AngleZ', t: 0.5, v: 3 }, { id: 'AngleZ', t: 1.3, v: -2 },
+        { id: 'AngleZ', t: 2.1, v: 3 }, { id: 'AngleZ', t: 3.4, v: 0 },
+        { id: 'ViewSquash', t: 0.3, v: 0.004 }, { id: 'ViewSquash', t: 2.8, v: 0.004 }, { id: 'ViewSquash', t: 3.4, v: 0 },
+      ],
+      params: [
+        { id: 'key7', to: 1 }, { id: 'BrowInnerUp', to: 0.7 }, { id: 'MouthPressLipOpen', to: 0.3 },
+        { id: 'ParamMouthForm', to: -0.1 }, { id: 'ParamEyeBallY', to: -0.4 }, { id: 'AngleY', to: -5 }, { id: 'AngleZ', to: 4 },
+      ] },
+    'post-stroke-2': { dur: 4,   // 摸后不舍：笑意没退+八字眉+眼神下垂，身体前倾 -9 又不舍得走
+      keys: [
+        { id: 'LeanInput', t: 0, v: 0 }, { id: 'LeanInput', t: 0.5, v: -9 }, { id: 'LeanInput', t: 3.3, v: -8 }, { id: 'LeanInput', t: 4, v: 0 },
+        { id: 'AngleZ', t: 0, v: 0 }, { id: 'AngleZ', t: 0.7, v: 3 }, { id: 'AngleZ', t: 1.5, v: -3 },
+        { id: 'AngleZ', t: 2.3, v: 3 }, { id: 'AngleZ', t: 3.1, v: -2 }, { id: 'AngleZ', t: 4, v: 0 },
+        { id: 'ViewSquash', t: 0.4, v: 0.02 }, { id: 'ViewSquash', t: 3.4, v: 0.02 }, { id: 'ViewSquash', t: 4, v: 0 },
+      ],
+      params: [
+        { id: 'key7', to: 1 }, { id: 'EyeSmile', to: 0.45 }, { id: 'BrowInnerUp', to: 0.9 },
+        { id: 'MouthPressLipOpen', to: 0.5 }, { id: 'ParamMouthForm', to: 0.2 },
+        { id: 'ParamEyeBallY', to: -0.45 }, { id: 'AngleY', to: -8 }, { id: 'AngleZ', to: 7 },
+      ] },
+    'post-stroke-3': { dur: 4.8,   // 摸后腻歪：笑得合不拢嘴+身体前倾 -15+头身轻轻摆+举手抚胸
+      keys: [
+        { id: 'LeanInput', t: 0, v: 0 }, { id: 'LeanInput', t: 0.5, v: -15 }, { id: 'LeanInput', t: 3.9, v: -14 }, { id: 'LeanInput', t: 4.8, v: 0 },
+        { id: 'AngleZ', t: 0, v: 0 }, { id: 'AngleZ', t: 0.8, v: 3 }, { id: 'AngleZ', t: 1.6, v: -3 },
+        { id: 'AngleZ', t: 2.4, v: 3 }, { id: 'AngleZ', t: 3.2, v: -3 }, { id: 'AngleZ', t: 4, v: 2 }, { id: 'AngleZ', t: 4.8, v: 0 },
+        { id: 'AngleX', t: 0, v: 0 }, { id: 'AngleX', t: 0.8, v: 4 }, { id: 'AngleX', t: 1.8, v: -4 },
+        { id: 'AngleX', t: 2.8, v: 4 }, { id: 'AngleX', t: 3.8, v: -3 }, { id: 'AngleX', t: 4.8, v: 0 },
+        { id: 'ViewSquash', t: 0.5, v: 0.03 }, { id: 'ViewSquash', t: 4.1, v: 0.03 }, { id: 'ViewSquash', t: 4.8, v: 0 },
+        // 举手抚胸 = raise(0~1.13s 入场含回弹) + 保持 + lower(3.78~4.8s 收手含回弹)，原厂时间轴平移拼接
+        { id: 'Movement2', t: 0, v: 0 }, { id: 'Movement2', t: 0.32, v: 0 }, { id: 'Movement2', t: 0.33, v: 1 },
+        { id: 'Movement2', t: 4.31, v: 1 }, { id: 'Movement2', t: 4.33, v: 0 }, { id: 'Movement2', t: 4.8, v: 0 },
+        { id: 'Param56', t: 0, v: 1 }, { id: 'Param56', t: 4.8, v: 1 },
+        { id: 'Param62', t: 0, v: 0 }, { id: 'Param62', t: 0.77, v: 0.034 }, { id: 'Param62', t: 4.6, v: -0.03 }, { id: 'Param62', t: 4.8, v: 0 },
+        { id: 'Param59', t: 0, v: 0 }, { id: 'Param59', t: 0.03, v: 0 }, { id: 'Param59', t: 0.80, v: 0.516 }, { id: 'Param59', t: 1.10, v: 0.476 },
+        { id: 'Param59', t: 3.78, v: 0.476 }, { id: 'Param59', t: 4.6, v: -0.048 }, { id: 'Param59', t: 4.8, v: 0 },
+        { id: 'Param60', t: 0, v: 0 }, { id: 'Param60', t: 0.07, v: 0 }, { id: 'Param60', t: 0.83, v: 0.88 }, { id: 'Param60', t: 1.13, v: 0.86 },
+        { id: 'Param60', t: 3.78, v: 0.86 }, { id: 'Param60', t: 4.6, v: -0.008 }, { id: 'Param60', t: 4.8, v: 0 },
+        { id: 'Param61', t: 0, v: 0 }, { id: 'Param61', t: 0.08, v: 0 }, { id: 'Param61', t: 0.85, v: 0.2 }, { id: 'Param61', t: 1.13, v: 0.002 },
+        { id: 'Param61', t: 3.78, v: 0 }, { id: 'Param61', t: 4.6, v: 0.062 }, { id: 'Param61', t: 4.8, v: 0.001 },
+      ],
+      params: [
+        { id: 'key7', to: 1 }, { id: 'EyeSmile', to: 0.6 }, { id: 'ParamMouthForm', to: 1 },
+        { id: 'MouthPressLipOpen', to: 0.4 }, { id: 'BrowInnerUp', to: 0.6 },
+        { id: 'AngleY', to: -6 }, { id: 'AngleZ', to: 9 },
+      ] },
+    'post-stroke-4': { dur: 6,   // 摸后融化：前倾按住 -16 慢慢回+快眨两下眼+举手抚胸——20 秒彩蛋
+      keys: [
+        { id: 'LeanInput', t: 0, v: 0 }, { id: 'LeanInput', t: 0.8, v: -16 }, { id: 'LeanInput', t: 4.8, v: -16 }, { id: 'LeanInput', t: 6, v: 0 },
+        { id: 'AngleZ', t: 0, v: 0 }, { id: 'AngleZ', t: 0.8, v: 5 }, { id: 'AngleZ', t: 2, v: -2 },
+        { id: 'AngleZ', t: 3.6, v: 3 }, { id: 'AngleZ', t: 6, v: 0 },
+        { id: 'AngleX', t: 0, v: 0 }, { id: 'AngleX', t: 0.7, v: 3 }, { id: 'AngleX', t: 2.2, v: -2 },
+        { id: 'AngleX', t: 3.8, v: 2 }, { id: 'AngleX', t: 6, v: 0 },
+        { id: 'ParamEyeLOpen', t: 0.2, v: -1 }, { id: 'ParamEyeLOpen', t: 0.28, v: -0.2 }, { id: 'ParamEyeLOpen', t: 0.45, v: 0 },
+        { id: 'ParamEyeLOpen', t: 0.95, v: -1 }, { id: 'ParamEyeLOpen', t: 1.03, v: -0.2 }, { id: 'ParamEyeLOpen', t: 1.2, v: 0 }, { id: 'ParamEyeLOpen', t: 6, v: 0 },
+        { id: 'ParamEyeROpen', t: 0.2, v: -1 }, { id: 'ParamEyeROpen', t: 0.28, v: -0.2 }, { id: 'ParamEyeROpen', t: 0.45, v: 0 },
+        { id: 'ParamEyeROpen', t: 0.95, v: -1 }, { id: 'ParamEyeROpen', t: 1.03, v: -0.2 }, { id: 'ParamEyeROpen', t: 1.2, v: 0 }, { id: 'ParamEyeROpen', t: 6, v: 0 },
+        { id: 'ViewSquash', t: 0.6, v: 0.02 }, { id: 'ViewSquash', t: 5.2, v: 0.02 }, { id: 'ViewSquash', t: 6, v: 0 },
+        // 举手抚胸 = raise(0~1.13s) + 保持 + lower(4.98~6s)，原厂时间轴
+        { id: 'Movement2', t: 0, v: 0 }, { id: 'Movement2', t: 0.32, v: 0 }, { id: 'Movement2', t: 0.33, v: 1 },
+        { id: 'Movement2', t: 5.51, v: 1 }, { id: 'Movement2', t: 5.53, v: 0 }, { id: 'Movement2', t: 6, v: 0 },
+        { id: 'Param56', t: 0, v: 1 }, { id: 'Param56', t: 6, v: 1 },
+        { id: 'Param62', t: 0, v: 0 }, { id: 'Param62', t: 0.77, v: 0.034 }, { id: 'Param62', t: 5.8, v: -0.03 }, { id: 'Param62', t: 6, v: 0 },
+        { id: 'Param59', t: 0, v: 0 }, { id: 'Param59', t: 0.03, v: 0 }, { id: 'Param59', t: 0.80, v: 0.516 }, { id: 'Param59', t: 1.10, v: 0.476 },
+        { id: 'Param59', t: 4.98, v: 0.476 }, { id: 'Param59', t: 5.8, v: -0.048 }, { id: 'Param59', t: 6, v: 0 },
+        { id: 'Param60', t: 0, v: 0 }, { id: 'Param60', t: 0.07, v: 0 }, { id: 'Param60', t: 0.83, v: 0.88 }, { id: 'Param60', t: 1.13, v: 0.86 },
+        { id: 'Param60', t: 4.98, v: 0.86 }, { id: 'Param60', t: 5.8, v: -0.008 }, { id: 'Param60', t: 6, v: 0 },
+        { id: 'Param61', t: 0, v: 0 }, { id: 'Param61', t: 0.08, v: 0 }, { id: 'Param61', t: 0.85, v: 0.2 }, { id: 'Param61', t: 1.13, v: 0.002 },
+        { id: 'Param61', t: 4.98, v: 0 }, { id: 'Param61', t: 5.8, v: 0.062 }, { id: 'Param61', t: 6, v: 0.001 },
+      ],
+      params: [
+        { id: 'key7', to: 1 }, { id: 'EyeSmile', to: 0.55 }, { id: 'ParamMouthForm', to: 0.9 },
+        { id: 'MouthPressLipOpen', to: 0.35 }, { id: 'BrowInnerUp', to: 0.5 },
+        { id: 'AngleY', to: -4 }, { id: 'AngleZ', to: 4 },
+      ] },
     'brow-tilt': { state: true, dur: 1.0, params: [
       { id: 'ParamBrowLY', to: 0.7 }, { id: 'ParamBrowRY', to: -0.45 },
     ] },

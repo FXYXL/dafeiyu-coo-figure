@@ -24,8 +24,13 @@ import {
   CubismModelSettingJson,
   CubismShaderManager_WebGL,
   CubismUserModel,
+  CubismEyeBlink,
 } from '../sdk/framework.js';
 import { SHADERS } from '../sdk/shaders.js';
+
+// SDK 内置眨眼（效仿 DeepFish main.cpp CubismEyeBlink，不自己造曲线）
+// 呼吸用 SDK 公式（CubismBreath 没导出，照 updateParameters 逻辑写：offset+peak*sin(2πt/cycle)）
+let _eyeBlink = null;
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 const XHTML = 'http://www.w3.org/1999/xhtml';
@@ -249,6 +254,14 @@ export async function createLive2DBody(base, opts, entry, kit) {
   const lipSyncIds = [];
   for (let i = 0; i < setting.getEyeBlinkParameterCount(); i++) eyeBlinkIds.push(setting.getEyeBlinkParameterId(i));
   for (let i = 0; i < setting.getLipSyncParameterCount(); i++) lipSyncIds.push(setting.getLipSyncParameterId(i));
+
+  // SDK 内置眨眼（效仿 DeepFish main.cpp：CubismEyeBlink + SetBlinkingInterval 3.2秒）
+  // model3.json 没定义 EyeBlink 参数 → getEyeBlinkParameterCount=0 → eyeBlinkIds 空 → 手动设
+  _eyeBlink = new CubismEyeBlink();
+  const blinkIds = eyeBlinkIds.length > 0 ? eyeBlinkIds : ['ParamEyeLOpen', 'ParamEyeROpen'];
+  _eyeBlink.setParameterIds(blinkIds);
+  _eyeBlink.setBlinkingInterval(3.2);
+  console.log('[eyeBlink] ids=' + blinkIds.join(',') + ' interval=3.2 created=' + !!_eyeBlink);
 
   const clips = new Map();
   for (const m of entry.motions ?? []) {
@@ -541,6 +554,17 @@ export async function createLive2DBody(base, opts, entry, kit) {
   // 比如 LeanInput 让头和胸往镜头靠。两者叠加才像"探身"，单靠旋转只是"歪一下"。
   // frame.gesture = { kind, k: 0..1 }，k 是动作进度。
   const paramActs = profile.paramActs ?? {};
+  // 2026-11-21：照鬼点子（sly-idea，已验证正常）的写法——退出动画统一并进主 keys 单一时间轴。
+  // 原来 finger-point/chest-hand/grass-hand 把收手放在独立的 exit 字段，那套机制从没被正确调用（闪现的真凶）。
+  // 合并：exit.keys 平移到 dur*0.72 开始接在主 keys 后面，dur 延长到收手结束。
+  for (const a of Object.values(paramActs)) {
+    if (!a?.exit?.keys?.length || !a.keys?.length) continue;
+    const offset = (a.dur ?? 4) * 0.72;
+    const edur = a.exit.dur ?? 1.25;
+    a.keys = a.keys.concat(a.exit.keys.map((f) => ({ ...f, t: (f.t ?? 0) + offset })));
+    a.dur = offset + edur;
+    delete a.exit;
+  }
   let activeAct = null;
   let activePost = null;   // 当前动作里"必须在物理之后写"的波形（腰/胯这类物理输出参数）
   let bodyLook = [0, 0];   // 本帧的指针跟随量，applyBodyFollow 在物理之后用它推身体
@@ -682,6 +706,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
   }
 
   function applyPhysicsWaves(t) {
+    return;
     for (const p of physWaveIdx) {
       const cur = model._model.getParameterValueByIndex(p.idx);
       model._model.setParameterValueByIndex(p.idx, cur + Math.sin((t * p.hz + p.phase) * Math.PI * 2) * p.amp);
@@ -705,12 +730,13 @@ export async function createLive2DBody(base, opts, entry, kit) {
    *  写 PositionX/Z 则是往链头上叠，物理会照常推出身体倾斜 + 胯摆，
    *  静止和走路走同一条链，不会互相打架。 */
   function applyBodyFollow(dt, mode, facing) {
+    return;   // 2026-11-21 用户定：古早债务，不再用。鼠标跟随全部由 figure 的 angleX/Y/Z + PositionX/Y/Z 负责
     if (!bodyFollow) return;
     const lx = bodyLook[0] ?? 0;
     const ly = bodyLook[1] ?? 0;
     // 用和头部同一套归一化（头是 look*0.73 进 -1..1），这样"头转到极限"时身体也到极限。
-    const nx = clamp(lx * 0.73, -1, 1);
-    const ny = clamp(ly * 0.6, -1, 1);
+    const nx = clamp(lx / 5 * 0.73, -1, 1);   // 2026-11-21 单位修正：look 是度数 ±5，不是 -1~1
+    const ny = clamp(ly / 4 * 0.6, -1, 1);
     dt = Math.min(dt, 1 / 30);   // 掉帧时别让弹簧炸
     // 弹簧-阻尼：起步慢、中途加速、到位有一点回弹，比线性跟手更像"反应"
     const ease = (v, vel, target, k, c) => {
@@ -719,7 +745,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
     };
     // 走路/跑步：把跟随目标平滑收回 0，身体交给物理（walk 的姿态由 kit 的位移驱动）。
     const walking = mode === 'walk' || mode === 'run';
-    const gain = walking ? 0 : 1;
+    const gain = 1;   // 2026-11-21：走路也跟鼠标（之前 gain=0 胯不动）
     const tx = nx * (bodyFollow.x ?? 16) * gain;
     const tz = ny * (bodyFollow.z ?? 11) * gain;
     [bfState.left, bfState.leftV] = ease(bfState.left, bfState.leftV, tx, bodyFollow.k ?? 42, bodyFollow.c ?? 9.5);
@@ -792,6 +818,25 @@ export async function createLive2DBody(base, opts, entry, kit) {
    *  主动触发和待机随机换手共用这一份，所以甩草在待机里也会真的甩。 */
   function applyActAt(act, t) {
     const dur = act.dur ?? 4;
+    // 2026-11-21：退出动画（配置在 profile.js 的 act.exit，1.25 秒关键帧）。
+    // 之前代码读 act.exitClip（不存在）→ 退出永不播 → 秒切回。现在按 sampleKeys 插值写参数。
+    if (act.exit && act._exitT !== undefined) {
+      const et = t - act._exitT;
+      const edur = act.exit.dur ?? 1.25;
+      if (et <= edur) {
+        const byId = new Map();
+        for (const f of act.exit.keys ?? []) {
+          if (!byId.has(f.id)) byId.set(f.id, []);
+          byId.get(f.id).push([f.t ?? 0, f.v ?? 0]);
+        }
+        for (const [id, frames] of byId) {
+          frames.sort((a, b) => a[0] - b[0]);
+          const i = paramIndex.get(id);
+          if (i !== undefined) model._model.setParameterValueByIndex(i, sampleKeys(frames, et));
+        }
+        return;
+      }
+    }
     const env = actWeight(t, dur);
     if (act.waves?.length) {
       writeActParams(act, 1);
@@ -818,6 +863,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
   }
 
   function applyIdlePhysics(t) {
+    return;
     for (const [name, i] of idlePhysIdx) {
       const c = idlePhys[name];
       const v = (c.base ?? 0) + Math.sin((t * c.hz + (c.phase ?? 0)) * Math.PI * 2) * c.amp;
@@ -889,11 +935,25 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 关键：Live2D 参数保持最后写入值——只删条目不够（CheeckPuff/Movement 等残留 1），
     // 必须把被清条目的静态参数显式写回 0（角色参数如 eyeOpen 有 roles 每帧重写，不用管）。
     if (s === '恢复' || s === 'restore' || s === 'neutral') {
+      // 2026-11-21：有 exit 的手势（竖手指/狗尾草/抚胸）不秒切——把通道条目换成播 exit.keys（1.25 秒收手），
+      // 播完自己走。没 exit 的照旧写 0 清掉。
+      const toDelete = [];
       for (const [id, c] of channel) {
-        if (c.kind !== 'static' && c.to === undefined) continue;
+        const def = c.src ? paramActs[c.src] : null;
+        const frames = def?.exit?.keys?.filter((k) => k.id === id).map((k) => [k.t ?? 0, k.v ?? 0]);
+        if (frames?.length) {
+          c.kind = 'keys';
+          c.frames = frames;
+          c.t0 = clockT;
+          c.dur = def.exit.dur ?? 1.25;
+          c.keep = false;
+          continue;
+        }
+        if (c.kind !== 'static' && c.to === undefined) { toDelete.push(id); continue; }
         if (c.to !== 0) { const i = paramIndex.get(id); if (i !== undefined) model._model.setParameterValueByIndex(i, 0); }
+        toDelete.push(id);
       }
-      channel.clear();
+      for (const id of toDelete) channel.delete(id);
       return null;
     }
     let scale = 1, pace = 1, repeat = 1, touched = false;
@@ -1009,7 +1069,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 不算——挂着红脸跟鼠标不冲突，全算的话表演期拖到 life 尾，脸退完了视线还压着（2026-11-20 用户反馈残留太久）
     performingUntil = now + dur + 0.5;
     const inT = Math.min(0.45, dur * 0.2);
-    const outT = Math.min(0.6, dur * 0.28);
+    // 2026-11-21：有 exit（竖手指/狗尾草/抚胸）的动作用 1.25 秒收手淡出，之前 0.6 秒太快=秒切感
+    const outT = def.exit?.dur ?? Math.min(0.6, dur * 0.28);
     // from 用参数的**默认值**，不是当前值 ——
     // 当前值可能已经被 applyFrame 的视线/表情改过（比如 AngleY 被写成 -27），
     // 拿它当起点会让通道从 -27 插到 -16，动作反而变成'抬头'。
@@ -1259,11 +1320,18 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 自己计时，不跟 kit 的 k 走。
     // 实测 k 会卡在中途（甩草永远停在 0.314），按 k 换算秒数的话动作只做了开头一小段，
     // 看起来就是"手抬了一下就没下文"。用累计时钟驱动，时长由 act.dur 说了算。
-    if (act._lastKind !== g.kind || k < 0.02) { act._lastKind = g.kind; act._t0 = clockT; act._exited = false; }
+    if (act._lastKind !== g.kind || k < 0.02) { act._lastKind = g.kind; act._t0 = clockT; act._exited = false; act._exitT = undefined; }
     const dur = act.dur ?? 2.4;
     const t = clockT - act._t0;
     if (t > dur) {
-      // 播完：参数交还给默认姿势（上一帧的淡出已经把值收到 0 附近，这里不会跳）
+      // 2026-11-21：有 exit 的动作 dur 结束时收手动画可能还没播完（0.72*dur + 1.25 > dur）——
+      // 之前这里直接写 0 是秒切的真凶。exit 没播完就继续播，播完才交还默认。
+      const exitEnd = dur * 0.72 + (act.exit?.dur ?? 0);
+      if (act.exit && act._exited && t <= exitEnd) {
+        applyActAt(act, t);
+        return;
+      }
+      // 播完：参数交还给默认姿势
       if (activeAct === g.kind) {
         for (const id of actParamIds(act)) {
           const i = paramIndex.get(id);
@@ -1277,10 +1345,10 @@ export async function createLive2DBody(base, opts, entry, kit) {
     applyActAt(act, t);
     // 退出段播一次"关闭"动画：VTS 里开/关是两个独立热键，
     // 只播"打开"的话收手那一下是硬切，看起来动作只做了一半。
-    if (act.exitClip && t > dur * 0.72 && !act._exited) {
+    if (act.exit && t > dur * 0.72 && !act._exited) {
       act._exited = true;
+      act._exitT = t;       // 2026-11-21：进入退出阶段，applyActAt 按 exit.keys 插值播收手动画
       heldGesture = null;   // 解除保持，让收手动画接管
-      if (clips.has(act.exitClip)) { try { startClip(act.exitClip, 3, false); } catch { /* 忽略 */ } }
     }
     activeAct = g.kind;
     activePost = act.postWaves ?? null;
@@ -1363,13 +1431,18 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 眨眼词演出期间抑制 kit 自动眨眼（idle 随机眨会叠在 wink/眨眼词上抢戏）——
     // 通道里有 Eye 参数条目 = 我们的眨眼词正在演
     const wordBlinking = channel.has('ParamEyeLOpen') || channel.has('ParamEyeROpen');
-    const close = neutralPose || wordBlinking ? 1 : 1 - clamp(frame.blink ?? 0, 0, 1);
+    const bkAge = frame.blinkAge ?? 0;
+    const bkDur = frame.blinkDur ?? 0.3;
+    let bkClose;
+    if (bkDur > 0 && bkAge < bkDur) { const p = bkAge / bkDur; if (p < 0.33) bkClose = p / 0.33; else if (p < 0.5) bkClose = 1; else bkClose = 1 - (p - 0.5) / 0.5; } else bkClose = 0;
+    const close = 1;   // 2026-11-21 照搬他们：open 不含眨眼（眨眼由 eyeBlink 的 r 负责）。之前 bkClose + eyeBlink 双重眨眼
     const squint = neutralPose ? 1 : 1 - clamp(frame.eyeClose ?? 0, 0, 1);
     const drowse = neutralPose ? 1 : 1 - 0.75 * clamp(frame.drowse ?? 0, 0, 1);
     const baseOpen = engine
       ? clamp(engine.eyeOpen ?? 1, 0, 1)
       : (recipe?.eyeOpen ?? roles.get('eyeOpen')?.def ?? 1);
-    const open = baseOpen * shape * close * squint * drowse;
+    // 2026-11-21：睡觉必须全闭眼（之前 drowse=1 只到 0.25 半闭 → 睡着睁眼）
+    const open = frame.mode === 'sleep' ? 0 : baseOpen * shape * close * squint * drowse;
     writeRole('eyeOpen', open);
     // 测试台在存图前读这个，确认「这一帧」到底算出了什么（不是换表情那一帧）
     globalThis.__l2dLast = {
@@ -1436,28 +1509,49 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 用两个不同频率的正弦叠起来，才不像机器在扫描。
     const swayX = Math.sin(clockT * 0.21) * gazeSway * 0.30;
     const swayZ = Math.sin(clockT * 0.13 + 1.1) * gazeSway * 0.22;
+    const driftX = Math.sin(clockT * 0.37) * 0.06 + Math.sin(clockT * 0.91 + 1.2) * 0.04;
+    const driftY = Math.sin(clockT * 0.29) * 0.05 + Math.sin(clockT * 0.77 + 0.8) * 0.03;
+    const driftZ = Math.sin(clockT * 0.23) * 0.06 + Math.sin(clockT * 0.63 + 1.5) * 0.04;
     if (engine) {
       writeRole('eyeBallX', clamp(ex * 0.6 + (lookEye[0] ?? 0) * 0.55, -1, 1));
       writeRole('eyeBallY', clamp(ey * 0.6 - (lookEye[1] ?? 0) * 0.45, -1, 1));
-      writeRole('angleX', clamp(ax * 0.75 + (lookHead[0] ?? 0) * 0.4 + swayX, -1, 1));
-      writeRole('angleY', clamp(ay * 0.75 - (lookHead[1] ?? 0) * 0.35, -1, 1));
-      writeRole('angleZ', clamp(az + tilt * 0.4 + swayZ, -1, 1));
-      // lean 是 kit 算好的身体倾倒量，已经乘过 faceVis（往左走为负、往右走为正），
-      // 写进 bodyX（PositionX）会由物理同时推出身体倾斜和胯摆 —— 这就是原版那种动感。
-      writeRole('bodyX', clamp(bx + lean * 0.35, -1, 1));
+      // 2026-11-21 单位修正：kit 的 look/tilt/lean 都是度数（look ±5、tilt ±7、lean -6~11），
+      // 之前当 -1~1 用 → 放大 5 倍鼠标敏感 + lean 接错位置。全部÷范围归一化。
+      const angleXVal = clamp((lookHead[0] ?? 0) / 5 * 0.73 + driftX, -1, 1);
+      const angleYVal = clamp(ay * 0.75 - (lookHead[1] ?? 0) / 4 * 0.9, -1, 1);
+      const angleZVal = clamp(az + tilt / 7 * 0.4 + swayZ, -1, 1);
+      writeRole('angleX', angleXVal);
+      writeRole('angleY', angleYVal);
+      writeRole('angleZ', angleZVal);
+      // lean 是整图旋转角（左右倾斜，度数）→ 走 PositionX（摆锤3 推 ParamBodyAngleX 左右），不是 LeanInput（那是前后）
+      writeRole('bodyX', clamp(angleXVal * 1.4 + lean / 3 + (frame.swing ?? 0) / 150, -1, 1));   // lookHead(kHead缩小)×1.4 补偿，glance 不会抖身体；lean 0.33 + swing 步伐 → 胯
+      // 2026-11-21：对齐 vtube.json FaceAngleY→PositionY / FaceAngleZ→PositionZ（1:1，-30~30）→ 摆锤7 推身体上下
+      { const _pyi = paramIndex.get('PositionY'), _pzi = paramIndex.get('PositionZ'), _ryi = paramIndex.get('ParamBodyAngleRY');
+        if (_pyi !== undefined) model._model.setParameterValueByIndex(_pyi, angleYVal * 30);
+        if (_pzi !== undefined) model._model.setParameterValueByIndex(_pzi, angleZVal * 30);
+        // 2026-11-21：frame.low = sitK*29（睡觉下沉）+ bob|sin|（走路颠簸）→ 身体 Y 位移。之前完全没接 → 睡觉站着、走路不颠。
+        if (_ryi !== undefined) model._model.setParameterValueByIndex(_ryi, -(frame.low ?? 0)); }
       // 表情通道：引擎/配方已经算好，之前漏写，导致只有眼/嘴/头在动
       for (const k of ['eyeSmile', 'mouthForm', 'browY', 'browAngle', 'cheek']) {
         if (Number.isFinite(engine[k])) writeRole(k, engine[k]);
       }
-      writeRole('breath', Number.isFinite(engine.breath) ? engine.breath : 0.5 + 0.5 * Math.sin(t * 1.6));
+      { const _bi = paramIndex.get('ParamBreath'); if (_bi !== undefined) model._model.setParameterValueByIndex(_bi, 0.5 + 0.5 * Math.sin(clockT * 2 * Math.PI / 3.2345)); }
     } else {
       writeRole('eyeBallX', clamp(lookEye[0] ?? 0, -1, 1));
       writeRole('eyeBallY', clamp(-(lookEye[1] ?? 0), -1, 1));
-      writeRole('angleX', clamp((lookHead[0] ?? 0) * 0.73 + swayX, -1, 1));
-      writeRole('angleY', clamp(-(lookHead[1] ?? 0) * 0.6, -1, 1));
-      writeRole('angleZ', clamp(tilt * 0.67 + swayZ, -1, 1));
-      writeRole('bodyX', clamp(lean * 0.35, -1, 1));
-      writeRole('breath', neutralPose ? 0.5 : 0.5 + 0.5 * Math.sin(t * 1.6));
+      const angleXVal = clamp((lookHead[0] ?? 0) / 5 * 0.73 + driftX, -1, 1);
+      const angleYVal = clamp(-(lookHead[1] ?? 0) / 4 * 0.9, -1, 1);
+      const angleZVal = clamp(tilt / 7 * 0.67 + swayZ, -1, 1);
+      writeRole('angleX', angleXVal);
+      writeRole('angleY', angleYVal);
+      writeRole('angleZ', angleZVal);
+      writeRole('bodyX', clamp(angleXVal * 1.4 + lean / 3 + (frame.swing ?? 0) / 150, -1, 1));   // lookHead(kHead缩小)×1.4 补偿，glance 不会抖身体；lean 0.33 + swing 步伐 → 胯
+      { const _pyi = paramIndex.get('PositionY'), _pzi = paramIndex.get('PositionZ'), _ryi = paramIndex.get('ParamBodyAngleRY');
+        if (_pyi !== undefined) model._model.setParameterValueByIndex(_pyi, angleYVal * 30);
+        if (_pzi !== undefined) model._model.setParameterValueByIndex(_pzi, angleZVal * 30);
+        // 2026-11-21：frame.low = sitK*29（睡觉下沉）+ bob|sin|（走路颠簸）→ 身体 Y 位移。之前完全没接 → 睡觉站着、走路不颠。
+        if (_ryi !== undefined) model._model.setParameterValueByIndex(_ryi, -(frame.low ?? 0)); }
+      { const _bi = paramIndex.get('ParamBreath'); if (_bi !== undefined) model._model.setParameterValueByIndex(_bi, 0.5 + 0.5 * Math.sin(clockT * 2 * Math.PI / 3.2345)); }
     }
 
     // 6) 外部直接驱动（工作台滑杆 / 参数面板）；放在最后，压过表情和待机
@@ -1521,6 +1615,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 物理是有状态的：同一中性姿势也会因为上一帧的惯性读出不同包围盒。
     // 简单模式量取景不跑物理（脚底 / 躯干 / 高度不受头发尾巴滞后影响）。
     if (!SIMPLE) {
+      if (_eyeBlink) _eyeBlink.updateParameters(model._model, 1 / 60);
       try { model._physics?.evaluate(model._model, 1 / 60); } catch { /* 物理失败不致命 */ }
       try { model._pose?.updateParameters(model._model, 1 / 60); } catch { /* 姿势失败不致命 */ }
     }
@@ -1716,7 +1811,12 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 弹簧（280/14）、锚点、阴影、与落地/拖拽的叠加全部白拿
     squash() {
       const e = virtualParams.get('ViewSquash');
-      return e ? e.v : 0;
+      const v = e ? e.v : 0;
+      if (Date.now() - (globalThis.__sqDbg ?? 0) > 2000) {
+        globalThis.__sqDbg = Date.now();
+        audit('sq ViewSquash=' + v.toFixed(4) + ' hasEntry=' + !!e);
+      }
+      return v;
     },
     colors: { z: '#7fb0e8' },
     // 2.8 叠加层：外力源（rua/触摸）在主通道结果之上相加——不动词表、不触发 face 清场
@@ -1859,7 +1959,11 @@ export async function createLive2DBody(base, opts, entry, kit) {
       globalThis.__l2dFigure = figure;   // 诊断/测试：harness 的 ?addp 走 overlaySet
       globalThis.__l2dFitState = { zoom: fitState.zoom, offset: fitState.offset, autoFit: fitState.autoFit, hasExtent: !!extent };
 
-      const dt = clamp(frame.dt ?? 0.016, 0.001, 0.05);
+      // 2026-11-21：frame.dt 比实际帧间隔小一半（实测 clockT 增长慢 2 倍 → 眨眼 630ms 而设定 300ms）。
+      // 用 Date.now() 算真实帧间隔，clockT 和实际时间对齐（本作用域 performance 是物理引擎对象，不能用）。
+      const _dtNow = Date.now();
+      const dt = clamp((_dtNow - (globalThis.__dtLast ?? _dtNow)) / 1000, 0.001, 0.05);
+      globalThis.__dtLast = _dtNow;
       clockT += dt;
       // 诊断（摸头冻结 bug）：draw 的墙上时钟间隙 >800ms 就打点——tick 断流或 iframe 被卡在这里现形。
       // 用 Date.now()：本作用域的 performance 是物理引擎对象（line 411），且 iframe 沙箱里 window.performance.now 不可用（1713 行注释，踩过）。
@@ -1907,7 +2011,37 @@ export async function createLive2DBody(base, opts, entry, kit) {
       // 写早了会被它盖掉（实测鞠躬的低头被 idle 吃掉，AngleY 读回是正值）。
       // 放物理之前，物理才能把它当输入用。
       applyChannel(clockT);
+      // 2026-11-21 照搬 DeepFish 的 Lids：eyeBlink 用 setParameterValueById 覆盖成 r（不眨时 1），
+      // 把 applyFrame 写的闭眼/眯眼/笑眼全盖掉 → 眼相关词全失效。eyeBlink 之后 × open（applyFrame 的开度）。
+      const _openBefore = globalThis.__l2dLast?.open ?? 1;
+      // 词在演眨眼（闭眼/眯眼/wink）时跳过 eyeBlink——否则 eyeBlink 覆盖掉词写的 ParamEyeLOpen
+      const _wordBlink = channel.has('ParamEyeLOpen') || channel.has('ParamEyeROpen');
+      if (_eyeBlink && !_wordBlink) _eyeBlink.updateParameters(model._model, dt);
+      {
+        const _el = paramIndex.get('ParamEyeLOpen'), _er = paramIndex.get('ParamEyeROpen');
+        if (_el !== undefined) model._model.setParameterValueByIndex(_el, model._model.getParameterValueByIndex(_el) * _openBefore);
+        if (_er !== undefined) model._model.setParameterValueByIndex(_er, model._model.getParameterValueByIndex(_er) * _openBefore);
+      }
       try { model._physics?.evaluate(model._model, dt); } catch { /* 物理失败不致命 */ }
+      // 打点：眨眼只在眨时打（0.05 秒一次，精确测时长）+ 每秒打身体/呼吸
+      {
+        const gv = (id) => { const i = paramIndex.get(id); return i !== undefined ? model._model.getParameterValueByIndex(i) : null; };
+        const eL = gv('ParamEyeLOpen'), bodyAX = gv('ParamBodyAngleX'), bodyAY = gv('ParamBodyAngleY');
+        const px = gv('PositionX'), br = gv('ParamBreath'), aY = gv('AngleY'), pAY = gv('ParamAngleY'), pAX = gv('ParamAngleX'), hipX = gv('HipAngleX'), lookX = frame.look?.[0];
+        // 眨眼：eyeL < 0.95 时每帧打，同时记 Date.now() 真实毫秒（验证 clockT 和实际时间是否一致）
+        if (eL != null && eL < 0.95) {
+          if (!globalThis.__blinkStart) globalThis.__blinkStart = Date.now();
+          audit('blink-in real=' + (Date.now() - globalThis.__blinkStart) + 'ms t=' + clockT.toFixed(2) + ' eyeL=' + eL.toFixed(3));
+        } else if (globalThis.__blinkStart) {
+          audit('blink-end real=' + (Date.now() - globalThis.__blinkStart) + 'ms t=' + clockT.toFixed(2));
+          globalThis.__blinkStart = 0;
+        }
+        // 每秒打身体/呼吸
+        if (Date.now() - (globalThis.__earDbg ?? 0) > 1000) {
+          globalThis.__earDbg = Date.now();
+          audit('dbg look=' + (lookX?.toFixed(2) ?? 'null') + ' px=' + (px?.toFixed(2) ?? 'null') + ' aY=' + (aY?.toFixed(2) ?? 'null') + ' pAX=' + (pAX?.toFixed(2) ?? 'null') + ' hipX=' + (hipX?.toFixed(2) ?? 'null'));
+        }
+      }
       applyPhysicsWaves(clockT);
       applyActPostWaves(clockT);
       applyChannelPost(clockT);   // 通道里标了 post 的那批（腰/胯）：必须是物理之后当帧最终值
