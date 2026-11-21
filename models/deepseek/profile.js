@@ -115,7 +115,7 @@ export default {
   useChannels: true,
   // 试点白名单：只放纯姿态类词，它们本来就不带手部动画/退出剪辑，接管风险最小。
   channelWords: [
-    "wave", "nod", "shake", "bow", "spin", "dance", "jump", "shiver", "look", "lean-in", "lean-back", "side", "peek", "tilt", "wiggle", "finger-point", "chest-hand", "grass-hand", "swing", "eye-smile", "eye-close", "eye-half", "eye-wide", "eye-squeeze", "blink", "wink-left", "wink-right", "wink-keep", "wink-hold",
+    "wave", "nod", "shake", "bow", "spin", "dance", "jump", "shiver", "look", "lean-in", "lean-back", "side", "peek", "tilt", "wiggle", "finger-point", "chest-hand", "grass-hand", "swing", "eye-smile", "eye-close", "eye-half", "eye-wide", "eye-squeeze", "blink", "head-swing", "glance", "cower", "pout", "sigh", "look-left", "look-right", "look-up", "look-down", "wink-left", "wink-right", "wink-keep", "wink-hold",
     // 2026-11-21 修正：这 7 个原来被上一行的行内注释吞掉了（写进 // 后面 = 从来没被接管过，
     // 一直走 act 老路瞬时写 0 —— 眉毛/嘴的表情同样"一闪"的真身）。
     "brow-frown", "brow-up", "brow-knit", "mouth-smile", "mouth-pout", "mouth-open", "blush",
@@ -286,6 +286,27 @@ export default {
     '挑一边眉': 'brow-tilt',
     '歪头瞧': 'tilt-look',
     '歪头看看': 'tilt-look',
+  },
+
+  // ---------- 组合词（Body.cs:220 的 Combos）----------
+  // 一个词展开成几个基础词，同一帧各走各的通道：各自的通道覆盖、各自的时长、各自的寿命。
+  // 元素是 id，或 { w, scale, pace, repeat, side } —— 把「微/大/快/慢/×n/:左」钉在某个基础词上
+  // （他们的解析顺序就是这样：先展开，再对每个 token 认修饰，所以「快摇头×3」的修饰只跟摇头）。
+  // 注意我们有两个眉毛词的名字和他们对调了：brow-frown = 他们的「八字眉」，brow-knit = 他们的「皱眉」。
+  combos: {
+    'happy-burst': ['mouth-open', 'eye-squeeze', 'head-swing'],                                    // 高兴 = 张嘴 眯眼笑 晃头
+    'snicker': ['smirk', { w: 'glance', side: 1 }, 'eye-squeeze'],                                 // 偷笑 = 坏笑 瞟一眼:左 眯眼笑
+    'dumbstruck': ['eye-wide', 'mouth-open', 'sweat', { w: 'blink', pace: 0.65, repeat: 2 }],       // 傻眼 = 睁大 张嘴 冷汗 快眨眼×2
+    'speechless': ['squint', 'press-lips', { w: 'shake', scale: 0.5 }],                             // 无语 = 斜眼 抿嘴 微摇头
+    'gloating': ['xx-eyes', 'head-swing', 'lean-back'],                                            // 得瑟 = 屑屑眼 晃头 后仰
+    'frantic': ['brow-knit', 'xx-eyes', 'mouth-open', { w: 'shake', pace: 0.65, repeat: 3 }],       // 抓狂 = 皱眉 ＞＜ 张嘴 快摇头×3
+    'drowsy-combo': ['eye-half', 'head-down', 'mouth-open', { w: 'blink', pace: 1.7, repeat: 2 }],  // 犯困 = 半睁 低头 张嘴 慢眨眼×2
+    'touched': ['brow-frown', 'tears', 'chest-hand', 'mouth-smile'],                                // 感动 = 八字眉 眼泪 抚胸 微笑
+    'scared': ['cower', 'sweat', 'brow-frown', 'lean-back'],                                        // 害怕 = 缩一下 冷汗 八字眉 后仰
+    'sly-idea': ['brow-up', 'smirk', 'finger-point'],                                               // 鬼点子 = 挑眉 坏笑 竖手指
+    'act-cute': ['pout', 'tilt', 'brow-frown', { w: 'blink', pace: 1.7 }],                           // 撒娇 = 嘟嘴 歪头 八字眉 慢眨眼
+    'rescued': ['eye-wide', 'head-up', 'mouth-smile', 'sigh'],                                      // 得救 = 睁大 抬头 微笑 叹气
+    'alert-combo': ['face-front', 'stand-straight', 'brow-knit', 'look-left'],                       // 警觉 = 正视 站直 皱眉 看左边
   },
 
   paramActs: {
@@ -576,21 +597,7 @@ export default {
     // 撒娇（2026-11-19 按他们家 Combos 重写：嘟嘴+歪头+八字眉+慢眨眼）——
     // 嘟嘴三件套（MouthFunnel 0.7 + Mouthpucker 1 + MouthForm -0.4，Body.cs:86 原样）
     // + 歪头 16 + 八字眉 + 慢眨眼两连——3.2s
-    'act-cute': { dur: 3.2,
-      keys: [
-        { id: 'ParamEyeLOpen', t: 0, v: 0 }, { id: 'ParamEyeLOpen', t: 0.6, v: -0.88 },
-        { id: 'ParamEyeLOpen', t: 1.2, v: 0 }, { id: 'ParamEyeLOpen', t: 1.9, v: -0.88 },
-        { id: 'ParamEyeLOpen', t: 2.6, v: 0 }, { id: 'ParamEyeLOpen', t: 3.2, v: 0 },
-        { id: 'ParamEyeROpen', t: 0, v: 0 }, { id: 'ParamEyeROpen', t: 0.6, v: -0.88 },
-        { id: 'ParamEyeROpen', t: 1.2, v: 0 }, { id: 'ParamEyeROpen', t: 1.9, v: -0.88 },
-        { id: 'ParamEyeROpen', t: 2.6, v: 0 }, { id: 'ParamEyeROpen', t: 3.2, v: 0 },
-      ],
-      params: [
-        { id: 'MouthFunnel', to: 0.7 }, { id: 'Mouthpucker', to: 1 }, { id: 'ParamMouthForm', to: -0.4 },
-        { id: 'AngleZ', to: 16 },
-        { id: 'ParamBrowLY', to: 0.45 }, { id: 'ParamBrowRY', to: 0.45 },
-        { id: 'ParamBrowLAngle', to: -0.55 }, { id: 'ParamBrowRAngle', to: -0.55 },
-      ] },
+    'act-cute': { dur: 3.2 },   // 组合词：零件见 profile.combos（对应 Body.cs:220 的 Combos）
     'defiant': { state: true, dur: 1.2, params: [
       { id: 'ParamBrowLY', to: -0.7 }, { id: 'ParamBrowRY', to: -0.7 },
       { id: 'ParamBrowLAngle', to: -0.9 }, { id: 'ParamBrowRAngle', to: -0.9 },
@@ -825,121 +832,30 @@ export default {
     // ── 3.1 组合词单条目（2026-11-19，第四批）——他们家 Combos 展开成单条目跨部位叠加：
     // params 静态部件 + keys 动作部件，**keys 与 params 不放同参数**（params 后写会覆盖 keys 动作）。
     // 高兴（Body.cs Combos：张嘴+眯眼笑+晃头）——2s 一套
-    'happy-burst': { dur: 2.0,
-      keys: [
-        { id: 'AngleZ', t: 0, v: 0 }, { id: 'AngleZ', t: 0.3, v: -10 }, { id: 'AngleZ', t: 0.7, v: 10 },
-        { id: 'AngleZ', t: 1.1, v: -8 }, { id: 'AngleZ', t: 1.5, v: 6 }, { id: 'AngleZ', t: 2.0, v: 0 },
-      ],
-      params: [
-        { id: 'ParamMouthOpenY', to: 0.6 }, { id: 'EyeSmile', to: 1 },
-        { id: 'ParamEyeLOpen', to: 0.5 }, { id: 'ParamEyeROpen', to: 0.5 },
-      ] },
+    'happy-burst': { dur: 2.0 },   // 组合词：零件见 profile.combos（对应 Body.cs:220 的 Combos）
     // 偷笑加长版（2026-11-19 用户：好玩加长）：坏笑立即挂 → 0.5s 后眼珠瞟过去停一会
     // → 1.3s 笑意渐浓（眯眼）——单条目内用 keys 时间轴做出「先后感」——2.8s
-    'snicker': { dur: 2.8,
-      keys: [
-        { id: 'ParamEyeBallX', t: 0, v: 0 }, { id: 'ParamEyeBallX', t: 0.5, v: 0 },
-        { id: 'ParamEyeBallX', t: 0.7, v: 0.85 }, { id: 'ParamEyeBallX', t: 1.8, v: 0.85 },
-        { id: 'ParamEyeBallX', t: 2.1, v: 0 }, { id: 'ParamEyeBallX', t: 2.8, v: 0 },
-        { id: 'EyeSmile', t: 0, v: 0 }, { id: 'EyeSmile', t: 0.9, v: 0 },
-        { id: 'EyeSmile', t: 1.3, v: 1 }, { id: 'EyeSmile', t: 2.8, v: 1 },
-        { id: 'ParamEyeLOpen', t: 0, v: 0 }, { id: 'ParamEyeLOpen', t: 0.9, v: 0 },
-        { id: 'ParamEyeLOpen', t: 1.3, v: -0.55 }, { id: 'ParamEyeLOpen', t: 2.8, v: -0.55 },
-        { id: 'ParamEyeROpen', t: 0, v: 0 }, { id: 'ParamEyeROpen', t: 0.9, v: 0 },
-        { id: 'ParamEyeROpen', t: 1.3, v: -0.55 }, { id: 'ParamEyeROpen', t: 2.8, v: -0.55 },
-      ],
-      params: [
-        { id: 'ParamMouthForm', to: 0.7 }, { id: 'MouthX', to: 0.5 },
-      ] },
+    'snicker': { dur: 2.8 },   // 组合词：零件见 profile.combos（对应 Body.cs:220 的 Combos）
     // 傻眼（睁大+张嘴+冷汗）——保持型
-    'dumbstruck': { state: true, dur: 1.2, params: [
-      { id: 'ParamEyeLOpen', to: 1 }, { id: 'ParamEyeROpen', to: 1 }, { id: 'EyeSmile', to: 0 },
-      { id: 'ParamMouthOpenY', to: 0.6 }, { id: 'key13', to: 1 },
-    ] },
+    'dumbstruck': { dur: 1.2 },   // 组合词：零件见 profile.combos（对应 Body.cs:220 的 Combos）
     // 得瑟（屑屑眼+晃头+后仰）——贴图挂着、身体后仰、头晃
-    'gloating': { dur: 2.0,
-      keys: [
-        { id: 'AngleZ', t: 0, v: 0 }, { id: 'AngleZ', t: 0.3, v: -10 }, { id: 'AngleZ', t: 0.7, v: 10 },
-        { id: 'AngleZ', t: 1.1, v: -8 }, { id: 'AngleZ', t: 1.5, v: 6 }, { id: 'AngleZ', t: 2.0, v: 0 },
-      ],
-      params: [
-        { id: 'key6', to: 1 }, { id: 'key1', to: 0 }, { id: 'key3', to: 0 }, { id: 'key4', to: 0 },
-        { id: 'key5', to: 0 }, { id: 'LeanInput', to: 9 },
-      ] },
+    'gloating': { dur: 2.0 },   // 组合词：零件见 profile.combos（对应 Body.cs:220 的 Combos）
     // 抓狂（皱眉+＞＜+张嘴+快摇头×3）——1.7s 三连摇头
-    'frantic': { dur: 1.7,
-      keys: [
-        { id: 'AngleX', t: 0, v: 0 }, { id: 'AngleX', t: 0.17, v: -11 }, { id: 'AngleX', t: 0.5, v: 11 },
-        { id: 'AngleX', t: 0.67, v: -11 }, { id: 'AngleX', t: 1.0, v: 11 },
-        { id: 'AngleX', t: 1.17, v: -11 }, { id: 'AngleX', t: 1.5, v: 11 }, { id: 'AngleX', t: 1.7, v: 0 },
-      ],
-      params: [
-        { id: 'ParamBrowLY', to: -0.7 }, { id: 'ParamBrowRY', to: -0.7 },
-        { id: 'ParamBrowLAngle', to: -0.9 }, { id: 'ParamBrowRAngle', to: -0.9 },
-        { id: 'key5', to: 1 }, { id: 'key1', to: 0 }, { id: 'key3', to: 0 },
-        { id: 'key4', to: 0 }, { id: 'key6', to: 0 }, { id: 'ParamMouthOpenY', to: 0.6 },
-      ] },
+    'frantic': { dur: 1.7 },   // 组合词：零件见 profile.combos（对应 Body.cs:220 的 Combos）
     // 犯困（半睁+低头+张嘴）——保持型
-    'drowsy-combo': { state: true, dur: 1.2, params: [
-      { id: 'ParamEyeLOpen', to: 0.45 }, { id: 'ParamEyeROpen', to: 0.45 }, { id: 'EyeSmile', to: 0 },
-      { id: 'AngleY', to: -14 }, { id: 'ParamMouthOpenY', to: 0.2 },
-    ] },
+    'drowsy-combo': { dur: 1.2 },   // 组合词：零件见 profile.combos（对应 Body.cs:220 的 Combos）
     // 感动（八字眉+眼泪+微笑）——保持型
-    'touched': { state: true, dur: 1.2, params: [
-      { id: 'ParamBrowLY', to: 0.45 }, { id: 'ParamBrowRY', to: 0.45 },
-      { id: 'ParamBrowLAngle', to: -0.55 }, { id: 'ParamBrowRAngle', to: -0.55 },
-      { id: 'key2', to: 1 }, { id: 'ParamMouthForm', to: 0.7 },
-    ] },
+    'touched': { dur: 1.2 },   // 组合词：零件见 profile.combos（对应 Body.cs:220 的 Combos）
     // 鬼点子（挑眉+坏笑+眼珠一转+竖手指）：Movement3 是竖食指部件显示档——
     // keys 竖起 0.3s、末段渐隐收回（默认手自动露出，不残留）——2.6s
     // hand: true + reflex: true（2026-11-20 用户二次反馈手指戳进身体）：手位是坐标不是幅度——
     // 没有 hand 豁免时 keys 被 moodScale/语气缩放（！=×1.2），0.705 变 0.85 手臂就抬过头戳进身体。
     // 两个豁免齐上 effScale 恒为 1，竖手指姿势与正牌 finger-point 完全一致。
-    'sly-idea': { dur: 2.6, hand: true, reflex: true, keys: [
-        { id: 'ParamEyeBallX', t: 0, v: 0 }, { id: 'ParamEyeBallX', t: 0.2, v: 0.8 },
-        { id: 'ParamEyeBallX', t: 0.5, v: -0.8 }, { id: 'ParamEyeBallX', t: 0.8, v: 0.4 },
-        { id: 'ParamEyeBallX', t: 1.2, v: 0 },
-        // 2026-11-20 二次重做：竖手指段换原厂 pointIn 时间轴（平移 +0.4s 与 Movement3 同拍）——
-        // 带到位回弹（Param41 0.708→0.698、Param42/43 微回弹），不再用静态峰值
-        { id: 'Movement3', t: 0, v: 0 }, { id: 'Movement3', t: 0.75, v: 0 }, { id: 'Movement3', t: 0.77, v: 1 },
-        { id: 'Movement3', t: 2.2, v: 1 }, { id: 'Movement3', t: 2.6, v: 0 },
-        { id: 'Movement1', t: 0, v: 0 }, { id: 'Movement1', t: 2.6, v: 0 },
-        { id: 'Param40', t: 0.4, v: 0 }, { id: 'Param40', t: 0.78, v: 0 }, { id: 'Param40', t: 1.07, v: 1 },
-        { id: 'Param40', t: 2.2, v: 1 }, { id: 'Param40', t: 2.6, v: 0 },
-        { id: 'Param41', t: 0.43, v: 0 }, { id: 'Param41', t: 1.30, v: 0.708 }, { id: 'Param41', t: 1.48, v: 0.698 },
-        { id: 'Param41', t: 1.60, v: 0.702 }, { id: 'Param41', t: 2.2, v: 0.702 }, { id: 'Param41', t: 2.6, v: 0 },
-        { id: 'Param39', t: 0.4, v: 0 }, { id: 'Param39', t: 1.27, v: 0.322 }, { id: 'Param39', t: 2.2, v: 0.322 }, { id: 'Param39', t: 2.6, v: 0 },
-        { id: 'Param42', t: 0.47, v: 0 }, { id: 'Param42', t: 1.33, v: -0.058 }, { id: 'Param42', t: 1.52, v: 0.026 },
-        { id: 'Param42', t: 1.63, v: 0 }, { id: 'Param42', t: 2.6, v: 0 },
-        { id: 'Param43', t: 0.50, v: 0 }, { id: 'Param43', t: 1.35, v: -0.164 }, { id: 'Param43', t: 1.55, v: 0.066 },
-        { id: 'Param43', t: 1.65, v: 0 }, { id: 'Param43', t: 2.6, v: 0 },
-        { id: 'Param56', t: 0.4, v: 1 }, { id: 'Param56', t: 2.2, v: 1 }, { id: 'Param56', t: 2.6, v: 0 },
-      ],
-      params: [
-        { id: 'ParamBrowLY', to: 0.6 }, { id: 'ParamBrowRY', to: 0.6 }, { id: 'BrowInnerUp', to: 0.4 },
-        { id: 'ParamMouthForm', to: 0.7 }, { id: 'MouthX', to: 0.5 },
-      ] },
+    'sly-idea': { dur: 2.6 },   // 组合词：零件见 profile.combos（对应 Body.cs:220 的 Combos）
     // 得救（睁大+微笑+叹气）——3.5s 完整松一口气
-    'rescued': { dur: 3.5,
-      keys: [
-        { id: 'ViewSquash', t: 0, v: 0 }, { id: 'ViewSquash', t: 0.8, v: -0.02 },
-        { id: 'ViewSquash', t: 1.2, v: -0.02 }, { id: 'ViewSquash', t: 1.9, v: 0.03 },
-        { id: 'ViewSquash', t: 2.8, v: 0.025 }, { id: 'ViewSquash', t: 3.5, v: 0 },
-        { id: 'AngleY', t: 0, v: 12 }, { id: 'AngleY', t: 0.8, v: 7 },
-        { id: 'AngleY', t: 1.8, v: -8 }, { id: 'AngleY', t: 2.8, v: -7 }, { id: 'AngleY', t: 3.5, v: 0 },
-        { id: 'LeanInput', t: 0, v: 0 }, { id: 'LeanInput', t: 0.8, v: 5 },
-        { id: 'LeanInput', t: 1.8, v: -6 }, { id: 'LeanInput', t: 2.8, v: -5 }, { id: 'LeanInput', t: 3.5, v: 0 },
-      ],
-      params: [
-        { id: 'ParamEyeLOpen', to: 1 }, { id: 'ParamEyeROpen', to: 1 }, { id: 'ParamMouthForm', to: 0.7 },
-      ] },
+    'rescued': { dur: 3.5 },   // 组合词：零件见 profile.combos（对应 Body.cs:220 的 Combos）
     // 警觉（正视站直+皱眉+看左边）——保持型（stand-straight 归位值与 look-left 合并成单 params）
-    'alert-combo': { state: true, dur: 1.2, params: [
-      { id: 'LeanInput', to: 0 }, { id: 'AngleY', to: 0 }, { id: 'AngleZ', to: 0 },
-      { id: 'AngleX', to: 7 }, { id: 'ParamEyeBallX', to: 0.75 },
-      { id: 'ParamBrowLY', to: -0.7 }, { id: 'ParamBrowRY', to: -0.7 },
-      { id: 'ParamBrowLAngle', to: -0.9 }, { id: 'ParamBrowRAngle', to: -0.9 },
-    ] },
+    'alert-combo': { dur: 1.2 },   // 组合词：零件见 profile.combos（对应 Body.cs:220 的 Combos）
     // 跳舞通道版（2026-11-19）：复刻他们家 6 拍摇摆（Body.cs:118-135，用户亲自指导的
     // 「身体左右转、头往相反方向转且晚 0.14 秒、头走小拱形」），拍长 0.53s。
     // 胸腔 Z 是物理输出 → keysPost（物理后写）；kit 原版 act('dance') 的 pulse 组变换/holdFace
@@ -1002,17 +918,7 @@ export default {
     // 无语 = 黑脸(key1) + 圈圈眼(key3)，其余眼睛关
     // 无语（2026-11-19 按他们家 Combos 重写：斜眼+抿嘴+微摇头）——
     // 斜眼三参数（REyeSquint/LEyeSquint 0.9 + 眼半开 0.7，Body.cs 斜眼原样）+ 抿嘴 + 微摇头两连——2s
-    'speechless': { dur: 2.0,
-      keys: [
-        { id: 'AngleX', t: 0, v: 0 }, { id: 'AngleX', t: 0.3, v: -8 },
-        { id: 'AngleX', t: 0.8, v: 8 }, { id: 'AngleX', t: 1.2, v: -6 },
-        { id: 'AngleX', t: 1.6, v: 4 }, { id: 'AngleX', t: 2.0, v: 0 },
-      ],
-      params: [
-        { id: 'REyeSquint', to: 0.9 }, { id: 'LEyeSquint', to: 0.9 },
-        { id: 'ParamEyeLOpen', to: 0.7 }, { id: 'ParamEyeROpen', to: 0.7 },
-        { id: 'MouthPressLipOpen', to: -1 }, { id: 'ParamMouthForm', to: -0.5 },
-      ] },
+    'speechless': { dur: 2.0 },   // 组合词：零件见 profile.combos（对应 Body.cs:220 的 Combos）
     // 阴险 = 黑脸(key1) + 屑屑眼(key6)
     'mad': { state: true, dur: 1.0, params: [
       { id: 'key1', to: 1 },
@@ -1056,14 +962,7 @@ export default {
     // 生气：黑脸 + 浑身抖动——抖动走 figure.faceShake（渲染组级，对齐 kit fc.shake，
     // 身体+头一起抖），不再用参数级 waves（那只抖头，且和组抖叠加会过头）
     'angry':     { state: true, dur: 1.2, params: [{ id: 'key1', to: 1 }] },
-    'scared':    { state: true, dur: 1.2,
-      params: [
-        { id: 'ParamEyeLOpen', to: 1 }, { id: 'ParamEyeROpen', to: 1 }, { id: 'EyeSmile', to: 0 },
-        { id: 'ParamBrowLY', to: 0.45 }, { id: 'ParamBrowRY', to: 0.45 },
-        { id: 'ParamBrowLAngle', to: -0.55 }, { id: 'ParamBrowRAngle', to: -0.55 },
-        { id: 'ParamMouthOpenY', to: 0.3 },
-        { id: 'key13', to: 1 },   // 冷汗（kit 旧脸配方 sweat:true 的对应）
-      ] },
+    'scared': { dur: 1.2 },   // 组合词：零件见 profile.combos（对应 Body.cs:220 的 Combos）
 
     // ── 3.8 俏皮搞怪批（2026-11-20，用户挑的七条）——
     // 全部按他们家组合词的工序做：params 静态部件 + keys 时间轴，keys 与 params 不放同参数。
@@ -1383,9 +1282,7 @@ export default {
       { id: 'ParamBrowLAngle', to: -0.55 }, { id: 'ParamBrowRAngle', to: -0.55 },
       { id: 'key7', to: 1 }, { id: 'ParamMouthForm', to: -0.6 },
     ] },
-    'act-cute': { state: true, dur: 1.2, params: [
-      { id: 'EyeSmile', to: 1 }, { id: 'ParamMouthForm', to: -0.6 }, { id: 'key7', to: 1 },
-    ] },
+    'act-cute': { dur: 1.2 },   // 组合词：零件见 profile.combos（对应 Body.cs:220 的 Combos）
     'defiant': { state: true, dur: 1.2, params: [
       { id: 'ParamBrowLY', to: -0.7 }, { id: 'ParamBrowRY', to: -0.7 },
       { id: 'ParamBrowLAngle', to: -0.9 }, { id: 'ParamBrowRAngle', to: -0.9 },
@@ -1516,7 +1413,7 @@ export default {
     worried: {"browY":0.55,"browAngle":-0.5,"mouthForm":-0.35},
     determined: {"browY":-0.5,"browAngle":0.6,"mouthForm":-0.1},
     flustered: {"browY":0.7,"mouthForm":0.1},
-    scared: {"browY":0.75,"browAngle":1,"mouthOpen":0.3,"mouthForm":-0.5},
+    'scared': { dur: 2.4 },   // 组合词：零件见 profile.combos（对应 Body.cs:220 的 Combos）
     excited: {"browY":0.5,"mouthForm":0.6},
     cry: {"browY":0.6,"browAngle":-0.6,"mouthForm":-0.75},
     confused: {"browY":0.25,"browAngle":0.3,"mouthForm":-0.2},

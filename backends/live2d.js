@@ -1139,9 +1139,14 @@ export async function createLive2DBody(base, opts, entry, kit) {
   let performingUntil = -99;   // 3.9c 表演期：词活跃期间视线看向屏幕（用户：做表情/动作时看着我，别追鼠标）
   let performingBlend = 0;   // 表演期视线曲线的混合系数（0=正常跟随鼠标 → 1=看向屏幕，双向缓动）
 
-  /** kit 的 doWord 会先问这里。返回 true = 这个词我处理了，不要走 pulse。
-   *  o（3.9）：kit 闲时调度的透传——o.idle = 闲时触发（登记收尾，走跑跳开始撤）、
-   *  o.life = 挂着的秒数（心情词比默认 3 秒久）。对话词不传 o，行为不变。 */
+  /** 组合词表（他们 Body.cs:220 的 Combos）：组合词 id → 基础词列表。
+   *  元素可以是 id 字符串，也可以是 { w, scale, pace, repeat, side } —— 把「微/大/快/慢/×n/:左」钉在某一个基础词上，
+   *  和他们的解析顺序一致（先展开，再对每个 token 认修饰）。 */
+  const combos = profile.combos ?? {};
+
+  /** kit 的 doWord 入口。组合词在这里展开成一串基础词，同一帧各走各的通道；
+   *  寿命（bornS/bornT）与气泡顶替按**组合词本身**（group）记，不按展开出来的基础词 ——
+   *  否则「感动」的四个零件会被当成四个独立词，各活各的、各被顶替各的。 */
   function actWord(w, fromFace, o) {
     lastWordAt = clockT;
     // face 联动词（blush/tears/sweat/heart-eyes）的退场：下一个任何词触发就让位。
@@ -1151,6 +1156,31 @@ export async function createLive2DBody(base, opts, entry, kit) {
     }
     bornSentence = sentenceCount;   // 词出生时的句号（跟句寿命用）
     bornAt = clockT;                // 词出生的时刻（闲置语境的限时用）
+    // 闲时触发（心情/随机动作）带来的保持秒数：一次取出、所有展开词共用（读一次就清）
+    const life = o?.life ?? pendingLife;
+    pendingLife = null;
+    const parts = combos[w];
+    if (parts?.length) {
+      for (const part of parts) {
+        if (typeof part === 'string') {
+          pendingMod = null;
+          dirSide = 1;
+          applyOneWord(part, fromFace, o, { group: w, life });
+        } else {
+          pendingMod = { scale: part.scale ?? 1, pace: part.pace ?? 1, repeat: part.repeat ?? 1, explicit: true };
+          dirSide = part.side ?? 1;
+          applyOneWord(part.w, fromFace, o, { group: w, life });
+        }
+      }
+      pendingMod = null;
+      dirSide = 1;
+      return false;   // 交还 kit：组合词本身的音效 / 粒子 / 情绪脸照发（和以前一样）
+    }
+    return applyOneWord(w, fromFace, o, { group: null, life });
+  }
+
+  /** 单个基础词：写通道 / 轨道 / 手部 / 叠加层。ctx.group = 属于哪个组合词（散词就是 null）。 */
+  function applyOneWord(w, fromFace, o, ctx) {
     if (!useChannels || !channelWords.has(w)) { audit('reject ' + w + ' (通道守卫)'); return false; }
     const def = paramActs[w];
     if (!def) return false;
@@ -1161,9 +1191,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 修饰：AI 写的「微/大/快/慢/×几」；没写就按当前情绪给个默认幅度
     const mod = pendingMod ?? { scale: 1, pace: 1, repeat: 1, explicit: false };
     pendingMod = null;
-    // 闲时触发（心情/随机动作）带来的保持秒数：读一次就清，正常对话词拿不到就是 undefined
-    const life = o?.life ?? pendingLife;
-    pendingLife = null;
+    // 闲时触发（心情/随机动作）带来的保持秒数：由入口一次取出、展开词共用
+    const life = ctx.life;
     // 2.3 tone（他们 Body.cs:335/360/365）：beat 末尾 ！/… 影响一次性动作的幅度与速度——
     //   ！→ 放大 1.2 倍、加速（时长 ×0.85）；… → 收着 0.85、放慢（×1.25）。
     //   只作用一次性动作（state 保持型不吃，Hold 型表情不是"演"的）；reflex 反射词豁免；
@@ -1178,12 +1207,12 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 3.9 闲时词登记：走跑跳开始（或兜底超时）由 stepIdleWords 按 src 撤掉通道条目
     if (o?.idle) {
       idleChannelWord = w;
-      idleChannelUntil = now + dur + 0.2;
+      idleChannelUntil = Math.max(idleChannelUntil, now + dur + 0.2);
       audit('idle-word ' + w);
     }
     // 3.9c 表演期：词活跃期间视线看向屏幕。只算「演」的部分（dur），state 词的保持期
     // 不算——挂着红脸跟鼠标不冲突，全算的话表演期拖到 life 尾，脸退完了视线还压着（2026-11-20 用户反馈残留太久）
-    performingUntil = now + dur + 0.5;
+    performingUntil = Math.max(performingUntil, now + dur + 0.5);
     const inT = Math.min(0.45, dur * 0.2);
     // 2026-11-21 眼睛：照搬他们的 lid 乘数（main.cpp:559 `lid(id, 1 + (value-1)*weight)`）。
     // 关键：基准恒是 1（睁眼），不是参数默认值 —— 这个模型的 ParamEyeLOpen 默认值是 0（绑定姿势闭眼），
@@ -1208,8 +1237,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 2026-11-20 修正：按条目的 src（来源词）判断——共享参数上「别人的」条目
     // （如闭眼写的 ParamEyeLOpen）不连坐。此前按参数 id 裸删，face-big 成员
     // （speechless 等 12 个）的 def 写了眼睛参数，blush 一触发闭眼就没了。
+    const me = ctx.group ?? w;
     for (const members of Object.values(profile.exclusiveGroups ?? {})) {
-      if (!members.includes(w)) continue;
+      if (!members.includes(me)) continue;
       const memberSet = new Set(members);
       for (const other of members) {
         if (other === w) continue;
@@ -1217,7 +1247,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
         if (!od) continue;
         for (const qid of [...(od.params ?? []).map((q) => q.id), ...(od.keys ?? []).map((k) => k.id)]) {
           const cur = channel.get(qid);
-          if (cur?.src && !memberSet.has(cur.src)) continue;   // 别人的条目不连坐
+          const curOwner = cur?.group ?? cur?.src;
+          if (curOwner === me) continue;                         // 同一次展开的零件，别自己清自己（感动=眉毛+眼泪+手+嘴）
+          if (curOwner && !memberSet.has(curOwner)) continue;   // 别人的条目不连坐（组合词按 group 认）
           dropParam(qid);
         }
       }
@@ -1229,7 +1261,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
     }
     // 静态姿势（歪头、侧身、前倾…）：插到一个固定值然后保持
     // emo：情绪弧度标记（applyFrame 扫描通道喂给弧度引擎，条目退场弧度自动消失）
-    const emo = (profile.emotionArc ?? {})[w] ?? null;
+    const owner = ctx.group ?? w;   // 组合词展开出来的零件，身上带的是组合词的名字
+    const emo = (profile.emotionArc ?? {})[owner] ?? null;
     for (const p of def.params ?? []) {
       const f0 = defVal(p.id);
       const lid = isLidParam(p.id);
@@ -1238,7 +1271,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       const to = (lid || smile)
         ? 1 + (((p.to ?? 1) - 1) * effScale)
         : f0 + ((p.to ?? 0) - f0) * effScale;
-      channel.set(p.id, { kind: 'hold', lid, smile, from: lid || smile ? 0 : f0, to: mir(p.id, to), t0: now, dur, in: inT, out: outT, keep: !!(def.state || def.keep), faceLinked: !!fromFace, emo, bornS: sentenceCount, bornT: clockT, src: w, life: life ?? undefined });
+      channel.set(p.id, { kind: 'hold', lid, smile, from: lid || smile ? 0 : f0, to: mir(p.id, to), t0: now, dur, in: inT, out: outT, keep: !!(def.state || def.keep), faceLinked: !!fromFace, emo, bornS: sentenceCount, bornT: clockT, src: w, group: ctx.group, life: life ?? undefined });
     }
     // 波形动作（点头、摇头、甩草…）：正弦摆动叠在通道上。
     // 不支持这一种的话，点头永远只能走旧路，也就永远不能和别的东西叠加。
@@ -1257,7 +1290,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       dur,
       in: inT,
       out: outT,
-      bornS: sentenceCount, bornT: clockT, src: w,   // 条目独立生日（共享寿命钟的替代——后词不再重置别人的钟）
+      bornS: sentenceCount, bornT: clockT, src: w, group: ctx.group,   // 条目独立生日（共享寿命钟的替代——后词不再重置别人的钟）
     });
     for (const wv of def.waves ?? []) setWave(wv, false);
     // postWaves 写的是物理的输出参数（腰/胯），只能在 physics.evaluate() 之后写，
@@ -1285,7 +1318,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
         for (let r = 0; r < mod.repeat; r++) {
           for (const [t, v] of frames) out.push([(r * span + t) * mod.pace, mir(id, v) * effScale]);
         }
-        tracks.push({ id, kind: 'keys', frames: out, t0: now, dur, emo, post, eyeLid: isLidParam(id), bornS: sentenceCount, bornT: clockT, src: w });
+        tracks.push({ id, kind: 'keys', frames: out, t0: now, dur, emo, post, eyeLid: isLidParam(id), bornS: sentenceCount, bornT: clockT, src: w, group: ctx.group });
       }
     }
     audit('write ' + w);
@@ -2443,13 +2476,18 @@ export async function createLive2DBody(base, opts, entry, kit) {
   const ADDON_WORDS = new Set(['blush', 'sweat', 'tears', 'bunny-teeth']);
   const faceBigWords = new Set(profile.exclusiveGroups?.['face-big'] ?? []);
   const onBeat = () => {
-    for (const [wid, def] of Object.entries(paramActs)) {
-      if (!def?.state || ADDON_WORDS.has(wid) || !faceBigWords.has(wid)) continue;
-      for (const qid of [...(def.params ?? []).map((q) => q.id), ...(def.keys ?? []).map((k) => k.id)]) {
-        const cur = channel.get(qid);
-        if (cur?.src && !faceBigWords.has(cur.src)) continue;   // 别人的条目不连坐（同互斥组守卫）
-        dropParam(qid);
-      }
+    // 气泡边界：face-big 成员让位（一个情绪一次一张脸）。
+    // 组合词展开后参数挂在零件上（眉毛/嘴/眼泪各自一条），靠条目的 group 认祖——
+    // 按 def.params 遍历的话组合词是空壳，一个参数都清不到。
+    for (const [id, c] of [...channel]) {
+      const owner = c.group ?? c.src;
+      if (!owner || ADDON_WORDS.has(owner) || !faceBigWords.has(owner)) continue;
+      dropParam(id);
+    }
+    for (let n = tracks.length - 1; n >= 0; n--) {
+      const owner = tracks[n].group ?? tracks[n].src;
+      if (!owner || ADDON_WORDS.has(owner) || !faceBigWords.has(owner)) continue;
+      tracks.splice(n, 1);
     }
   };
   const body = kit.createBody(host, { figure, words, css: 'foreignObject{pointer-events:none}', onSpeechStart, onSpeechEnd, onBeat });
