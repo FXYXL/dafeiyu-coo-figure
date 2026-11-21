@@ -103,7 +103,7 @@ export default {
     { word: 'chest-hand', kind: 'act', w: 4, life: 4 },
     { word: 'finger-point', kind: 'act', w: 4, life: 4 },
     { word: 'swing', kind: 'act', w: 2 },
-    { word: 'skit', kind: 'act', w: 1 },   // 彩蛋小剧场（纯动作版，见 profile.skits）
+    { word: 'skit', kind: 'act', w: 8 },   // 彩蛋小剧场（纯动作版，见 profile.skits）——权重 8 ≈ 20 分钟碰到一次；1 的时候实测 2.8 小时
   ],
 
   // 指针跟随身体：光标左右 → 躯干跟着倾。walk 是走路时的倾斜方向（负号=朝行进方向倒，
