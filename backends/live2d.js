@@ -2182,6 +2182,20 @@ export async function createLive2DBody(base, opts, entry, kit) {
       return v;
     },
     colors: { z: '#7fb0e8' },
+    // 整图滚转：他们的 ViewRoll（main.cpp:565 的 bodyRoll，作用在整个图形矩阵上，单位度）。
+    // kit 本来就会把 groupTilt 的返回值当整组旋转 —— 直接把 ViewRoll 加进去，不用改 kit。
+    groupTilt(mode, tilt, lean) {
+      const roll = virtualParams.get('ViewRoll')?.v ?? 0;
+      return tilt + lean + roll;
+    },
+    // 整图平移：他们的 ViewX/ViewY（main.cpp:649 的 bodyX/bodyY）。单位是 NDC ——
+    // 1 = 半个屏宽/半屏高（他们矩阵里 bodyX 直接加在 -1..1 的投影坐标上）。
+    // 舞蹈里 ViewX 只有 ±0.02（≈1% 屏宽），就是整个画面跟着拍子轻轻左右蹭。
+    groupMove() {
+      const x = virtualParams.get('ViewX')?.v ?? 0;
+      const y = virtualParams.get('ViewY')?.v ?? 0;
+      return x || y ? { x, y } : null;
+    },
     // 2.8 叠加层：外力源（rua/触摸）在主通道结果之上相加——不动词表、不触发 face 清场
     overlaySet,
     overlayClear,

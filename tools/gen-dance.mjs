@@ -126,10 +126,12 @@ export const MAP = {
   ParamBodyAngleZ: { id: 'ParamBodyAngleZ', post: true },
   ShoulderYy: { id: 'ShoulderY', post: false },
   ShoulderX: { id: 'ShoulderX', post: false },
-  // ViewRoll / ViewX / ViewY 是他们的「整图变换」输入（main.cpp:565 的 bodyRoll/bodyX/bodyY，
-  // 作用在整个图形的矩阵上）。我们这层走 kit 的 groupTilt（只吃 tilt/lean），
-  // figure 没有整组平移/滚转的钩子 —— 这三个暂时没有消费者，对账时跳过。
-  // 要对齐这一层得给 kit 加钩子（figure.groupMove），属于「整图变换」那一层的债。
+  // ViewRoll / ViewX / ViewY 是他们的「整图变换」输入（main.cpp:565 的 bodyRoll/bodyX/bodyY）。
+  // 我们这边现在有消费者了：figure.groupTilt 把 ViewRoll 并进整组旋转，
+  // figure.groupMove 把 ViewX/ViewY 交给 kit 的组平移（patch-pet-kit 的 groupMove）。
+  ViewRoll: { id: 'ViewRoll', post: false },
+  ViewX: { id: 'ViewX', post: false },
+  ViewY: { id: 'ViewY', post: false },
 };
 
 if (process.argv[1] && process.argv[1].endsWith('gen-dance.mjs')) {

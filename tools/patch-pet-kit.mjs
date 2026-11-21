@@ -72,6 +72,18 @@ const PATCHES = [
     ),
   },
   {
+    file: 'body', id: 'groupMove',
+    desc: '整图平移：figure.groupMove() 的 NDC 位移加到组变换（他们 main.cpp:649 的 bodyX/bodyY）',
+    detect: (s) => /custom\?\.groupMove/.test(s),
+    apply: (s) => s.replace(
+      '    pet.xf = { AX, AY, ax, ay, kx, ky, rot };',
+      '    // figure.groupMove：整图平移（NDC，1 = 半个屏宽）。他们 main.cpp:649 的 bodyX/bodyY 就是这一层\n'
+      + '    const mv = custom?.groupMove?.(pet.mode);\n'
+      + '    if (mv) { AX += (mv.x ?? 0) * W / 2; AY += (mv.y ?? 0) * H / 2; }\n'
+      + '    pet.xf = { AX, AY, ax, ay, kx, ky, rot };',
+    ),
+  },
+  {
     file: 'body', id: 'noTurn',
     desc: 'noMirror 的形象不做 facing 翻转（待机转身 + 张望动作两处）',
     detect: (s) => /!custom\?\.noMirror && pointer\.inside && !press/.test(s) && /!pet\.turned && !custom\?\.noMirror/.test(s),
