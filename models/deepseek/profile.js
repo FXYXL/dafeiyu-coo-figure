@@ -115,7 +115,7 @@ export default {
   useChannels: true,
   // 试点白名单：只放纯姿态类词，它们本来就不带手部动画/退出剪辑，接管风险最小。
   channelWords: [
-    "wave", "nod", "shake", "bow", "spin", "dance", "jump", "shiver", "look", "lean-in", "lean-back", "side", "peek", "tilt", "wiggle", "finger-point", "chest-hand", "grass-hand", "swing", "eye-smile", "eye-close", "eye-half", "eye-wide", "eye-squeeze", "wink-left", "wink-right", "wink-keep", "wink-hold",
+    "wave", "nod", "shake", "bow", "spin", "dance", "jump", "shiver", "look", "lean-in", "lean-back", "side", "peek", "tilt", "wiggle", "finger-point", "chest-hand", "grass-hand", "swing", "eye-smile", "eye-close", "eye-half", "eye-wide", "eye-squeeze", "blink", "wink-left", "wink-right", "wink-keep", "wink-hold",
     // 2026-11-21 修正：这 7 个原来被上一行的行内注释吞掉了（写进 // 后面 = 从来没被接管过，
     // 一直走 act 老路瞬时写 0 —— 眉毛/嘴的表情同样"一闪"的真身）。
     "brow-frown", "brow-up", "brow-knit", "mouth-smile", "mouth-pout", "mouth-open", "blush",
@@ -167,7 +167,7 @@ export default {
     '扣盆': 'pan-face',
     '挥手': 'wave',
     '招手': 'wave',
-    '点头': 'nod', '叹气': 'sigh', '大笑': 'laugh', '眼泪': 'tears', '挑一下眉': 'brow-raise-once', '歪一下头': 'tilt-once', '晃头': 'head-swing', '慢歪头': 'slow-tilt', '缩一下': 'cower', '吓一跳': 'startle', '左右张望': 'look-around', '摇摆一': 'sway-1', '剧场摇摆一': 'theater-sway-1', '剧场摇摆二': 'theater-sway-2', '慢摇': 'slow-sway', '摇摆二': 'dance', '看过来': 'face-front', '看你': 'face-front', '看左边': 'look-left', '看右边': 'look-right', '看上面': 'look-up', '看下面': 'look-down', '转头': 'turn-head', '前倾': 'lean-forward', '单眨眼': 'wink-hold', '眨单眼': 'wink-keep', '快眨左': 'wink-left', '快眨右': 'wink-right', '高兴': 'happy-burst', '偷笑': 'snicker', '傻眼': 'dumbstruck', '得瑟': 'gloating', '抓狂': 'frantic', '犯困': 'drowsy-combo', '感动': 'touched', '鬼点子': 'sly-idea', '得救': 'rescued', '警觉': 'alert-combo', '瞟一眼': 'glance', '竖手指': 'finger-point', '快眨单眼': 'wink-left', '放下手': 'put-hand-down',
+    '点头': 'nod', '叹气': 'sigh', '大笑': 'laugh', '眼泪': 'tears', '挑一下眉': 'brow-raise-once', '歪一下头': 'tilt-once', '晃头': 'head-swing', '慢歪头': 'slow-tilt', '缩一下': 'cower', '吓一跳': 'startle', '左右张望': 'look-around', '摇摆一': 'sway-1', '剧场摇摆一': 'theater-sway-1', '剧场摇摆二': 'theater-sway-2', '慢摇': 'slow-sway', '摇摆二': 'dance', '看过来': 'face-front', '看你': 'face-front', '看左边': 'look-left', '看右边': 'look-right', '看上面': 'look-up', '看下面': 'look-down', '转头': 'turn-head', '前倾': 'lean-forward', '眨眼': 'blink', '单眨眼': 'wink-hold', '眨单眼': 'wink-keep', '快眨左': 'wink-left', '快眨右': 'wink-right', '高兴': 'happy-burst', '偷笑': 'snicker', '傻眼': 'dumbstruck', '得瑟': 'gloating', '抓狂': 'frantic', '犯困': 'drowsy-combo', '感动': 'touched', '鬼点子': 'sly-idea', '得救': 'rescued', '警觉': 'alert-combo', '瞟一眼': 'glance', '竖手指': 'finger-point', '快眨单眼': 'wink-left', '放下手': 'put-hand-down',
     '摇头': 'shake',
     '鞠躬': 'bow',
     '转圈': 'spin',
@@ -468,9 +468,9 @@ export default {
     'wink-left':   { reflex: true, dur: 0.8,
       keys: [
         // 他们 Hold EyeOpen .45 × Move(0→-1→0) = 0.45→0→0.45（只睁回半睁笑眼，所以柔）
-        { id: 'ParamEyeLOpen', t: 0, v: 0.45 }, { id: 'ParamEyeLOpen', t: 0.14, v: 0 },
-        { id: 'ParamEyeLOpen', t: 0.6, v: 0 }, { id: 'ParamEyeLOpen', t: 0.8, v: 0.45 },
-        { id: 'ParamEyeROpen', t: 0, v: 0.45 }, { id: 'ParamEyeROpen', t: 0.8, v: 0.45 },
+        { id: 'ParamEyeLOpen', t: 0, v: -0.55 }, { id: 'ParamEyeLOpen', t: 0.14, v: -1 },
+        { id: 'ParamEyeLOpen', t: 0.6, v: -1 }, { id: 'ParamEyeLOpen', t: 0.8, v: -0.55 },
+        { id: 'ParamEyeROpen', t: 0, v: -0.55 }, { id: 'ParamEyeROpen', t: 0.8, v: -0.55 },
         { id: 'AngleZ', t: 0, v: 0 }, { id: 'AngleZ', t: 0.14, v: 12 },
         { id: 'AngleZ', t: 0.6, v: 12 }, { id: 'AngleZ', t: 0.8, v: 0 },
         { id: 'EyeSmile', t: 0, v: 0.45 }, { id: 'EyeSmile', t: 0.14, v: 1 },
@@ -481,9 +481,9 @@ export default {
     'wink-right':  { reflex: true, dur: 0.8,
       keys: [
         // 镜像：0.45→0→0.45
-        { id: 'ParamEyeROpen', t: 0, v: 0.45 }, { id: 'ParamEyeROpen', t: 0.14, v: 0 },
-        { id: 'ParamEyeROpen', t: 0.6, v: 0 }, { id: 'ParamEyeROpen', t: 0.8, v: 0.45 },
-        { id: 'ParamEyeLOpen', t: 0, v: 0.45 }, { id: 'ParamEyeLOpen', t: 0.8, v: 0.45 },
+        { id: 'ParamEyeROpen', t: 0, v: -0.55 }, { id: 'ParamEyeROpen', t: 0.14, v: -1 },
+        { id: 'ParamEyeROpen', t: 0.6, v: -1 }, { id: 'ParamEyeROpen', t: 0.8, v: -0.55 },
+        { id: 'ParamEyeLOpen', t: 0, v: -0.55 }, { id: 'ParamEyeLOpen', t: 0.8, v: -0.55 },
         { id: 'AngleZ', t: 0, v: 0 }, { id: 'AngleZ', t: 0.14, v: -12 },
         { id: 'AngleZ', t: 0.6, v: -12 }, { id: 'AngleZ', t: 0.8, v: 0 },
         { id: 'EyeSmile', t: 0, v: 0.45 }, { id: 'EyeSmile', t: 0.14, v: 1 },
@@ -491,10 +491,15 @@ export default {
       ],
       params: [] },
     // 单眨眼（Body.cs:74）：左眼闭着停 2 秒再开——抛媚眼式
+    // 眨眼（Body.cs:105 原样）：EyeOpen 增量 0 → -1 → 0，0.22 秒一次；n 次由 ×n 修饰展开
+    blink:         { dur: 0.22, keys: [
+      { id: 'ParamEyeLOpen', t: 0, v: 0 }, { id: 'ParamEyeLOpen', t: 0.07, v: -1 },
+      { id: 'ParamEyeLOpen', t: 0.16, v: 0 }, { id: 'ParamEyeLOpen', t: 0.22, v: 0 },
+    ] },
     'wink-hold':   { reflex: true, dur: 2.35,
       keys: [
-        { id: 'ParamEyeLOpen', t: 0, v: 1 }, { id: 'ParamEyeLOpen', t: 0.2, v: 0 },
-        { id: 'ParamEyeLOpen', t: 2.2, v: 0 }, { id: 'ParamEyeLOpen', t: 2.35, v: 1 },
+        { id: 'ParamEyeLOpen', t: 0, v: 0 }, { id: 'ParamEyeLOpen', t: 0.2, v: -1 },
+        { id: 'ParamEyeLOpen', t: 2.2, v: -1 }, { id: 'ParamEyeLOpen', t: 2.35, v: 0 },
       ] },
     // 眨单眼（Body.cs:73 的 state 版在我们这里被自动放松打断，看起来只闪一下——
     // 2026-11-21 改成柔和关键帧：0.22s 闭 → 停 0.55s → 0.33s 慢慢睁开，带笑眼）
@@ -534,8 +539,8 @@ export default {
       { id: 'LeanInput', to: 0 }, { id: 'AngleX', to: 0 }, { id: 'AngleY', to: 0 }, { id: 'AngleZ', to: 0 },
     ] },
     'squint':     { state: true, dur: 1.2, params: [
-      { id: 'REyeSquint', to: 1 }, { id: 'LEyeSquint', to: 1 },
-      { id: 'ParamEyeLOpen', to: 0.6 }, { id: 'ParamEyeROpen', to: 0.6 },
+      { id: 'REyeSquint', to: 0.9 }, { id: 'LEyeSquint', to: 0.9 },
+      { id: 'ParamEyeLOpen', to: 0.7 }, { id: 'ParamEyeROpen', to: 0.7 },
     ] },
     'smirk':      { state: true, dur: 1.0, params: [
       { id: 'ParamMouthForm', to: 1 }, { id: 'MouthX', to: 0.6 },
@@ -573,12 +578,12 @@ export default {
     // + 歪头 16 + 八字眉 + 慢眨眼两连——3.2s
     'act-cute': { dur: 3.2,
       keys: [
-        { id: 'ParamEyeLOpen', t: 0, v: 1 }, { id: 'ParamEyeLOpen', t: 0.6, v: 0.12 },
-        { id: 'ParamEyeLOpen', t: 1.2, v: 1 }, { id: 'ParamEyeLOpen', t: 1.9, v: 0.12 },
-        { id: 'ParamEyeLOpen', t: 2.6, v: 1 }, { id: 'ParamEyeLOpen', t: 3.2, v: 1 },
-        { id: 'ParamEyeROpen', t: 0, v: 1 }, { id: 'ParamEyeROpen', t: 0.6, v: 0.12 },
-        { id: 'ParamEyeROpen', t: 1.2, v: 1 }, { id: 'ParamEyeROpen', t: 1.9, v: 0.12 },
-        { id: 'ParamEyeROpen', t: 2.6, v: 1 }, { id: 'ParamEyeROpen', t: 3.2, v: 1 },
+        { id: 'ParamEyeLOpen', t: 0, v: 0 }, { id: 'ParamEyeLOpen', t: 0.6, v: -0.88 },
+        { id: 'ParamEyeLOpen', t: 1.2, v: 0 }, { id: 'ParamEyeLOpen', t: 1.9, v: -0.88 },
+        { id: 'ParamEyeLOpen', t: 2.6, v: 0 }, { id: 'ParamEyeLOpen', t: 3.2, v: 0 },
+        { id: 'ParamEyeROpen', t: 0, v: 0 }, { id: 'ParamEyeROpen', t: 0.6, v: -0.88 },
+        { id: 'ParamEyeROpen', t: 1.2, v: 0 }, { id: 'ParamEyeROpen', t: 1.9, v: -0.88 },
+        { id: 'ParamEyeROpen', t: 2.6, v: 0 }, { id: 'ParamEyeROpen', t: 3.2, v: 0 },
       ],
       params: [
         { id: 'MouthFunnel', to: 0.7 }, { id: 'Mouthpucker', to: 1 }, { id: 'ParamMouthForm', to: -0.4 },
@@ -643,15 +648,15 @@ export default {
         { id: 'ViewSquash', t: 2.8, v: 0.025 },
         { id: 'ViewSquash', t: 3.5, v: 0 },
         { id: 'AngleY', t: 0, v: 0 }, { id: 'AngleY', t: 0.8, v: 7 },
-        { id: 'AngleY', t: 1.8, v: -8 }, { id: 'AngleY', t: 2.8, v: -7 }, { id: 'AngleY', t: 3.5, v: 0 },
+        { id: 'AngleY', t: 1.8, v: -9 }, { id: 'AngleY', t: 2.8, v: -8 }, { id: 'AngleY', t: 3.5, v: 0 },
         { id: 'LeanInput', t: 0, v: 0 }, { id: 'LeanInput', t: 0.8, v: 5 },
-        { id: 'LeanInput', t: 1.8, v: -6 }, { id: 'LeanInput', t: 2.8, v: -5 }, { id: 'LeanInput', t: 3.5, v: 0 },
-        { id: 'ParamEyeLOpen', t: 0, v: 1 }, { id: 'ParamEyeLOpen', t: 0.8, v: 0.5 },
-        { id: 'ParamEyeLOpen', t: 1.8, v: 0.3 }, { id: 'ParamEyeLOpen', t: 2.8, v: 0.35 }, { id: 'ParamEyeLOpen', t: 3.5, v: 1 },
-        { id: 'ParamEyeROpen', t: 0, v: 1 }, { id: 'ParamEyeROpen', t: 0.8, v: 0.5 },
-        { id: 'ParamEyeROpen', t: 1.8, v: 0.3 }, { id: 'ParamEyeROpen', t: 2.8, v: 0.35 }, { id: 'ParamEyeROpen', t: 3.5, v: 1 },
+        { id: 'LeanInput', t: 1.8, v: -7 }, { id: 'LeanInput', t: 2.8, v: -6 }, { id: 'LeanInput', t: 3.5, v: 0 },
+        { id: 'ParamEyeLOpen', t: 0, v: 0 }, { id: 'ParamEyeLOpen', t: 0.8, v: -0.2 },
+        { id: 'ParamEyeLOpen', t: 1.8, v: -0.6 }, { id: 'ParamEyeLOpen', t: 2.8, v: -0.55 }, { id: 'ParamEyeLOpen', t: 3.5, v: 0 },
+        { id: 'ParamEyeROpen', t: 0, v: 0 }, { id: 'ParamEyeROpen', t: 0.8, v: -0.2 },
+        { id: 'ParamEyeROpen', t: 1.8, v: -0.6 }, { id: 'ParamEyeROpen', t: 2.8, v: -0.55 }, { id: 'ParamEyeROpen', t: 3.5, v: 0 },
         { id: 'ParamMouthOpenY', t: 0, v: 0 }, { id: 'ParamMouthOpenY', t: 1.1, v: 0 },
-        { id: 'ParamMouthOpenY', t: 1.4, v: 0.35 }, { id: 'ParamMouthOpenY', t: 2.2, v: 0.12 },
+        { id: 'ParamMouthOpenY', t: 1.4, v: 0.3 }, { id: 'ParamMouthOpenY', t: 2.2, v: 0.12 },
         { id: 'ParamMouthOpenY', t: 2.8, v: 0 }, { id: 'ParamMouthOpenY', t: 3.5, v: 0 },
         { id: 'MouthFunnel', t: 0, v: 0 }, { id: 'MouthFunnel', t: 1.1, v: 0 },
         { id: 'MouthFunnel', t: 1.4, v: 0.9 }, { id: 'MouthFunnel', t: 2.2, v: 0.6 },
@@ -714,8 +719,10 @@ export default {
         { id: 'EyeSmile', t: 0, v: 0 }, { id: 'EyeSmile', t: 1.4, v: 0 },
         { id: 'BrowInnerUp', t: 0, v: 0 }, { id: 'BrowInnerUp', t: 0.08, v: 0.9 },
         { id: 'BrowInnerUp', t: 1.0, v: 0.6 }, { id: 'BrowInnerUp', t: 1.4, v: 0 },
-        { id: 'ParamMouthOpenY', t: 0, v: 0 }, { id: 'ParamMouthOpenY', t: 0.08, v: 0.3 },
-        { id: 'ParamMouthOpenY', t: 0.8, v: 0.35 }, { id: 'ParamMouthOpenY', t: 1.4, v: 0 },
+        { id: 'ParamEyeLOpen', t: 0, v: 0 }, { id: 'ParamEyeLOpen', t: 0.08, v: 0.35 },
+        { id: 'ParamEyeLOpen', t: 0.8, v: 0.3 }, { id: 'ParamEyeLOpen', t: 1.2, v: 0 },
+        { id: 'ParamEyeROpen', t: 0, v: 0 }, { id: 'ParamEyeROpen', t: 0.08, v: 0.35 },
+        { id: 'ParamEyeROpen', t: 0.8, v: 0.3 }, { id: 'ParamEyeROpen', t: 1.2, v: 0 },
       ],
       params: [] },
     // 摇摆一（Body.cs:120/125/126/129 曲线，node 重算 Dance/Groove）——12 拍快速左右摇摆（听歌第一段）
@@ -783,10 +790,8 @@ export default {
     // :右 走 3.6 镜像）。偷笑组合里的「瞟一眼:左」就是它。
     'glance': { dur: 0.8,
       keys: [
-        { id: 'ParamEyeBallX', t: 0, v: 0 }, { id: 'ParamEyeBallX', t: 0.15, v: 0.85 },
+        { id: 'ParamEyeBallX', t: 0, v: 0 }, { id: 'ParamEyeBallX', t: 0.12, v: 0.85 },
         { id: 'ParamEyeBallX', t: 0.55, v: 0.85 }, { id: 'ParamEyeBallX', t: 0.8, v: 0 },
-        { id: 'AngleX', t: 0, v: 0 }, { id: 'AngleX', t: 0.15, v: 5 },
-        { id: 'AngleX', t: 0.55, v: 5 }, { id: 'AngleX', t: 0.8, v: 0 },
       ] },
     'look-around': { dur: 1.9,
       keys: [
@@ -838,10 +843,10 @@ export default {
         { id: 'ParamEyeBallX', t: 2.1, v: 0 }, { id: 'ParamEyeBallX', t: 2.8, v: 0 },
         { id: 'EyeSmile', t: 0, v: 0 }, { id: 'EyeSmile', t: 0.9, v: 0 },
         { id: 'EyeSmile', t: 1.3, v: 1 }, { id: 'EyeSmile', t: 2.8, v: 1 },
-        { id: 'ParamEyeLOpen', t: 0, v: 1 }, { id: 'ParamEyeLOpen', t: 0.9, v: 1 },
-        { id: 'ParamEyeLOpen', t: 1.3, v: 0.45 }, { id: 'ParamEyeLOpen', t: 2.8, v: 0.45 },
-        { id: 'ParamEyeROpen', t: 0, v: 1 }, { id: 'ParamEyeROpen', t: 0.9, v: 1 },
-        { id: 'ParamEyeROpen', t: 1.3, v: 0.45 }, { id: 'ParamEyeROpen', t: 2.8, v: 0.45 },
+        { id: 'ParamEyeLOpen', t: 0, v: 0 }, { id: 'ParamEyeLOpen', t: 0.9, v: 0 },
+        { id: 'ParamEyeLOpen', t: 1.3, v: -0.55 }, { id: 'ParamEyeLOpen', t: 2.8, v: -0.55 },
+        { id: 'ParamEyeROpen', t: 0, v: 0 }, { id: 'ParamEyeROpen', t: 0.9, v: 0 },
+        { id: 'ParamEyeROpen', t: 1.3, v: -0.55 }, { id: 'ParamEyeROpen', t: 2.8, v: -0.55 },
       ],
       params: [
         { id: 'ParamMouthForm', to: 0.7 }, { id: 'MouthX', to: 0.5 },
@@ -947,35 +952,50 @@ export default {
         { id: 'RForearm', amp: 6, freq: 2.5 },
         { id: 'AngleX', amp: 3, freq: 1.25 },
       ] },
-    'dance': { takeover: true, dur: 3.4,
-      // 连续扭（扭腰同款 postWaves，幅度收敛、频率对拍子 1.9）叠在拍子 keys 上 → 「真的在扭」而不是倾斜
+    // 摇摆二（Body.cs:126 Groove(s=1, 6×.4*8/6, 交替)）—— 2026-11-21 用 tools/gen-dance.mjs 重算：
+    // 旧表是按「没除 0.7 的拍长」算的老版（dur 3.4、幅度 -9/8），和他们的 4.571 / ±21 差一整代。
+    'dance': { takeover: true, dur: 4.571,
+      // 连续扭（扭腰同款 postWaves，幅度收敛、频率对拍子）叠在拍子 keys 上 → 「真的在扭」而不是倾斜
+      // freq 按拍频等比缩放：旧 6 拍 / 3.4 秒时 0.94 → 新 6 拍 / 4.571 秒 0.70
       postWaves: [
-        { id: 'ParamBodyAngleZ', amp: 10, freq: 0.94 },
-        { id: 'HipAngleX', amp: 12, freq: 0.94, phase: 0.12 },
+        { id: 'ParamBodyAngleZ', amp: 10, freq: 0.70 },
+        { id: 'HipAngleX', amp: 12, freq: 0.70, phase: 0.12 },
       ],
       keys: [
-        { id: 'AngleZ', t: 0, v: 0 }, { id: 'AngleZ', t: 0.67, v: -9 }, { id: 'AngleZ', t: 1.2, v: 9 },
-        { id: 'AngleZ', t: 1.73, v: -9 }, { id: 'AngleZ', t: 2.26, v: 9 }, { id: 'AngleZ', t: 2.79, v: -9 },
-        { id: 'AngleZ', t: 3.2, v: 0 },
-        { id: 'AngleY', t: 0, v: 0 }, { id: 'AngleY', t: 0.27, v: -6 }, { id: 'AngleY', t: 0.8, v: 6 },
-        { id: 'AngleY', t: 1.33, v: -6 }, { id: 'AngleY', t: 1.86, v: 6 }, { id: 'AngleY', t: 2.39, v: -6 },
-        { id: 'AngleY', t: 2.92, v: 6 }, { id: 'AngleY', t: 3.2, v: 0 },
-        { id: 'ShoulderY', t: 0.53, v: 8 }, { id: 'ShoulderY', t: 0.8, v: 0 },
-        { id: 'ShoulderY', t: 1.33, v: 8 }, { id: 'ShoulderY', t: 1.6, v: 0 },
-        { id: 'ShoulderY', t: 2.13, v: 8 }, { id: 'ShoulderY', t: 2.4, v: 0 },
+        { id: 'AngleZ', t: 0, v: 0 }, { id: 'AngleZ', t: 0.441, v: 21 }, { id: 'AngleZ', t: 1.203, v: -21 },
+        { id: 'AngleZ', t: 1.965, v: 21 }, { id: 'AngleZ', t: 2.727, v: -21 }, { id: 'AngleZ', t: 3.489, v: 21 },
+        { id: 'AngleZ', t: 4.25, v: -21 }, { id: 'AngleZ', t: 4.631, v: 0 },
+        { id: 'AngleX', t: 0, v: 0 }, { id: 'AngleX', t: 0.481, v: 9 }, { id: 'AngleX', t: 1.243, v: -9 },
+        { id: 'AngleX', t: 2.005, v: 9 }, { id: 'AngleX', t: 2.767, v: -9 }, { id: 'AngleX', t: 3.529, v: 9 },
+        { id: 'AngleX', t: 4.29, v: -9 }, { id: 'AngleX', t: 4.671, v: 0 },
+        { id: 'AngleY', t: 0, v: 0 }, { id: 'AngleY', t: 0.431, v: -4 }, { id: 'AngleY', t: 0.812, v: 3 },
+        { id: 'AngleY', t: 1.193, v: -4 }, { id: 'AngleY', t: 1.574, v: 3 }, { id: 'AngleY', t: 1.955, v: -4 },
+        { id: 'AngleY', t: 2.336, v: 3 }, { id: 'AngleY', t: 2.717, v: -4 }, { id: 'AngleY', t: 3.098, v: 3 },
+        { id: 'AngleY', t: 3.479, v: -4 }, { id: 'AngleY', t: 3.86, v: 3 }, { id: 'AngleY', t: 4.24, v: -4 },
+        { id: 'AngleY', t: 4.621, v: 0 },
+        { id: 'ShoulderY', t: 0, v: 0 }, { id: 'ShoulderY', t: 0.381, v: 14 }, { id: 'ShoulderY', t: 1.143, v: -14 },
+        { id: 'ShoulderY', t: 1.905, v: 14 }, { id: 'ShoulderY', t: 2.667, v: -14 }, { id: 'ShoulderY', t: 3.429, v: 14 },
+        { id: 'ShoulderY', t: 4.19, v: -14 }, { id: 'ShoulderY', t: 4.571, v: 0 },
+        { id: 'ShoulderX', t: 0, v: 0 }, { id: 'ShoulderX', t: 0.381, v: 10 }, { id: 'ShoulderX', t: 1.143, v: -10 },
+        { id: 'ShoulderX', t: 1.905, v: 10 }, { id: 'ShoulderX', t: 2.667, v: -10 }, { id: 'ShoulderX', t: 3.429, v: 10 },
+        { id: 'ShoulderX', t: 4.19, v: -10 }, { id: 'ShoulderX', t: 4.571, v: 0 },
       ],
       // 物理驱动线（胸晃/朝向的来源）：PositionX 是唯一「非输出+是输入」的重心参数，
       // 必须**物理前写**（waves）——放 postWaves 物理吃不到；ParamBodyAngleX/Z 都是
       // 物理输出，前写会被当场算回（写了白写）。RZ 物理不读不写，自由驱动整体摆。
       waves: [
-        { id: 'PositionX', amp: 14, freq: 0.94 },
-        { id: 'ParamBodyAngleRZ', amp: 9, freq: 0.94, phase: 0.06 },
+        { id: 'PositionX', amp: 14, freq: 0.70 },
+        { id: 'ParamBodyAngleRZ', amp: 9, freq: 0.70, phase: 0.06 },
       ],
       keysPost: [
-        { id: 'ParamBodyAngleZ', t: 0, v: 0 }, { id: 'ParamBodyAngleZ', t: 0.53, v: 22 },
-        { id: 'ParamBodyAngleZ', t: 1.06, v: -22 }, { id: 'ParamBodyAngleZ', t: 1.59, v: 22 },
-        { id: 'ParamBodyAngleZ', t: 2.12, v: -22 }, { id: 'ParamBodyAngleZ', t: 2.65, v: 22 },
-        { id: 'ParamBodyAngleZ', t: 3.2, v: 0 },
+        { id: 'ParamBodyAngleZ', t: 0, v: 0 }, { id: 'ParamBodyAngleZ', t: 0.381, v: 5 },
+        { id: 'ParamBodyAngleZ', t: 1.143, v: -5 }, { id: 'ParamBodyAngleZ', t: 1.905, v: 5 },
+        { id: 'ParamBodyAngleZ', t: 2.667, v: -5 }, { id: 'ParamBodyAngleZ', t: 3.429, v: 5 },
+        { id: 'ParamBodyAngleZ', t: 4.19, v: -5 }, { id: 'ParamBodyAngleZ', t: 4.571, v: 0 },
+        { id: 'ParamBodyAngleX', t: 0, v: 0 }, { id: 'ParamBodyAngleX', t: 0.381, v: 4 },
+        { id: 'ParamBodyAngleX', t: 1.143, v: -4 }, { id: 'ParamBodyAngleX', t: 1.905, v: 4 },
+        { id: 'ParamBodyAngleX', t: 2.667, v: -4 }, { id: 'ParamBodyAngleX', t: 3.429, v: 4 },
+        { id: 'ParamBodyAngleX', t: 4.19, v: -4 }, { id: 'ParamBodyAngleX', t: 4.571, v: 0 },
       ] },
     'monocle-face':{ state: true, dur: 1.0, params: [{ id: 'key12', to: 1 }] },
     // —— 原 expressionCombos 的组合，翻译成通道版（2026-11-18 统一，全部可叠+自动放松）——
@@ -1055,10 +1075,10 @@ export default {
         { id: 'AngleY', t: 1.4, v: 9 }, { id: 'AngleY', t: 2.4, v: 5 }, { id: 'AngleY', t: 3.2, v: 0 },
         { id: 'BrowInnerUp', t: 0, v: 0 }, { id: 'BrowInnerUp', t: 0.8, v: 0.55 },
         { id: 'BrowInnerUp', t: 1.6, v: 0.35 }, { id: 'BrowInnerUp', t: 3.2, v: 0 },
-        { id: 'ParamEyeLOpen', t: 0, v: 1 }, { id: 'ParamEyeLOpen', t: 0.9, v: 0.5 },
-        { id: 'ParamEyeLOpen', t: 1.5, v: 0.15 }, { id: 'ParamEyeLOpen', t: 2.3, v: 0.1 }, { id: 'ParamEyeLOpen', t: 3.2, v: 1 },
-        { id: 'ParamEyeROpen', t: 0, v: 1 }, { id: 'ParamEyeROpen', t: 0.9, v: 0.5 },
-        { id: 'ParamEyeROpen', t: 1.5, v: 0.15 }, { id: 'ParamEyeROpen', t: 2.3, v: 0.1 }, { id: 'ParamEyeROpen', t: 3.2, v: 1 },
+        { id: 'ParamEyeLOpen', t: 0, v: 0 }, { id: 'ParamEyeLOpen', t: 0.9, v: -0.5 },
+        { id: 'ParamEyeLOpen', t: 1.5, v: -0.85 }, { id: 'ParamEyeLOpen', t: 2.3, v: -0.9 }, { id: 'ParamEyeLOpen', t: 3.2, v: 0 },
+        { id: 'ParamEyeROpen', t: 0, v: 0 }, { id: 'ParamEyeROpen', t: 0.9, v: -0.5 },
+        { id: 'ParamEyeROpen', t: 1.5, v: -0.85 }, { id: 'ParamEyeROpen', t: 2.3, v: -0.9 }, { id: 'ParamEyeROpen', t: 3.2, v: 0 },
         { id: 'ParamMouthOpenY', t: 0.6, v: 0 }, { id: 'ParamMouthOpenY', t: 1.5, v: 0.7 },
         { id: 'ParamMouthOpenY', t: 2.3, v: 0.4 }, { id: 'ParamMouthOpenY', t: 3.0, v: 0 }, { id: 'ParamMouthOpenY', t: 3.2, v: 0 },
         { id: 'JawOpen', t: 0.6, v: 0 }, { id: 'JawOpen', t: 1.5, v: 0.35 },
@@ -1074,10 +1094,10 @@ export default {
         { id: 'ViewSquash', t: 0.6, v: -0.07 }, { id: 'ViewSquash', t: 0.95, v: 0.03 }, { id: 'ViewSquash', t: 1.3, v: 0 }, { id: 'ViewSquash', t: 1.5, v: 0 },
         { id: 'AngleY', t: 0, v: 0 }, { id: 'AngleY', t: 0.4, v: -9 },
         { id: 'AngleY', t: 0.6, v: 11 }, { id: 'AngleY', t: 0.95, v: 5 }, { id: 'AngleY', t: 1.3, v: 0 }, { id: 'AngleY', t: 1.5, v: 0 },
-        { id: 'ParamEyeLOpen', t: 0, v: 1 }, { id: 'ParamEyeLOpen', t: 0.4, v: 0 },
-        { id: 'ParamEyeLOpen', t: 0.85, v: 0 }, { id: 'ParamEyeLOpen', t: 1.25, v: 1 }, { id: 'ParamEyeLOpen', t: 1.5, v: 1 },
-        { id: 'ParamEyeROpen', t: 0, v: 1 }, { id: 'ParamEyeROpen', t: 0.4, v: 0 },
-        { id: 'ParamEyeROpen', t: 0.85, v: 0 }, { id: 'ParamEyeROpen', t: 1.25, v: 1 }, { id: 'ParamEyeROpen', t: 1.5, v: 1 },
+        { id: 'ParamEyeLOpen', t: 0, v: 0 }, { id: 'ParamEyeLOpen', t: 0.4, v: -1 },
+        { id: 'ParamEyeLOpen', t: 0.85, v: -1 }, { id: 'ParamEyeLOpen', t: 1.25, v: 0 }, { id: 'ParamEyeLOpen', t: 1.5, v: 0 },
+        { id: 'ParamEyeROpen', t: 0, v: 0 }, { id: 'ParamEyeROpen', t: 0.4, v: -1 },
+        { id: 'ParamEyeROpen', t: 0.85, v: -1 }, { id: 'ParamEyeROpen', t: 1.25, v: 0 }, { id: 'ParamEyeROpen', t: 1.5, v: 0 },
         { id: 'ParamMouthOpenY', t: 0, v: 0 }, { id: 'ParamMouthOpenY', t: 0.4, v: 0.3 },
         { id: 'ParamMouthOpenY', t: 0.6, v: 0.85 }, { id: 'ParamMouthOpenY', t: 0.95, v: 0.25 }, { id: 'ParamMouthOpenY', t: 1.3, v: 0 }, { id: 'ParamMouthOpenY', t: 1.5, v: 0 },
         { id: 'BrowInnerUp', t: 0, v: 0 }, { id: 'BrowInnerUp', t: 0.6, v: 0.85 },
@@ -1112,10 +1132,10 @@ export default {
     //   + 舌头跟着出来停一会再收回——1.4s
     'wink-tongue': { dur: 1.4,
       keys: [
-        { id: 'ParamEyeLOpen', t: 0, v: 1 }, { id: 'ParamEyeLOpen', t: 0.14, v: 0 },
-        { id: 'ParamEyeLOpen', t: 0.9, v: 0 }, { id: 'ParamEyeLOpen', t: 1.4, v: 1 },
-        { id: 'ParamEyeROpen', t: 0, v: 1 }, { id: 'ParamEyeROpen', t: 0.14, v: 0.45 },
-        { id: 'ParamEyeROpen', t: 0.9, v: 0.45 }, { id: 'ParamEyeROpen', t: 1.4, v: 1 },
+        { id: 'ParamEyeLOpen', t: 0, v: 0 }, { id: 'ParamEyeLOpen', t: 0.14, v: -1 },
+        { id: 'ParamEyeLOpen', t: 0.9, v: -1 }, { id: 'ParamEyeLOpen', t: 1.4, v: 0 },
+        { id: 'ParamEyeROpen', t: 0, v: 0 }, { id: 'ParamEyeROpen', t: 0.14, v: -0.55 },
+        { id: 'ParamEyeROpen', t: 0.9, v: -0.55 }, { id: 'ParamEyeROpen', t: 1.4, v: 0 },
         { id: 'EyeSmile', t: 0, v: 0.45 }, { id: 'EyeSmile', t: 0.14, v: 1 },
         { id: 'EyeSmile', t: 0.9, v: 1 }, { id: 'EyeSmile', t: 1.4, v: 0.45 },
         { id: 'AngleZ', t: 0, v: 0 }, { id: 'AngleZ', t: 0.14, v: 12 },

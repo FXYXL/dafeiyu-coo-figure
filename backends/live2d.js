@@ -1076,6 +1076,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
   // 而是像他们 hold 那样存成"相对 1 的乘数"，由 Lids 段乘在 eyeBlink 之后。
   // 每帧前批重建（writeChannel 开头清零），物理之前被用掉。
   const lidMul = { L: 1, R: 1 };
+  // 眼睛关键帧的**增量**（他们 track 走 `lid(id, 1 + value)`，所以值为 -1 就是闭上）。
+  // 多条轨道同参数相加（sigh 的微闭 + 单眨眼），最后 1+Σ 变成乘数。
+  const lidAdd = { L: 0, R: 0 };
   // applyFrame 算出的「不含表情配方 eyeOpen」的开度系数（shape/困意/睡姿），给 Lids 段乘
   let lastOpenNoBase = 1;
   // 通道缓动的时间常数（他们 main.cpp:550 的 1-exp(-dt/0.15f)，全通道同一个值）
@@ -1375,7 +1378,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
   /** 物理之后写的那一批（腰/胯这类物理输出参数）。写早了会被物理算回去。 */
   function applyChannelPost(t) { writeChannel(t, true); }
   function writeChannel(t, wantPost) {
-    if (!wantPost) { virtualParams.clear(); lidMul.L = 1; lidMul.R = 1; }   // 虚拟表/lid 乘数每帧前批重建
+    if (!wantPost) { virtualParams.clear(); lidMul.L = 1; lidMul.R = 1; lidAdd.L = 0; lidAdd.R = 0; }   // 虚拟表/lid 乘数每帧前批重建
     if (!useChannels || (channel.size === 0 && tracks.length === 0 && overlay.size === 0)) return;
     for (const [id, c] of channel) {
       const age = t - c.t0;
@@ -1434,7 +1437,6 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 多条时后写覆盖 —— 和以前完全一致。
     if (tracks.length) {
       const sums = new Map();
-      const eyeDirect = new Map();
       for (let n = tracks.length - 1; n >= 0; n--) {
         const c = tracks[n];
         const age = t - c.t0;
@@ -1455,10 +1457,13 @@ export async function createLive2DBody(base, opts, entry, kit) {
           if (k <= 0) continue;
           v = (c.base + c.amp * Math.sin((rel * c.freq + c.phase) * Math.PI * 2)) * k;
         }
-        if (c.eyeLid || c.id === 'ParamEyeLOpen' || c.id === 'ParamEyeROpen') { eyeDirect.set(c.id, v); continue; }
+        // 眼睛关键帧是**增量**（他们 lid(1+value)）：同参数多条相加，最后统一变成乘数
+        if (c.eyeLid || c.id === 'ParamEyeLOpen' || c.id === 'ParamEyeROpen') {
+          if (c.id === 'ParamEyeLOpen') lidAdd.L += v; else lidAdd.R += v;
+          continue;
+        }
         sums.set(c.id, (sums.get(c.id) ?? 0) + v);
       }
-      for (const [id, v] of eyeDirect) setParamByName(id, v);
       for (const [id, sum] of sums) addParam(id, sum);
     }
     // 叠加层（2.8）：主通道写完后，把外力增量**加**到当前值上（rua 头反向叠在歪头词上 = 更歪）
@@ -2305,8 +2310,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
         // 通道乘数（他们 Lids updater：在 eyeBlink 之后、物理之前）。
         // eyeBlink 把参数整个写成 r（不含 applyFrame 的 open），所以这里要乘回
         // role 的非配方开度系数（shape/困意/睡姿）——之前半睁的 role 0.37 就是这么丢的。
-        const _mulL = (_blinkRan ? lastOpenNoBase : 1) * lidMul.L;
-        const _mulR = (_blinkRan ? lastOpenNoBase : 1) * lidMul.R;
+        // 三类相乘：hold 词的乘数（闭眼/半睁）× 关键帧增量（1+Σ，单眨眼/sigh 微闭）× role 的非配方开度
+        const _mulL = (_blinkRan ? lastOpenNoBase : 1) * lidMul.L * Math.max(0, 1 + lidAdd.L);
+        const _mulR = (_blinkRan ? lastOpenNoBase : 1) * lidMul.R * Math.max(0, 1 + lidAdd.R);
         if (_el !== undefined && _mulL !== 1) model._model.setParameterValueByIndex(_el, model._model.getParameterValueByIndex(_el) * _mulL);
         if (_er !== undefined && _mulR !== 1) model._model.setParameterValueByIndex(_er, model._model.getParameterValueByIndex(_er) * _mulR);
         // rua 单闭眼：手在哪侧闭哪只眼（side=1 右、-1 左）。
