@@ -11,7 +11,6 @@
  *   - extent 由运行时实测（贴图就绪第 3 帧读 alpha 包围盒）；只有实测不准时才在 profile.extent 覆盖
  */
 export default {
-  maxTexture: 8192,
   fit: { mode: 'contain', anchor: 'bottom', padding: [0.04, 0.02], offset: [0, 0], zoom: 1 },
   // roam：跟随 Coo 的走动偏好；stand：固定站定（后端强制 roam off）
   motion: {"kind":"roam","speed":1,"native":true},
@@ -56,7 +55,8 @@ export default {
   // 4.2 摸摸分区（256 逻辑坐标椭圆：中心 x,y + 半轴 rx,ry）——坐标是估计值，实验后调。
   // head/face 按住 = 完整 rua 模式；其他分区划过 = 摸一下（一次性事件，简单版）。
   touchZones: [
-    { id: 'head', x: 128, y: 50, rx: 74, ry: 40 },
+    // 2026-11-21 按 DeepFish HeadBox 比例（0.5/0.225/0.19/0.095 × 256）：原来 rx74/ry40 大了约 50%，离头很远就触发
+    { id: 'head', x: 128, y: 58, rx: 49, ry: 24 },
     { id: 'face', x: 128, y: 102, rx: 70, ry: 20 },
     { id: 'chest', x: 128, y: 145, rx: 58, ry: 30 },
     { id: 'skirt', x: 128, y: 192, rx: 66, ry: 26 },
@@ -129,7 +129,9 @@ export default {
   // 走神只靠鼠标唤回：光标停住 3.6 秒（或盯 8 秒）后再酝酿 1.5 秒开始飘，
   // 一直飘到鼠标动为止（span: 0 = 不过期；想加保质期就写秒数，比如 120~180）。
   // fade = 收回速度（越大越快，0.6 大约两秒收干净）；resume = 回神速度（0.9 比收回稍快，像人反应过来）
-  gazeFollow: { idleSec: 3.6, holdSec: 8, onset: 1.5, fade: 0.5, resume: 10, movePx: 3, span: 0, spanJitter: 0, wake: 1.2 },
+  // 2026-11-21 走神分层对齐 DeepFish（眼睛先走→头跟→身体最后）：
+  // fadeEye 8（时间常数 0.125s，眼睛瞬间不再跟鼠标，交给眼跳主动瞟）+ fadeHead 1.2（0.83s）+ fade 0.35（2.9s）
+  gazeFollow: { idleSec: 3.6, holdSec: 8, onset: 1.5, fade: 0.35, fadeEye: 8, fadeHead: 1.2, resume: 10, movePx: 3, span: 0, spanJitter: 0, wake: 1.2 },
 
   idlePhysics: {
     // 只写"源头参数"。ParamBodyAngleX / HipAngleX / ParamBodyAngleZ 本身是物理的
