@@ -568,6 +568,14 @@ export async function createLive2DBody(base, opts, entry, kit) {
   let activeAct = null;
   let activePost = null;   // 当前动作里"必须在物理之后写"的波形（腰/胯这类物理输出参数）
   let bodyLook = [0, 0];   // 本帧的指针跟随量，applyBodyFollow 在物理之后用它推身体
+  // rua 4.x（2026-11-21 figure 侧重写，旧的随 git checkout 丢了）：手驱动头的弹簧状态
+  const ruaS = { ax: 0, ay: 0, axv: 0, ayv: 0 };
+  // 2026-11-21 照搬他们 Spring（springK=130/springC=13）：所有头角度都过弹簧，有惯性/过冲才自然。
+  // 原来是 kit 的 look lerp（一阶、无过冲）→ 直接写值 → 机械感。
+  const angleS = { x: 0, xv: 0, y: 0, yv: 0, z: 0, zv: 0 };
+  // 2026-11-21 眼跳 saccade（照搬 DeepFish）：眼睛先走神——每 1.2~4 秒随机看别处（±0.24，速度 25 很快），头慢慢跟
+  const sac = { x: 0, y: 0, tx: 0, ty: 0, wait: 0 };
+  const ruaSpring = (v, vel, tgt, k, c, d) => { const nv = vel + ((tgt - v) * k - vel * c) * d; return [v + nv * d, nv]; };
   // 注意力衰减：光标停住一阵、或者盯着看了一段时间，就慢慢收回中位（不是硬切回）。
   let gazeK = 1;          // 身体（最慢）
   let gazeKEye = 1;       // 眼睛（最快回正）
@@ -1497,6 +1505,18 @@ export async function createLive2DBody(base, opts, entry, kit) {
       look = lookEye = lookHead = rawLook;
     }
     bodyLook = look;   // 留给 applyBodyFollow 用（身体跟随要在物理之后写）
+    // ---------- rua 4.x：手驱动头（弹簧延迟）----------
+    // kit 发 frame.rua = { on, ux, uy, side, face, seconds, melt, moving, fx }
+    // 方向：左右同向（手在右→脸朝右）、上下反向（手在上→头低下去）
+    const ruaOn = !!frame.rua?.on;
+    const _rux = frame.rua?.ux ?? 0, _ruy = frame.rua?.uy ?? 0;
+    [ruaS.ax, ruaS.axv] = ruaSpring(ruaS.ax, ruaS.axv, ruaOn ? _rux : 0, 150, 14, dt);
+    [ruaS.ay, ruaS.ayv] = ruaSpring(ruaS.ay, ruaS.ayv, ruaOn ? -_ruy : 0, 150, 14, dt);
+    const ruaRX = ruaS.ax * 22 / 30;   // ±22 度（他们的 FaceAngleX = lookX*22），归一化 /30
+    const ruaRY = ruaS.ay * 16 / 30;   // ±16 度
+    const ruaSide = frame.rua?.side ?? 0;
+    const ruaSecs = frame.rua?.seconds ?? 0;
+    const ruaMelt = frame.rua?.melt ?? 0;
     const tilt = neutralPose ? 0 : (frame.tilt ?? 0);
     const lean = neutralPose ? 0 : (frame.lean ?? 0);
     const ax = engine?.angleX ?? 0;
@@ -1509,22 +1529,41 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 用两个不同频率的正弦叠起来，才不像机器在扫描。
     const swayX = Math.sin(clockT * 0.21) * gazeSway * 0.30;
     const swayZ = Math.sin(clockT * 0.13 + 1.1) * gazeSway * 0.22;
-    const driftX = Math.sin(clockT * 0.37) * 0.06 + Math.sin(clockT * 0.91 + 1.2) * 0.04;
-    const driftY = Math.sin(clockT * 0.29) * 0.05 + Math.sin(clockT * 0.77 + 0.8) * 0.03;
-    const driftZ = Math.sin(clockT * 0.23) * 0.06 + Math.sin(clockT * 0.63 + 1.5) * 0.04;
+    // 2026-11-21 减小：0.1 幅（≈3 度）比他们 alive*3*Drift（idle ~1 度）大 3 倍，头一直在抖不平滑
+    const driftX = Math.sin(clockT * 0.37) * 0.02 + Math.sin(clockT * 0.91 + 1.2) * 0.01;
+    const driftY = Math.sin(clockT * 0.29) * 0.015 + Math.sin(clockT * 0.77 + 0.8) * 0.01;
+    const driftZ = Math.sin(clockT * 0.23) * 0.02 + Math.sin(clockT * 0.63 + 1.5) * 0.01;
+    // 2026-11-21 眼跳（眼睛先走神）：每 1.2~4 秒随机跳一个方向，速度快（25），头/身体慢慢跟。
+    // 走神时眼跳幅度放大（kEye 小 → 放 3 倍），眼睛主动「瞟到别处」，不是回中发呆。
+    const _sacBoost = 1 + 2.0 * (1 - clamp(gazeKEye, 0, 1));
+    sac.wait -= dt;
+    if (sac.wait <= 0) {
+      sac.wait = 1.2 + 2.8 * Math.random();
+      sac.tx = (Math.random() - 0.5) * 0.24 * _sacBoost;
+      sac.ty = (Math.random() - 0.5) * 0.16 * _sacBoost;
+    }
+    const _dart = 1 - Math.exp(-dt * 25);
+    sac.x += (sac.tx - sac.x) * _dart;
+    sac.y += (sac.ty - sac.y) * _dart;
     if (engine) {
-      writeRole('eyeBallX', clamp(ex * 0.6 + (lookEye[0] ?? 0) * 0.55, -1, 1));
-      writeRole('eyeBallY', clamp(ey * 0.6 - (lookEye[1] ?? 0) * 0.45, -1, 1));
-      // 2026-11-21 单位修正：kit 的 look/tilt/lean 都是度数（look ±5、tilt ±7、lean -6~11），
+      // 2026-11-21 眼睛归一化（之前 lookEye 是度数 ±5，×0.55=±2.75 被 clamp 卡在 ±1 一直饱和 →
+      // 走神衰减前 60% 眼睛毫无变化、只有头在转，看着就是「头先走」）。对齐他们 -0.9*(eyeLook+saccade)。
+      writeRole('eyeBallX', clamp(ex * 0.6 + (lookEye[0] ?? 0) / 5 * 0.9 + sac.x, -1, 1));
+      writeRole('eyeBallY', clamp(ey * 0.6 - (lookEye[1] ?? 0) / 4 * 0.9 + sac.y, -1, 1));
+    // 2026-11-21 单位修正：kit 的 look/tilt/lean 都是度数（look ±5、tilt ±7、lean -6~11），
       // 之前当 -1~1 用 → 放大 5 倍鼠标敏感 + lean 接错位置。全部÷范围归一化。
-      const angleXVal = clamp((lookHead[0] ?? 0) / 5 * 0.73 + driftX, -1, 1);
-      const angleYVal = clamp(ay * 0.75 - (lookHead[1] ?? 0) / 4 * 0.9, -1, 1);
+      const angleXVal = clamp((lookHead[0] ?? 0) / 5 * 0.73 + driftX + ruaRX, -1, 1);
+      const angleYVal = clamp(ay * 0.75 - (lookHead[1] ?? 0) / 4 * 0.47 + ruaRY, -1, 1);   // 2026-11-21 对齐他们 FaceAngleY=lookY*14（±14 度）；原来 0.9=±27 度
       const angleZVal = clamp(az + tilt / 7 * 0.4 + swayZ, -1, 1);
-      writeRole('angleX', angleXVal);
-      writeRole('angleY', angleYVal);
-      writeRole('angleZ', angleZVal);
+      // 2026-11-21 照搬他们 Spring（springK=130/springC=13）：头角度过弹簧，有惯性/过冲才自然
+      [angleS.x, angleS.xv] = ruaSpring(angleS.x, angleS.xv, angleXVal, 130, 13, dt);
+      [angleS.y, angleS.yv] = ruaSpring(angleS.y, angleS.yv, angleYVal, 130, 13, dt);
+      [angleS.z, angleS.zv] = ruaSpring(angleS.z, angleS.zv, angleZVal, 130, 13, dt);
+      writeRole('angleX', angleS.x);
+      writeRole('angleY', angleS.y);
+      writeRole('angleZ', angleS.z);
       // lean 是整图旋转角（左右倾斜，度数）→ 走 PositionX（摆锤3 推 ParamBodyAngleX 左右），不是 LeanInput（那是前后）
-      writeRole('bodyX', clamp(angleXVal * 1.4 + lean / 3 + (frame.swing ?? 0) / 150, -1, 1));   // lookHead(kHead缩小)×1.4 补偿，glance 不会抖身体；lean 0.33 + swing 步伐 → 胯
+      writeRole('bodyX', clamp((bodyLook[0] ?? 0) / 5 * 1.02 + lean / 3 + (frame.swing ?? 0) / 150, -1, 1));   // 2026-11-21 身体用自己的更慢走神系数 bodyLook（fade 0.35），之前用 angleXVal(kHead) → 头和身体同步走，看不出分层
       // 2026-11-21：对齐 vtube.json FaceAngleY→PositionY / FaceAngleZ→PositionZ（1:1，-30~30）→ 摆锤7 推身体上下
       { const _pyi = paramIndex.get('PositionY'), _pzi = paramIndex.get('PositionZ'), _ryi = paramIndex.get('ParamBodyAngleRY');
         if (_pyi !== undefined) model._model.setParameterValueByIndex(_pyi, angleYVal * 30);
@@ -1537,15 +1576,20 @@ export async function createLive2DBody(base, opts, entry, kit) {
       }
       { const _bi = paramIndex.get('ParamBreath'); if (_bi !== undefined) model._model.setParameterValueByIndex(_bi, 0.5 + 0.5 * Math.sin(clockT * 2 * Math.PI / 3.2345)); }
     } else {
-      writeRole('eyeBallX', clamp(lookEye[0] ?? 0, -1, 1));
-      writeRole('eyeBallY', clamp(-(lookEye[1] ?? 0), -1, 1));
-      const angleXVal = clamp((lookHead[0] ?? 0) / 5 * 0.73 + driftX, -1, 1);
-      const angleYVal = clamp(-(lookHead[1] ?? 0) / 4 * 0.9, -1, 1);
+      // 2026-11-21 同上：眼珠归一化（度数 ÷5/÷4），否则 ±5 直接饱和看不出走神
+      writeRole('eyeBallX', clamp((lookEye[0] ?? 0) / 5 * 0.9 + sac.x, -1, 1));
+      writeRole('eyeBallY', clamp(-(lookEye[1] ?? 0) / 4 * 0.9 + sac.y, -1, 1));
+      const angleXVal = clamp((lookHead[0] ?? 0) / 5 * 0.73 + driftX + ruaRX, -1, 1);
+      const angleYVal = clamp(-(lookHead[1] ?? 0) / 4 * 0.47 + ruaRY, -1, 1);   // 2026-11-21 对齐他们 ±14 度（原 0.9=±27）
       const angleZVal = clamp(tilt / 7 * 0.67 + swayZ, -1, 1);
-      writeRole('angleX', angleXVal);
-      writeRole('angleY', angleYVal);
-      writeRole('angleZ', angleZVal);
-      writeRole('bodyX', clamp(angleXVal * 1.4 + lean / 3 + (frame.swing ?? 0) / 150, -1, 1));   // lookHead(kHead缩小)×1.4 补偿，glance 不会抖身体；lean 0.33 + swing 步伐 → 胯
+      // 2026-11-21 照搬他们 Spring（springK=130/springC=13）：头角度过弹簧，有惯性/过冲才自然
+      [angleS.x, angleS.xv] = ruaSpring(angleS.x, angleS.xv, angleXVal, 130, 13, dt);
+      [angleS.y, angleS.yv] = ruaSpring(angleS.y, angleS.yv, angleYVal, 130, 13, dt);
+      [angleS.z, angleS.zv] = ruaSpring(angleS.z, angleS.zv, angleZVal, 130, 13, dt);
+      writeRole('angleX', angleS.x);
+      writeRole('angleY', angleS.y);
+      writeRole('angleZ', angleS.z);
+      writeRole('bodyX', clamp((bodyLook[0] ?? 0) / 5 * 1.02 + lean / 3 + (frame.swing ?? 0) / 150, -1, 1));   // 2026-11-21 身体用自己的更慢走神系数 bodyLook（fade 0.35），之前用 angleXVal(kHead) → 头和身体同步走，看不出分层
       { const _pyi = paramIndex.get('PositionY'), _pzi = paramIndex.get('PositionZ'), _ryi = paramIndex.get('ParamBodyAngleRY');
         if (_pyi !== undefined) model._model.setParameterValueByIndex(_pyi, angleYVal * 30);
         if (_pzi !== undefined) model._model.setParameterValueByIndex(_pzi, angleZVal * 30);
@@ -2021,6 +2065,10 @@ export async function createLive2DBody(base, opts, entry, kit) {
         const _el = paramIndex.get('ParamEyeLOpen'), _er = paramIndex.get('ParamEyeROpen');
         if (_el !== undefined) model._model.setParameterValueByIndex(_el, model._model.getParameterValueByIndex(_el) * _openBefore);
         if (_er !== undefined) model._model.setParameterValueByIndex(_er, model._model.getParameterValueByIndex(_er) * _openBefore);
+        // rua 单闭眼：手在哪侧闭哪只眼（side=1 右、-1 左）
+        const _rs = frame.rua?.side ?? 0;
+        if (_rs === 1 && _er !== undefined) model._model.setParameterValueByIndex(_er, 0);
+        else if (_rs === -1 && _el !== undefined) model._model.setParameterValueByIndex(_el, 0);
       }
       try { model._physics?.evaluate(model._model, dt); } catch { /* 物理失败不致命 */ }
       // 打点：眨眼只在眨时打（0.05 秒一次，精确测时长）+ 每秒打身体/呼吸

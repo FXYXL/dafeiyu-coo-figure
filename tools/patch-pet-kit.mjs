@@ -755,7 +755,8 @@ const PATCHES = [
     if (id) { out.push(id); continue; }
     // actModifier：修饰词不算新词——剥掉前缀修饰（微/大/快/慢/轻/猛/×几）再校验，
     // 通过就把原词放行给 kit baseWord（那边解析修饰为幅度/速度）。
-    const bare = w.replace(/^[微大快慢轻猛]+/, '').replace(/^[×xX]\\d+/, '');
+    // 2026-11-21 修：×3 是后缀（原来 ^ 匹配开头永远剥不掉）、:左/:右 方向后缀也没剥 → 带参数词全被 dropped。
+    const bare = w.replace(/^[微大快慢轻猛]+/, '').replace(/[×xX]\\d+$/, '').replace(/[:：](左|右)$/, '');
     if (bare && bare !== w && vocabId(bare, vocab)) { out.push(w); continue; }
     dropped.push(w);`,
       );
