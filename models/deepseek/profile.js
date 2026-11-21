@@ -116,7 +116,7 @@ export default {
   useChannels: true,
   // 试点白名单：只放纯姿态类词，它们本来就不带手部动画/退出剪辑，接管风险最小。
   channelWords: [
-    "wave", "nod", "shake", "bow", "spin", "dance", "jump", "shiver", "look", "lean-in", "lean-back", "side", "peek", "tilt", "wiggle", "finger-point", "chest-hand", "grass-hand", "swing", "eye-smile", "eye-close", "eye-half", "eye-wide", "eye-squeeze", "blink", "head-swing", "glance", "cower", "pout", "sigh", "look-left", "look-right", "look-up", "look-down", "wink-left", "wink-right", "wink-keep", "wink-hold",
+    "wave", "nod", "shake", "bow", "spin", "dance", "jump", "shiver", "look", "lean-in", "lean-back", "side", "peek", "tilt", "wiggle", "finger-point", "chest-hand", "grass-hand", "swing", "eye-smile", "eye-close", "eye-half", "eye-wide", "eye-squeeze", "blink", "head-swing", "glance", "cower", "pout", "sigh", "look-around", "startle", "look-left", "look-right", "look-up", "look-down", "wink-left", "wink-right", "wink-keep", "wink-hold",
     // 2026-11-21 修正：这 7 个原来被上一行的行内注释吞掉了（写进 // 后面 = 从来没被接管过，
     // 一直走 act 老路瞬时写 0 —— 眉毛/嘴的表情同样"一闪"的真身）。
     "brow-frown", "brow-up", "brow-knit", "mouth-smile", "mouth-pout", "mouth-open", "blush",
@@ -314,7 +314,8 @@ export default {
   // 他们的 skits.txt 是「台词 + 动作」脚本；文字气泡我们拿不到通道（kit 的 onEvent 只有
   // arrived / interrupted / touch / mode / done），所以这里只演动作和表情，
   // say: true 的剧本用假口型（ParamMouthOpenY 走帧，不出声）。
-  // 闲时池里加一条 { word: 'skit' } 就会被随机抽到；任何新词 / 说话 / 走路 / 拖动都会硬打断。
+  // 闲时池里只有一条 { word: 'skit' }，抽到就从这里随机挑一个；
+  // 名字不进词表（AI 不知道这些，也不会去点）。任何新词 / 说话 / 走路 / 拖动都会硬打断。
   skits: [
     {
       id: 'detective', dur: 6.6, life: 8,
@@ -329,6 +330,54 @@ export default {
       ],
     },
     {
+      id: 'overtime', dur: 8.0, life: 10,
+      // 认真加班：低头盯屏幕 → 皱眉 → 眯眼 → 点两下头 → 长叹一口气 → 重新坐直
+      steps: [
+        { at: 0.0, w: 'head-down' },
+        { at: 1.2, w: 'brow-knit' },
+        { at: 2.0, w: 'squint' },
+        { at: 3.0, w: 'nod' },
+        { at: 4.4, w: 'nod' },
+        { at: 5.6, w: 'sigh' },
+        { at: 7.2, w: 'stand-straight' },
+      ],
+    },
+    {
+      id: 'snack', dur: 7.0, life: 9,
+      // 偷吃零食：左右张望（没人）→ 往左瞟 → 往右瞟 → 咬一口 → 眯眼笑 → 又心虚地张望
+      steps: [
+        { at: 0.0, w: 'look-around' },
+        { at: 1.4, w: 'glance', side: 1 },
+        { at: 2.6, w: 'glance', side: -1 },
+        { at: 3.6, w: 'mouth-open' },
+        { at: 4.2, w: 'eye-smile' },
+        { at: 5.4, w: 'look-around' },
+      ],
+    },
+    {
+      id: 'entrance', dur: 6.8, life: 9, say: true,
+      // 突然入戏：站直 → 挑眉 → 瞪眼 → 抬手一指 → 晃头念台词 → 歪头收尾（假口型）
+      steps: [
+        { at: 0.0, w: 'stand-straight' },
+        { at: 0.6, w: 'brow-up' },
+        { at: 1.4, w: 'eye-wide' },
+        { at: 2.2, w: 'finger-point' },
+        { at: 3.6, w: 'head-swing' },
+        { at: 5.0, w: 'tilt' },
+      ],
+    },
+    {
+      id: 'magical', dur: 6.6, life: 9,
+      // 魔法少女：歪头 → 眯眼笑 → 举手念咒 → 转个圈 → 瞪眼（变身完成）
+      steps: [
+        { at: 0.0, w: 'tilt' },
+        { at: 0.8, w: 'eye-smile' },
+        { at: 1.6, w: 'finger-point' },
+        { at: 3.2, w: 'spin' },
+        { at: 4.6, w: 'eye-wide' },
+      ],
+    },
+    {
       id: 'doze', dur: 7.4, life: 9,
       // 学习打瞌睡：半睁 → 低头 → 慢眨眼 → 点头打盹 → 惊醒瞪眼 → 左右张望
       steps: [
@@ -339,6 +388,87 @@ export default {
         { at: 4.0, w: { w: 'blink', pace: 1.7 } },
         { at: 5.2, w: 'eye-wide' },
         { at: 5.6, w: 'look-around' },
+      ],
+    },
+    {
+      id: 'selfscare', dur: 6.4, life: 8,
+      // 自己吓自己：张望 → 自己被吓一跳 → 缩起来 → 瞪着眼 → 又张望（确认没东西）
+      steps: [
+        { at: 0.0, w: 'look-around' },
+        { at: 1.2, w: 'startle' },
+        { at: 2.6, w: 'cower' },
+        { at: 3.6, w: 'eye-wide' },
+        { at: 4.4, w: 'look-around' },
+      ],
+    },
+    {
+      id: 'vampire', dur: 7.0, life: 9,
+      // 吸血鬼：黑脸 → 坏笑 → 歪头 → 慢眨一下 → 低头（凑近）→ 坏笑
+      steps: [
+        { at: 0.0, w: 'dark-face' },
+        { at: 0.8, w: 'smirk' },
+        { at: 1.8, w: 'tilt' },
+        { at: 2.8, w: { w: 'blink', pace: 1.7 } },
+        { at: 4.2, w: 'head-down' },
+        { at: 5.4, w: 'smirk' },
+      ],
+    },
+    {
+      id: 'teacher', dur: 8.2, life: 10, say: true,
+      // 小学老师：站直 → 挑眉 → 抬手一指（点名）→ 点头 → 张嘴讲课 → 晃头 → 点头
+      steps: [
+        { at: 0.0, w: 'stand-straight' },
+        { at: 0.6, w: 'brow-up' },
+        { at: 1.4, w: 'finger-point' },
+        { at: 2.8, w: 'nod' },
+        { at: 3.8, w: 'mouth-open' },
+        { at: 5.0, w: 'head-swing' },
+        { at: 6.4, w: 'nod' },
+      ],
+    },
+    {
+      id: 'diet', dur: 7.0, life: 9,
+      // 减肥计划：张嘴（想吃）→ 低头看肚子 → 叹气 → 站直 → 微摇头 → 撇嘴
+      steps: [
+        { at: 0.0, w: 'mouth-open' },
+        { at: 1.2, w: 'head-down' },
+        { at: 2.4, w: 'sigh' },
+        { at: 3.8, w: 'stand-straight' },
+        { at: 5.0, w: { w: 'shake', scale: 0.5 } },
+        { at: 6.0, w: 'pout' },
+      ],
+    },
+    {
+      id: 'treasure', dur: 7.6, life: 9,
+      // 寻宝：张望 → 往左瞟 → 蹲低（缩一下）→ 瞪眼（发现了）→ 往右瞟 → 点头 → 坏笑
+      steps: [
+        { at: 0.0, w: 'look-around' },
+        { at: 1.4, w: 'glance', side: 1 },
+        { at: 2.4, w: 'cower' },
+        { at: 3.4, w: 'eye-wide' },
+        { at: 4.4, w: 'glance', side: -1 },
+        { at: 5.6, w: 'nod' },
+        { at: 6.4, w: 'smirk' },
+      ],
+    },
+    {
+      id: 'guard', dur: 8.0, life: 10, say: true,
+      // 保安大叔：站直 → 皱眉 → 左右张望 → 晃头 → 点头 → 点头（训话）
+      steps: [
+        { at: 0.0, w: 'stand-straight' },
+        { at: 0.6, w: 'brow-knit' },
+        { at: 1.6, w: 'look-around' },
+        { at: 3.2, w: 'head-swing' },
+        { at: 4.6, w: 'nod' },
+        { at: 6.0, w: 'nod' },
+      ],
+    },
+    {
+      id: 'dancefloor', dur: 5.4, life: 8,
+      // 跳舞：整段摇摆二（4.57 秒），中途眯眼笑一下
+      steps: [
+        { at: 0.0, w: 'dance' },
+        { at: 2.0, w: 'eye-smile' },
       ],
     },
   ],

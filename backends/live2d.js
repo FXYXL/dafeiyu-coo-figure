@@ -1151,9 +1151,12 @@ export async function createLive2DBody(base, opts, entry, kit) {
   // 触发：闲时池里的一条 { word: 'skit' }；打断：任何新词 / 开口说话 / 走路拖拽，硬切。
   const skits = profile.skits ?? [];
   let skit = null;   // { def, t, done:Set }
+  let lastSkitId = null;   // 别连着抽到同一个
   function startSkit() {
     if (!skits.length) return false;
-    const def = skits[Math.floor(Math.random() * skits.length)];
+    const pool = skits.length > 1 ? skits.filter((s) => s.id !== lastSkitId) : skits;
+    const def = pool[Math.floor(Math.random() * pool.length)];
+    lastSkitId = def.id;
     skit = { def, t: 0, done: new Set() };
     audit('skit-start ' + def.id);
     return true;
