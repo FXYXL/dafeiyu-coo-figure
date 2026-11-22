@@ -567,6 +567,33 @@ const PATCHES = [
   },
   // ===== pet-app.js：主线程 rAF 探测 + 触摸时间戳 =====
   {
+    file: 'body', id: 'noHoverPet',
+    desc: '关掉「划过 320px 就摸头」的原生反应（用户：鼠标从身上划过去就触发，还不用按键）',
+    detect: (s) => /划过不再有任何反应/.test(s),
+    apply: (s) => {
+      const a = `    const over = hitPet(p);
+    if (over && ['idle', 'look', 'sit', 'sleep'].includes(pet.mode)) {
+      strokeAcc += Math.hypot(ddx, ddy);
+      if (strokeAcc > 320 && petCool <= 0) {
+        strokeAcc = 0; petCool = 2.5;
+        play('purr', 'touch');
+        if (pet.mode === 'sleep') emitHeart();
+        else setExpr(Math.random() < .5 ? 'love' : 'shy');
+        // 4.2 分区：摸到哪个区发哪个区（头区划过仍是 pet 轻摸），文本由 World 组装
+        const rz = zoneAt(p);
+        onEvent('touch', rz && rz !== 'head' ? { kind: 'stroke', zone: rz } : { kind: 'pet', asleep: pet.mode === 'sleep' });
+      }
+    }
+    return (pet.cursor = over ? 'grab' : '');`;
+      const b = `    const over = hitPet(p);
+    // 2026-11-22：划过不再有任何反应（用户：鼠标从她身上划过去就触发摸头，还不用按键）。
+    // 轻摸改成必须右键按住：头/脸是持续 rua，其它区在 pointerDown 里一次性处理。
+    return (pet.cursor = over ? 'grab' : '');`;
+      if (!s.includes(a)) throw new Error('noHoverPet：划过段锚点未命中');
+      return s.replace(a, b);
+    },
+  },
+  {
     file: 'body', id: 'emitEvent',
     desc: 'figure → 页面的事件桥：custom.emitEvent(kind, d) 透传 opts.onEvent（彩蛋台词气泡用）',
     detect: (s) => /custom\.emitEvent = /.test(s),
@@ -574,6 +601,32 @@ const PATCHES = [
       const a = "  const onEvent = opts.onEvent || (() => {});";
       if (!s.includes(a)) throw new Error('emitEvent：onEvent 锚点未命中');
       return s.replace(a, a + "\n  custom.emitEvent = (kind, d) => onEvent(kind, d);   // figure 自己发的事件（彩蛋台词等）走同一条上报路");
+    },
+  },
+  {
+    file: 'petapp', id: 'rightHoldMenu',
+    desc: '右键长按 = rua（kit 里按头区），单击 = 原来的菜单：250ms 内松开才算单击',
+    detect: (s) => /右键长按 = rua/.test(s),
+    apply: (s) => {
+      const a = "document.addEventListener('contextmenu', (e) => {\n  e.preventDefault();\n  if (body?.hit({ x: e.clientX, y: e.clientY })) openMenu();\n});";
+      const b = "/* 2026-11-22：右键长按 = rua（kit 里按头区），单击才是菜单。\n   在 Windows 上 contextmenu 是「右键松开」时触发，所以用按住的时长区分：\n   250ms 内松开 = 单击（菜单），超过 = 长按（rua 已经由 kit 接管，不弹菜单）。 */\nlet rightDownAt = 0;\ndocument.addEventListener('pointerdown', (e) => { if (e.button === 2) rightDownAt = performance.now(); }, { capture: true });\ndocument.addEventListener('pointerup', (e) => {\n  // 在别处（比如桌面）松开不会有 contextmenu，300ms 后自己清掉，免得影响下一次\n  if (e.button === 2) setTimeout(() => { rightDownAt = 0; }, 300);\n}, { capture: true });\ndocument.addEventListener('contextmenu', (e) => {\n  e.preventDefault();\n  const held = rightDownAt ? performance.now() - rightDownAt : 999;\n  rightDownAt = 0;\n  if (held < 250 && body?.hit({ x: e.clientX, y: e.clientY })) openMenu();\n});";
+      if (!s.includes(a)) throw new Error('rightHoldMenu：contextmenu 锚点未命中');
+      return s.replace(a, b);
+    },
+  },
+  {
+    file: 'petapp', id: 'ruaHand',
+    desc: 'rua 的几何白手：右键摸头时替代指针（figure 的 rua-start/end 事件驱动），跟着鼠标朝头部倾斜',
+    detect: (s) => /rua-hand/.test(s),
+    apply: (s) => {
+      let out = s.replace('/* ---------- body events → World ---------- */', "/* ---------- rua 的白手（照他们 HandWindow：一只几何白手替代指针） ---------- */\nconst ruaHand = document.createElement('div');\nruaHand.className = 'rua-hand';\nruaHand.hidden = true;\nruaHand.style.cssText = 'position:fixed;left:0;top:0;width:160px;height:160px;pointer-events:none;z-index:2;opacity:0;transition:opacity .12s ease;will-change:transform';\nruaHand.innerHTML = `<svg viewBox=\"0 0 160 160\" width=\"160\" height=\"160\" aria-hidden=\"true\">\n  <g fill=\"#fff\" stroke=\"#b9bdc9\" stroke-width=\"2.4\" stroke-linejoin=\"round\">\n    <ellipse cx=\"80\" cy=\"100\" rx=\"31\" ry=\"27\"/>\n    <rect x=\"53\" y=\"48\" width=\"15\" height=\"56\" rx=\"7.5\" transform=\"rotate(-26 80 96)\"/>\n    <rect x=\"70\" y=\"30\" width=\"15\" height=\"72\" rx=\"7.5\" transform=\"rotate(-9 80 96)\"/>\n    <rect x=\"87\" y=\"34\" width=\"15\" height=\"68\" rx=\"7.5\" transform=\"rotate(4 80 96)\"/>\n    <rect x=\"104\" y=\"48\" width=\"14\" height=\"54\" rx=\"7\" transform=\"rotate(16 80 96)\"/>\n    <rect x=\"33\" y=\"88\" width=\"42\" height=\"15\" rx=\"7.5\" transform=\"rotate(38 80 96)\"/>\n  </g>\n</svg>`;\nstage.append(ruaHand);\nfunction showRuaHand() {\n  if (!ruaHand.hidden) return;\n  ruaHand.hidden = false;\n  requestAnimationFrame(() => { ruaHand.style.opacity = '1'; });\n  document.documentElement.style.cursor = 'none';   // 手替代了指针（他们 Mouse.OverrideCursor = None）\n  updateRuaHand();\n}\nfunction hideRuaHand() {\n  if (ruaHand.hidden) return;\n  ruaHand.style.opacity = '0';\n  document.documentElement.style.cursor = '';\n  setTimeout(() => { ruaHand.hidden = true; }, 120);\n}\n/** 手跟着鼠标，朝头部中心倾（照他们 HandPoseFor 的味道：离中心越远越斜、略压扁）。 */\nfunction updateRuaHand() {\n  if (ruaHand.hidden) return;\n  const p0 = cursor.at;\n  const a = at()?.bubble;\n  if (!p0) return;\n  let rot = -40, sx = 1;\n  if (a) {\n    const ux = clamp((p0.x - a.x) / 64, -1.2, 1.2), uy = clamp((p0.y - a.y) / 46, -1.2, 1.2);\n    const r = Math.min(Math.hypot(ux, uy), 1.05);\n    const nz = Math.max(.55, Math.sqrt(Math.max(0, 1 - r * r * .7)));\n    rot = -40 + clamp(ux, -1, 1) * 12;\n    sx = .82 + .18 * nz;   // 越往侧面越\"扁\"（伪 3D）\n  }\n  ruaHand.style.transform = `translate(${p0.x - 64}px, ${p0.y - 96}px) rotate(${rot}deg) scale(${sx.toFixed(3)}, 1)`;\n}\ndocument.addEventListener('pointermove', updateRuaHand, { passive: true });\n" + '\n/* ---------- body events → World ---------- */');
+      if (!out.includes('function showRuaHand')) throw new Error('ruaHand：插入锚点未命中');
+      out = out.replace(
+        "    if (d.kind === 'grab') closeMenu();",
+        "    if (d.kind === 'grab') closeMenu();\n    // rua 的白手（他们 HandWindow）：开始摸出现、松手淡出\n    if (d.kind === 'rua-start') showRuaHand();\n    else if (d.kind === 'rua-end') hideRuaHand();",
+      );
+      if (!out.includes('showRuaHand();')) throw new Error('ruaHand：onBody 分支未命中');
+      return out;
     },
   },
   {
@@ -967,6 +1020,19 @@ function toneOf(text: string): string {
     },
   },
   {
+    file: 'body', id: 'ruaSpeed',
+    desc: 'rua 帧里多带一个真实手速 speed（猛摸判据：|ruaVel| 不做 clamp，fx 只是水平的 1/600）',
+    detect: (s) => /rua\.speed = speed/.test(s),
+    apply: (s) => {
+      const a = "    rua.fx = Math.max(-1, Math.min(1, ruaVel.x / 600));";
+      if (!s.includes(a)) throw new Error('ruaSpeed：锚点未命中');
+      let out = s.replace(a, a + "\n    rua.speed = speed;   // 2026-11-22：真实手速（px/s），猛摸瞪眼用它判定");
+      // frame.rua 也要带 speed（漏了的话 figure 收不到）
+      out = out.replace('melt: rua.melt, moving: rua.moving, fx: rua.fx', 'melt: rua.melt, moving: rua.moving, fx: rua.fx, speed: rua.speed');
+      return out;
+    },
+  },
+  {
     file: 'body', id: 'rightClickRua',
     desc: '右键 = rua、左键 = 拖拽（和 DeepFish 一样左拖右摸）：crash 链（按头→拖拽→松手摔）从根断掉，不再靠头区判断分叉',
     detect: (s) => /p\.button === 2/.test(s),
@@ -990,6 +1056,27 @@ function toneOf(text: string): string {
         ].join('\n'),
       );
       return out === s ? null : out;
+    },
+  },
+  {
+    file: 'body', id: 'ruaHeadOnly',
+    desc: '右键只有头/脸区进入 rua（用户：摸哪里都算摸头）；其它区不接管，留给页面区分单击/长按',
+    detect: (s) => /只有头\/脸才进入 rua/.test(s),
+    apply: (s) => {
+      const a = `    if (p.button === 2) {
+      if (pet.mode === 'walk' || pet.mode === 'run') setMode('idle');
+      press = null;`;
+      const b = `    if (p.button === 2) {
+      if (pet.mode === 'walk' || pet.mode === 'run') setMode('idle');
+      press = null;
+      // 2026-11-22：只有头/脸才进入 rua（用户：摸哪里都算摸头）。其它区右键不接管，
+      // 交给页面区分单击（菜单）和长按（P3 的一次性轻摸）。
+      {
+        const _z = zoneAt(p);
+        if (_z !== 'head' && _z !== 'face') { pointer.samples = [{ t: now(p), x: p.x, y: p.y }]; return true; }
+      }`;
+      if (!s.includes(a)) throw new Error('ruaHeadOnly：pointerDown 锚点未命中');
+      return s.replace(a, b);
     },
   },
   {

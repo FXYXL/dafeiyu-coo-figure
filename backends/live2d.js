@@ -617,6 +617,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
   // rua 单闭眼的缓动状态（0=不闭 1=全闭）。照他们 Hold 的 1-exp(-dt/0.15)：
   // 手移到脸侧时眼睛是「半眯→闭」的柔和过渡，不是硬切（后面搬 rua 头就靠这条）。
   const ruaEyeS = { L: 0, R: 0 };
+  // rua 档位状态（2026-11-22 重做）：峰值时长、猛摸计时/瞪眼冷却、松手检测
+  let ruaPeak = 0, ruaFastT = 0, ruaStartleAt = -9, ruaStartle = -9, ruaPrevOn = false;
   // vtube 映射的平滑状态（main.cpp:606 `lag = smoothing*0.005`）：
   // 大肥鱼.vtube.json 里 FaceAngleX→15、Y→4、Z→30，对应 lag 0.075 / 0.02 / 0.15 秒。
   const mapS = { X: 0, Y: 0, Z: 0, started: false };
@@ -1251,6 +1253,24 @@ export async function createLive2DBody(base, opts, entry, kit) {
     }
     if (skit.t > (skit.def.dur ?? 6)) stopSkit('done');
   }
+  /** rua 松手：按峰值时长给一个「摸后」反应（他们 PlayAfterStroke 的档位，台词交给她自己说）。 */
+  function stepRuaState(frame) {
+    const on = !!frame.rua?.on;
+    if (on) { ruaPeak = Math.max(ruaPeak, frame.rua?.seconds ?? 0); ruaPrevOn = true; return; }
+    if (!ruaPrevOn) return;
+    ruaPrevOn = false;
+    const peak = ruaPeak;
+    ruaPeak = 0;
+    if (peak < 3) return;                      // 按下去没怎么动：不算摸过（他们 touched 同款门槛）
+    pendingMod = { scale: 1, pace: 1, repeat: 1, explicit: true };
+    dirSide = 1;
+    applyOneWord('blush', true, {}, {});       // 脸红一路带到摸后（他们 Face(空 + 脸红)）
+    if (peak >= 8) {
+      pendingMod = { scale: 1, pace: 1, repeat: 1, explicit: true };
+      applyOneWord('eye-squeeze', true, {}, {});   // 8 秒以上：腻歪，眯眼笑
+    }
+  }
+
   /** 假口型：只在这句台词的时间里动嘴（两句之间的停顿闭嘴）。两条正弦交叉，像在念但没声音。 */
   function skitTalk() {
     if (!skit || skit.t > skitSayUntil) return 0;
@@ -1884,6 +1904,25 @@ export async function createLive2DBody(base, opts, entry, kit) {
     const ruaSide = frame.rua?.side ?? 0;
     const ruaSecs = frame.rua?.seconds ?? 0;
     const ruaMelt = frame.rua?.melt ?? 0;
+    // 猛摸瞪眼（用户 2026-11-22 要的）：手速 >850px/s 连摸 0.35 秒 → 一次瞪眼，冷却 4 秒。
+    // kit 的 fx 只是水平方向 /600，所以另加了一个未 clamp 的 speed。
+    const ruaSpeed = frame.rua?.speed ?? 0;
+    if (ruaOn && ruaSpeed > 850) ruaFastT += dt; else ruaFastT = Math.max(0, ruaFastT - dt);
+    if (ruaFastT > 0.35 && clockT > ruaStartleAt) { ruaStartleAt = clockT + 4; ruaStartle = clockT; }
+    const ruaStartleK = ruaStartle > 0 ? clamp(1 - (clockT - ruaStartle) / 0.45, 0, 1) : 0;
+    // ---------- rua 档位表情（照 StrokeFace）----------
+    // 写在这里而不是 engine 分支里：这只模型没接表演层（engine 恒 null），
+    // 放 engine 分支的话整块不会执行（第一版就是这么没生效的）。
+    // engine 存在时下面还会再写一次，压过 engine 的心情值。
+    if (ruaOn) {
+      const m = ruaMelt, sec = ruaSecs;
+      writeRole('eyeSmile', 1);
+      writeRole('mouthForm', 1);
+      writeRole('eyeOpen', ruaStartleK > 0.25 ? 1 : 0.45 * (1 - m));
+      if (m > 0.001) writeRole('lean', -17 * m);
+      if (sec >= 8) { writeRole('browY', 0.5); writeRole('browAngle', 0.3); }
+      else if (sec >= 3) writeRole('browY', 0.2);
+    }
     const tilt = neutralPose ? 0 : (frame.tilt ?? 0);
     const lean = neutralPose ? 0 : (frame.lean ?? 0);
     const ax = engine?.angleX ?? 0;
@@ -1950,6 +1989,21 @@ export async function createLive2DBody(base, opts, entry, kit) {
       // 表情通道：引擎/配方已经算好，之前漏写，导致只有眼/嘴/头在动
       for (const k of ['eyeSmile', 'mouthForm', 'browY', 'browAngle', 'cheek']) {
         if (Number.isFinite(engine[k])) writeRole(k, engine[k]);
+      }
+      // ---------- rua 档位表情（照 PetWindow.Touch.cs 的 StrokeFace）----------
+      // 笑眼(+嘴形) → 按 melt 慢慢合上；3 秒后眉心动；8 秒后眉眼都软；融化时前倾。
+      // 猛摸瞪眼优先：眼睛直接回到 1（睁大）。
+      if (ruaOn) {
+        const m = ruaMelt, sec = ruaSecs;
+        writeRole('eyeSmile', 1);
+        writeRole('mouthForm', 1);
+        writeRole('eyeOpen', ruaStartleK > 0.25 ? 1 : 0.45 * (1 - m));
+        if (m > 0.001) {
+          writeRole('lean', -17 * m);
+          writeRole('angleZ', clamp(angleS.z + 6 * Math.sin(Math.PI * m) + 3 * m, -30, 30));
+        }
+        if (sec >= 8) { writeRole('browY', 0.5); writeRole('browAngle', 0.3); }
+        else if (sec >= 3) writeRole('browY', 0.2);
       }
       { const _bi = paramIndex.get('ParamBreath'); if (_bi !== undefined) model._model.setParameterValueByIndex(_bi, 0.5 + 0.5 * Math.sin(clockT * 2 * Math.PI / 3.2345)); }
     } else {
@@ -2254,6 +2308,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
   };
 
   const figure = {
+    // 摸摸分区（kit 的 zoneAt 读这个）：profile.touchZones 是 256 逻辑坐标的椭圆。
+    // 2026-11-22：之前根本没暴露 —— kit 的 zoneAt 一直返回 null，4.2 的分区等于没做。
+    touchZones() { return profile.touchZones; },
     // 彩蛋台词：交给页面临时显示一句话（页面侧不排队、不发给 World）。
     // 她正在说话/有问答挂着时页面自己忽略，所以不会和对话抢气泡。
     emitBubble(text, seconds) {
@@ -2451,6 +2508,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       }
 
       model._model.loadParameters();
+      stepRuaState(frame);   // 松手反应（按峰值时长）
       applyFrame(face, frame, dt, !extent);
       // 服装/大小这类"状态"要压在 role 之上、并进入基准（换装后应该持久）。
       // 它们会写 key9/10/11/12（兔牙、钢盆、眼镜…），必须排在表情之前，
@@ -2511,9 +2569,14 @@ export async function createLive2DBody(base, opts, entry, kit) {
         // 原来是硬写 0 —— 手移过去眼睛「啪」一下闭上。改成缓动后是「半眯→闭」的柔和过渡，
         // 反过来松手时也是慢慢睁开（后面搬 rua 头/表情档位就靠这条）。
         const _rs = frame.rua?.side ?? 0;
+        // 2026-11-22 对齐他们 StrokeFace：side=1（手在屏幕右）闭的是 ParamEyeLOpen
+        // （模型的左眼在屏幕右边）；摸到脸上且居中 = 双眼都闭（眯眼笑）。之前两侧是反的。
+        const _rFace = !!frame.rua?.face && _rs === 0;
+        const _wantL = (_rs === 1 || _rFace) ? 1 : 0;
+        const _wantR = (_rs === -1 || _rFace) ? 1 : 0;
         const _rEase = 1 - Math.exp(-dt / 0.15);
-        ruaEyeS.L += ((_rs === -1 ? 1 : 0) - ruaEyeS.L) * _rEase;
-        ruaEyeS.R += ((_rs === 1 ? 1 : 0) - ruaEyeS.R) * _rEase;
+        ruaEyeS.L += (_wantL - ruaEyeS.L) * _rEase;
+        ruaEyeS.R += (_wantR - ruaEyeS.R) * _rEase;
         if (_el !== undefined && ruaEyeS.L > 0.002) model._model.setParameterValueByIndex(_el, model._model.getParameterValueByIndex(_el) * (1 - ruaEyeS.L));
         if (_er !== undefined && ruaEyeS.R > 0.002) model._model.setParameterValueByIndex(_er, model._model.getParameterValueByIndex(_er) * (1 - ruaEyeS.R));
         globalThis.__lidMul = [+lidMul.L.toFixed(3), +lidMul.R.toFixed(3)];
