@@ -30,6 +30,7 @@ const FILES = {
   petapp: `${DIR}/web/pet-app.js`,
   script: `${DIR}/src/script.ts`,
   mtext: `${DIR}/src/model-text.ts`,
+  chat: `${DIR}/src/chat.ts`,
   packs: `${DIR}/src/packs.ts`,
   world: `${DIR}/src/world.ts`,
   server: `${DIR}/src/server.ts`,
@@ -1352,6 +1353,16 @@ function toneOf(text: string): string {
         pub,
       ].join('\n'));
       return out;
+    },
+  },
+  {
+    file: 'chat', id: 'chatNoCrash',
+    desc: '渲染层去「摔晕」：历史事件里 crashed 一直是 true（core-state 的 lastTruncateAt 就是最后一条的时间，truncate 后 cursor 重置，那批旧事件会排到最新位置），界面按 crashed 拼文案，所以删文本/拦推送都无效。这里直接让界面看到的 crashed 恒为 false',
+    detect: (s) => s.includes('crashed: false'),
+    apply: (s) => {
+      const a = "touch: { kind: t.kind, count: typeof t.count === 'number' ? t.count : 1, woke: t.woke === true, crashed: t.crashed === true }";
+      if (!s.includes(a)) throw new Error('chatNoCrash：锚点未命中');
+      return s.replace(a, "// 2026-11-23：界面不再播放「摔晕」——历史事件里 crashed 恒为 true，\n        // truncate 后 cursor 被重置，那些旧事件会排到最新位置反复重建（用户以为一直在刷）。\n        // 事件数据本身不动，只让渲染层按 false 处理。\n        touch: { kind: t.kind, count: typeof t.count === 'number' ? t.count : 1, woke: t.woke === true, crashed: false }");
     },
   },
 ];
