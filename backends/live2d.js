@@ -1827,8 +1827,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
     if (engine) {
       // 2026-11-21 眼睛归一化（之前 lookEye 是度数 ±5，×0.55=±2.75 被 clamp 卡在 ±1 一直饱和 →
       // 走神衰减前 60% 眼睛毫无变化、只有头在转，看着就是「头先走」）。对齐他们 -0.9*(eyeLook+saccade)。
-      writeRole('eyeBallX', clamp(ex * 0.6 + (lookEye[0] ?? 0) / 5 * 0.9 + sac.x, -1, 1));
-      writeRole('eyeBallY', clamp(ey * 0.6 + (lookEye[1] ?? 0) / 4 * 0.9 + sac.y, -1, 1));   // 2026-11-21 去掉负号：他们 EyeRightY = +0.7*(eyeLookY+saccadeY)
+      writeRole('eyeBallX', clamp(ex * 0.6 + (lookEye[0] ?? 0) / 5 * 0.6 + sac.x * 0.6, -1, 1));
+      writeRole('eyeBallY', clamp(ey * 0.6 + (lookEye[1] ?? 0) / 4 * 0.7 + sac.y * 0.7, -1, 1));   // 2026-11-21 去掉负号：他们 EyeRightY = +0.7*(eyeLookY+saccadeY)
     // 2026-11-21 单位修正：kit 的 look/tilt/lean 都是度数（look ±5、tilt ±7、lean -6~11），
       // 之前当 -1~1 用 → 放大 5 倍鼠标敏感 + lean 接错位置。全部÷范围归一化。
       // 2026-11-21 度数域（role space 已改 [-30,30]）：直接对齐 DeepFish 度数（FaceAngleX=lookX*22 等）
@@ -1867,8 +1867,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
       { const _bi = paramIndex.get('ParamBreath'); if (_bi !== undefined) model._model.setParameterValueByIndex(_bi, 0.5 + 0.5 * Math.sin(clockT * 2 * Math.PI / 3.2345)); }
     } else {
       // 2026-11-21 同上：眼珠归一化（度数 ÷5/÷4），否则 ±5 直接饱和看不出走神
-      writeRole('eyeBallX', clamp((lookEye[0] ?? 0) / 5 * 0.9 + sac.x, -1, 1));
-      writeRole('eyeBallY', clamp((lookEye[1] ?? 0) / 4 * 0.9 + sac.y, -1, 1));   // 2026-11-21 去掉负号（原来上下和鼠标反）
+      writeRole('eyeBallX', clamp((lookEye[0] ?? 0) / 5 * 0.6 + sac.x * 0.6, -1, 1));
+      writeRole('eyeBallY', clamp((lookEye[1] ?? 0) / 4 * 0.7 + sac.y * 0.7, -1, 1));   // 2026-11-21 去掉负号（原来上下和鼠标反）
       // 2026-11-21 度数域（role space 已改 [-30,30]）
       const angleXVal = clamp((lookHead[0] ?? 0) / 5 * 22 + driftX + ruaRX, -30, 30);
       const angleYVal = clamp((lookHead[1] ?? 0) / 4 * 16 + driftY + ruaRY, -30, 30);

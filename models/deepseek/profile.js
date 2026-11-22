@@ -725,11 +725,16 @@ export default {
     // —— 基础词补齐（3.1）——
     'head-down':  { state: true, dur: 1.0, params: [{ id: 'AngleY', to: -14 }] },   // 对齐 Body.cs 低头 FaceAngleY -14,
     'head-up':    { state: true, dur: 1.0, params: [{ id: 'AngleY', to: 12 }] },   // 对齐 Body.cs 抬头 FaceAngleY 12,
+    // 正视（Body.cs:58 Clear: tilt/turn/pitch/gaze）：清四个姿势通道——头不歪不转不抬不低，**眼珠也回中**。
+    // 2026-11-22：之前漏了眼珠，看过左边再"正视"眼睛还瞟着。
     'face-front': { state: true, dur: 1.0, params: [
       { id: 'AngleX', to: 0 }, { id: 'AngleY', to: 0 }, { id: 'AngleZ', to: 0 },
+      { id: 'ParamEyeBallX', to: 0 }, { id: 'ParamEyeBallY', to: 0 },
     ] },
+    // 站直（Body.cs:61 Clear: lean）只清前倾后仰这一个通道 —— **不动头**。
+    // 2026-11-22：之前把三个角度也写 0，等于歪着头说站直就变成正视了。
     'stand-straight': { state: true, dur: 1.0, params: [
-      { id: 'LeanInput', to: 0 }, { id: 'AngleX', to: 0 }, { id: 'AngleY', to: 0 }, { id: 'AngleZ', to: 0 },
+      { id: 'LeanInput', to: 0 },
     ] },
     'squint':     { state: true, dur: 1.2, params: [
       { id: 'REyeSquint', to: 0.9 }, { id: 'LEyeSquint', to: 0.9 },
