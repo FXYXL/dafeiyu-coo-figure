@@ -116,7 +116,7 @@ export default {
   useChannels: true,
   // 试点白名单：只放纯姿态类词，它们本来就不带手部动画/退出剪辑，接管风险最小。
   channelWords: [
-    "wave", "nod", "shake", "bow", "spin", "dance", "jump", "shiver", "look", "lean-in", "lean-back", "side", "peek", "tilt", "wiggle", "finger-point", "chest-hand", "grass-hand", "swing", "eye-smile", "eye-close", "eye-half", "eye-wide", "eye-squeeze", "blink", "head-swing", "glance", "cower", "pout", "sigh", "look-around", "startle", "look-left", "look-right", "look-up", "look-down", "wink-left", "wink-right", "wink-keep", "wink-hold",
+    "wave", "nod", "shake", "bow", "spin", "dance", "jump", "shiver", "look", "lean-in", "lean-back", "side", "peek", "tilt", "wiggle", "finger-point", "chest-hand", "grass-hand", "swing", "eye-smile", "eye-close", "eye-half", "eye-wide", "eye-squeeze", "blink", "wink-slow", "eye-default", "loading-face", "head-swing", "glance", "cower", "pout", "sigh", "look-around", "startle", "look-left", "look-right", "look-up", "look-down", "wink-left", "wink-right", "wink-keep", "wink-hold",
     // 2026-11-21 修正：这 7 个原来被上一行的行内注释吞掉了（写进 // 后面 = 从来没被接管过，
     // 一直走 act 老路瞬时写 0 —— 眉毛/嘴的表情同样"一闪"的真身）。
     "brow-frown", "brow-up", "brow-knit", "mouth-smile", "mouth-pout", "mouth-open", "blush",
@@ -168,7 +168,7 @@ export default {
     '扣盆': 'pan-face',
     '挥手': 'wave',
     '招手': 'wave',
-    '点头': 'nod', '叹气': 'sigh', '大笑': 'laugh', '眼泪': 'tears', '挑一下眉': 'brow-raise-once', '歪一下头': 'tilt-once', '晃头': 'head-swing', '慢歪头': 'slow-tilt', '缩一下': 'cower', '吓一跳': 'startle', '左右张望': 'look-around', '摇摆一': 'sway-1', '剧场摇摆一': 'theater-sway-1', '剧场摇摆二': 'theater-sway-2', '慢摇': 'slow-sway', '摇摆二': 'dance', '看过来': 'face-front', '看你': 'face-front', '看左边': 'look-left', '看右边': 'look-right', '看上面': 'look-up', '看下面': 'look-down', '转头': 'turn-head', '前倾': 'lean-forward', '眨眼': 'blink', '单眨眼': 'wink-hold', '眨单眼': 'wink-keep', '快眨左': 'wink-left', '快眨右': 'wink-right', '高兴': 'happy-burst', '偷笑': 'snicker', '傻眼': 'dumbstruck', '得瑟': 'gloating', '抓狂': 'frantic', '犯困': 'drowsy-combo', '感动': 'touched', '鬼点子': 'sly-idea', '得救': 'rescued', '警觉': 'alert-combo', '瞟一眼': 'glance', '竖手指': 'finger-point', '快眨单眼': 'wink-left', '放下手': 'put-hand-down',
+    '点头': 'nod', '叹气': 'sigh', '大笑': 'laugh', '眼泪': 'tears', '挑一下眉': 'brow-raise-once', '歪一下头': 'tilt-once', '晃头': 'head-swing', '慢歪头': 'slow-tilt', '缩一下': 'cower', '吓一跳': 'startle', '左右张望': 'look-around', '摇摆一': 'sway-1', '剧场摇摆一': 'theater-sway-1', '剧场摇摆二': 'theater-sway-2', '慢摇': 'slow-sway', '摇摆二': 'dance', '看过来': 'face-front', '看你': 'face-front', '看左边': 'look-left', '看右边': 'look-right', '看上面': 'look-up', '看下面': 'look-down', '转头': 'turn-head', '前倾': 'lean-forward', '眨眼': 'blink', '单眨眼': 'wink-hold', '眨单眼': 'wink-keep', '快眨左': 'wink-left', '快眨右': 'wink-right', '单左眨眼': 'wink-slow', '默认眼': 'eye-default', '睁眼': 'eye-default', '加载': 'loading-face', '＞＜': 'xx-eyes', '><': 'xx-eyes', '高兴': 'happy-burst', '偷笑': 'snicker', '傻眼': 'dumbstruck', '得瑟': 'gloating', '抓狂': 'frantic', '犯困': 'drowsy-combo', '感动': 'touched', '鬼点子': 'sly-idea', '得救': 'rescued', '警觉': 'alert-combo', '瞟一眼': 'glance', '竖手指': 'finger-point', '快眨单眼': 'wink-left', '放下手': 'put-hand-down',
     '摇头': 'shake',
     '鞠躬': 'bow',
     '转圈': 'spin',
@@ -691,6 +691,15 @@ export default {
     // 松开交给通道的自动放松（平滑淡出），不手写时长——这才是他们那一套。
     'wink-keep':   { reflex: true, state: true, dur: 1.2, params: [
       { id: 'ParamEyeLOpen', to: 0 }, { id: 'EyeSmile', to: 1 },
+    ] },
+    // 单左眨眼（Body.cs:79）：单眼眨一下、闭 0.6 秒（欢迎收尾用，比快眨单眼慢、比单眨眼短）。值是增量（1+value）
+    'wink-slow':   { dur: 0.85, keys: [
+      { id: 'ParamEyeLOpen', t: 0, v: 0 }, { id: 'ParamEyeLOpen', t: 0.12, v: -1 },
+      { id: 'ParamEyeLOpen', t: 0.72, v: -1 }, { id: 'ParamEyeLOpen', t: 0.85, v: 0 },
+    ] },
+    // 默认眼（Body.cs:81）：只把眼睛收回默认——睁开、笑眼关掉，嘴和身子都不动
+    'eye-default': { state: true, dur: 1.0, params: [
+      { id: 'ParamEyeLOpen', to: 1 }, { id: 'ParamEyeROpen', to: 1 }, { id: 'EyeSmile', to: 0 },
     ] },
     'brow-frown':  { state: true, dur: 1.0, params: [
       { id: 'BrowInnerUp', to: 1 },
