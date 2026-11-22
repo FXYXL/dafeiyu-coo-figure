@@ -675,9 +675,13 @@ export async function createLive2DBody(base, opts, entry, kit) {
     melt: {   // 摸后融化（20 秒彩蛋）
       dur: 6,
       exps: ['脸红'],
-      sets: { EyeSmile: .55, ParamMouthForm: .9, ParamMouthPressLipOpen: .35, BrowInnerUp: .5, FaceAngleY: -4, FaceAngleZ: 4 },
+      // 他们 Behavior.cs:67 的 sets 里就有 ("LeanInput", -17) —— 我搬的时候漏了。
+      sets: { EyeSmile: .55, ParamMouthForm: .9, ParamMouthPressLipOpen: .35, BrowInnerUp: .5, FaceAngleY: -4, FaceAngleZ: 4, LeanInput: -17 },
       keys: {
-        LeanInput: [[0, -17], [.8, -16], [4.8, -16], [6, 0]],
+        // 他们原串 "0:0 .8:1 4.8:1 6:0" 是**增量**（叠加在 sets 的 -17 上）：
+        // 0→0 = -17，.8→+1 = -16，4.8 保持，6→0 仍是 -17。整段都前倾着，退出交给 mood 结束后的 clear。
+        // 之前我抄成绝对值 [[0,-17],[.8,-16],[4.8,-16],[6,0]]，等于 6 秒时硬回 0 —— 比收手（5.1s 开始、1.6s）早。
+        LeanInput: [[0, 0], [.8, 1], [4.8, 1], [6, 0]],
         FaceAngleZ: [[0, 0], [.8, 5], [2, -2], [3.6, 3], [6, 0]],
         FaceAngleX: [[0, 0], [.7, -3], [2.2, 2], [3.8, -2], [6, 0]],
         EyeOpen: [[0, 0], [.2, -1], [.28, -.2], [.45, 0], [.95, -1], [1.03, -.2], [1.2, 0], [6, 0]],   // 快眨两下
@@ -1915,9 +1919,12 @@ export async function createLive2DBody(base, opts, entry, kit) {
     } else ruaW = 0;
     // 前倾单独一条：摸的时候和 mood 期间都保持，mood 演完才 0.6 秒褪掉
     if (frame.rua?.on || ruaAfter) ruaLeanK = 1;
-    // 2.0 秒而不是 0.6 —— 摸后的「抬手到胸口」要用 put-hand-down 收手（1.6 秒），
-    // 前倾必须盖住它，否则手还没放下身体就直了（用户：「抚胸手还没做完就拉回去了」）。
-    else if (ruaLeanK > 0.002) ruaLeanK += (0 - ruaLeanK) * (1 - Math.exp(-dt / 2.0));
+    // 前倾的退出时长**跟收手动作为准**，不拍数字：他们 mood 结束时 clear LeanInput 和
+    // PutHandDown 是同时发生的，所以我们用 put-hand-down 自己的 dur（1.6 秒）当时间常数。
+    else if (ruaLeanK > 0.002) {
+      const _leanOut = paramActs['put-hand-down']?.dur ?? 1.6;
+      ruaLeanK += (0 - ruaLeanK) * (1 - Math.exp(-dt / _leanOut));
+    }
     else { ruaLeanK = 0; ruaMeltHold = 0; }
 
     // 1) 全部 role 回到默认（写默认 == 模型默认姿势，所以是幂等的）
