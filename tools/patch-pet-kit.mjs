@@ -492,21 +492,6 @@ const PATCHES = [
   },
   // ===== world.ts：4.2 rua 事件直达（不进聚合）=====
   {
-    file: 'world', id: 'crashDedup',
-    desc: 'crash/drop 文本去重：8 秒内同一条「重重落地，摔晕了一会儿」不重复 push（rua 误入拖拽时刷屏的兜底）',
-    detect: (s) => /__lastCrashText/.test(s),
-    apply: (s) => {
-      const out = s.replace(
-        "      case 'crash': text = m.crashed; break;",
-        "      case 'crash': { const now = Date.now(); try { new Image().src = '/api/figure-log?m=' + encodeURIComponent('crash-src kind=crash t=' + JSON.stringify(t).slice(0, 80)); } catch {} if (this.__lastCrashText && now - this.__lastCrashText < 8000) return; this.__lastCrashText = now; text = m.crashed; break; }   // 4.2 去重 + 源头打点",
-      );
-      // ruaCrashGuard 已经把 case 'crash' 改成直接 return（这条文案彻底不存在），
-      // 这里找不到锚点是正常的，安静跳过。
-      if (!out.includes('__lastCrashText')) return out;
-      return out;
-    },
-  },
-  {
     file: 'world', id: 'ruaEvents',
     desc: 'rua 事件（开始/升档/持续心跳/结束）立即直达给 AI，不走 2.5s 触摸聚合——文本只描述状态（谁在摸/多久/什么档位），她的回应自己组织',
     detect: (s) => /rua-start' \|\| kind === 'rua-tier'/.test(s),
@@ -523,8 +508,7 @@ const PATCHES = [
     // 4.2 rua：开始/升档/持续心跳/结束各立即直达，不进 2.5s 聚合（摸头状态要实时）。
     // 文本只描述状态事实（谁在摸/摸了多久/她现在什么表情档位），她的回应完全自己组织。
     if (kind === 'rua-start' || kind === 'rua-tier' || kind === 'rua-still' || kind === 'rua-end') {
-      // 残留的 drop/crash 聚合静默丢弃——flushTouch 会把它刷成「重重落地，摔晕了一会儿」
-      // （rua 期间刷屏的真因：之前拖拽/掉落的 touch 对象还挂着 timer）
+      // 起摸时把还没 flush 的零散 touch 丢掉，免得摸头正起劲时补一条「戳了你一下」
       if (this.touch) { clearTimeout(this.touch.timer); this.touch = null; }
       const u = this.userName, m = this.t;
       const tier = Number(msg.tier) || 0, seconds = Number(msg.seconds) || 0;
@@ -1076,10 +1060,9 @@ function toneOf(text: string): string {
       const a2 = "      onEvent('touch', { kind: 'rua-still', tier: ruaTier, seconds: Math.max(rua.seconds, ruaMax) });   // 峰值，防倒退\n    }\n  }";
       if (!out.includes(a2)) throw new Error('ruaTune：stepRua 尾部锚点未命中');
       out = out.replace(a2, "      onEvent('touch', { kind: 'rua-still', tier: ruaTier, seconds: Math.max(rua.seconds, ruaMax) });   // 峰值，防倒退\n    }\n    lastRuaAt = t;\n    // 2026-11-22 用户：1.5 秒宽限不要了 —— 手离开头区就算了，只在松手时结算。\n  }");
-      // 4) crash 抑制：rua 后 3 秒内不算摔晕
-      const a3 = "    if (kind === 'throw' && impact > 1000) { setMode('dizzy'); onEvent('touch', { kind: 'crash' }); return; }";
-      if (!out.includes(a3)) throw new Error('ruaTune：crash 锚点未命中');
-      out = out.replace(a3, "    // 2026-11-22：rua 之后 3 秒内的「摔飞」不算摔晕——摸头时偶尔会顺着拖拽链\n    // 把她甩出去，World 把 crash 聚合成「你重重落地，摔晕了一会儿」刷进聊天。\n    if (kind === 'throw' && impact > 1000) {\n      // 2026-11-22：**先不发 crash 事件**。摔晕的表现（dizzy）保留，只是不往聊天推文本。\n      // 原因：这条在 web 层，重启 world 就生效；World 那边「单独 crash 丢弃」要整个应用重启。\n      // 摸头时会顺着拖拽链产生一堆 throw，World 把残留 crash 聚合成\n      // 「你重重落地，摔晕了一会儿」刷屏（用户实测 14 条）。\n      setMode('dizzy'); return;\n    }");
+      // 4)（已删）原来这里把落地 crash 事件整个掐掉，理由是「rua 后 3 秒不算摔晕」。
+      // 2026-11-23 查明刷屏真因是控制台 touch 渲染器的 default 分支（见 chat 的 ruaChat 补丁），
+      // 跟 crash 事件无关；这条抑制只会让「真被甩出去」也不再告诉她。恢复上游原样，不再改。
       // 5) 松手后 6 秒不做闲时动作（摸后 mood 要演 3.4~6 秒）
       const a5 = "    ruaDown = false;\n    const held = Math.round(ruaMax * 10) / 10;";
       if (!out.includes(a5)) throw new Error('ruaTune：endRua 锚点未命中');
@@ -1109,38 +1092,6 @@ function toneOf(text: string): string {
       const a = "onEvent('touch', { kind: 'rua-start' });";
       if (!s.includes(a)) throw new Error('ruaHeadBox：锚点未命中');
       return s.replace(a, "onEvent('touch', { kind: 'rua-start', hx: c.x, hy: c.y, rx: headRx, ry: headRy });");
-    },
-  },
-  {
-    file: 'world', id: 'ruaCrashGuard',
-    desc: 'rua 期间丢弃 crash/drop/throw：右键摸头会顺带发出 drag 链的 touch，World 把残留 crash 聚合成「你重重落地，摔晕了一会儿」刷进聊天',
-    detect: (s) => /ruaActive/.test(s),
-    apply: (s) => {
-      let out = s.replace(
-        "  private touch: TouchBatch | null = null;",
-        "  private touch: TouchBatch | null = null;\n  /** rua（右键摸头）进行中：这期间的拖拽/掉落事件一律丢弃（2026-11-22 修刷屏） */\n  private ruaActive = false;",
-      );
-      if (!out.includes('ruaActive')) throw new Error('ruaCrashGuard：字段未插入');
-      out = out.replace(
-        "    const kind = String(msg.kind);\n    if (kind === 'grab') return;",
-        "    const kind = String(msg.kind);\n    if (kind === 'grab') return;\n    // 2026-11-22：rua 期间丢掉 crash/drop/throw —— 右键长按摸头时页面偶尔还顺着拖拽链\n    // 发出 throw/crash，World 把残留的 crash 聚合成「你重重落地，摔晕了一会儿」刷进聊天。\n    if (this.ruaActive && (kind === 'crash' || kind === 'drop' || kind === 'throw')) return;",
-      );
-      if (!out.includes("kind === 'crash' || kind === 'drop'")) throw new Error('ruaCrashGuard：丢弃分支未命中');
-      out = out.replace(
-        "      if (this.touch) { clearTimeout(this.touch.timer); this.touch = null; }",
-        "      if (this.touch) { clearTimeout(this.touch.timer); this.touch = null; }\n      this.ruaActive = kind !== 'rua-end';",
-      );
-      if (!out.includes("this.ruaActive = kind !== 'rua-end';")) throw new Error('ruaCrashGuard：开关未插入');
-      // 最后一道：flushTouch 里也彻底不出这条文案（即使有残留的 crash touch 对象）
-      const oldCase = "      case 'crash': { const now = Date.now(); try { new Image().src = '/api/figure-log?m=' + encodeURIComponent('crash-src kind=crash t=' + JSON.stringify(t).slice(0, 80)); } catch {} if (this.__lastCrashText && now - this.__lastCrashText < 8000) return; this.__lastCrashText = now; text = m.crashed; break; }";
-      if (out.includes(oldCase)) {
-        out = out.replace(oldCase, "      // 2026-11-22：flushTouch 里也彻底不出这条文案（kit 已不发 crash，这里再兜一层）\n      case 'crash': return;");
-      }
-      // 更根本的一条：crash 只是 throw/drop 的「摔晕了」补充标记，单独出现一律丢弃。
-      const oldCrash = "    if (kind === 'crash' && this.touch && (this.touch.kind === 'throw' || this.touch.kind === 'drop')) {\n      this.touch.crashed = true;\n      return;\n    }";
-      if (!out.includes(oldCrash)) throw new Error('ruaCrashGuard：crash 分支未命中');
-      out = out.replace(oldCrash, "    // 2026-11-22：crash 只给 throw/drop 打标记，**单独出现一律丢弃**。\n    // 之前没有对应 throw/drop 时会新建一个 touch，2.5 秒后 flush 成「你重重落地，摔晕了一会儿」\n    // —— rua 时页面顺着拖拽链反复发 crash，聊天里就刷屏了（用户截图 10 条相同）。\n    if (kind === 'crash') {\n      if (this.touch && (this.touch.kind === 'throw' || this.touch.kind === 'drop')) this.touch.crashed = true;\n      return;\n    }");
-      return out;
     },
   },
   {
@@ -1302,67 +1253,15 @@ function toneOf(text: string): string {
       return s.replace(a, "      // 2026-11-22：原来无条件写 'throw'，但事件按速度分 throw/drop ——\n      // 轻轻放下落地也会走「抛出去」的判据（impact>1000 就 crash）。按速度对齐。\n      pet.airKind = speed > 700 ? 'throw' : 'drop';");
     },
   },
+  // ===== chat.ts：rua 事件不进对话页 =====
   {
-    file: 'mtext', id: 'noCrashText',
-    desc: '把「你重重落地,摔晕了一会儿」这半句从文本源删掉：thrown/dropped 不再拼 crashed 后缀。事件链、crashed 标记都不动（身体表现照旧），只是永远进不了聊天。',
-    detect: (s) => /_crashed\?: boolean/.test(s),
+    file: 'chat', id: 'ruaChat',
+    desc: "rua-start/tier/still/end 不给对话页条目：控制台前端 touch 渲染器只认 poke/pet/throw/drop，其余全落 default，被渲染成「雅汐 重重落地，摔晕了一会儿」（摸头每 2.5 秒一条，满屏）。事件照常投递给模型，只是不生成页面条目",
+    detect: (s) => s.includes("t.kind.startsWith('rua-')"),
     apply: (s) => {
-      let out = s;
-      const a1 = "${user}把你拎起来甩了出去${crashed ? ',你重重落地,摔晕了一会儿' : ''}";
-      const b1 = "${user}把你拎起来甩了出去";
-      const a2 = "${user}把你拎起来,放到了屏幕横向 ${at ?? '某'} 处${crashed ? ',你摔晕了一会儿' : ''}";
-      const b2 = "${user}把你拎起来,放到了屏幕横向 ${at ?? '某'} 处";
-      const a3 = "crashed: '你重重落地,摔晕了一会儿',";
-      const b3 = "crashed: '你落在了地上',";
-      let n = 0;
-      if (out.includes(a1)) { out = out.replace(a1, b1); out = out.replace("crashed: boolean) => `${user}把你拎起来甩了出去", "_crashed?: boolean) => `${user}把你拎起来甩了出去"); n++; }
-      if (out.includes(a2)) { out = out.replace(a2, b2); out = out.replace("crashed: boolean) => `${user}把你拎起来,放到了屏幕横向", "_crashed?: boolean) => `${user}把你拎起来,放到了屏幕横向"); n++; }
-      if (out.includes(a3)) { out = out.replace(a3, b3); n++; }
-      if (!n) return null;   // 已经改过（revert 后的原始文件才有这些串）
-      return out;
-    },
-  },
-  {
-    file: 'world', id: 'noCrashEmit',
-    desc: '兜底两层：flushTouch 生成文本时过滤「摔晕」；push 进界面时再过滤一次（对话页看到的走的是 push）',
-    detect: (s) => /TEXT-FILTER/.test(s),
-    apply: (s) => {
-      const a = "    const wakes = !this.touchWoke && touchWakes(this.cfg.touch, t.kind);";
-      if (!s.includes(a)) throw new Error('noCrashEmit：锚点未命中');
-      let out = s.replace(a, [
-        "    // 2026-11-23 兜底：任何路径发出的文本都不许出现「摔晕」（用户：rua 时满屏）。",
-        "    // 同时记一条日志：哪条 kind 还在带这句 —— 下次直接从日志定位上游。",
-        "    if (text.includes('摔晕')) {",
-        "      try { appendFileSync('D:/AI/rua-debug.log', new Date().toISOString() + ' TEXT-FILTER ' + t.kind + ' crashed=' + t.crashed + ' ' + text + '\\n'); } catch {}",
-        "      text = text.replace(/[,，]?(你)?重重落地[,，]?摔晕了一会儿/g, '').replace(/[,，]?(你)?摔晕了一会儿/g, '').trim();",
-        "    }",
-        "    if (!text) return;",
-        a,
-      ].join('\n'));
-      // 第二层：pushEvent 是**所有消息进对话页的唯一出口**（flushTouch 只是其中一条）。
-      // 用户在对话页看到那十几条、但会话记录和控制台里都没有 —— 说明走的是 push 到 UI。
-      // 在这里按文本过滤，界面就不可能再出现这句。锚点用两行（onChat 里也有 const host，但后面不跟 if）。
-      const pub = "    const host = this.host;\n    if (!host) return null;";
-      if (!out.includes(pub)) throw new Error('noCrashEmit：push 锚点未命中');
-      out = out.replace(pub, [
-        "    // 2026-11-23：最后一道 —— 进界面前按文本过滤（任何 type / 任何来源）",
-        "    if (typeof text === 'string' && text.includes('摔晕')) {",
-        "      try { appendFileSync('D:/AI/rua-debug.log', new Date().toISOString() + ' PUSH-FILTER ' + type + '\\n'); } catch {}",
-        "      return null;",
-        "    }",
-        pub,
-      ].join('\n'));
-      return out;
-    },
-  },
-  {
-    file: 'chat', id: 'chatNoCrash',
-    desc: '渲染层去「摔晕」：历史事件里 crashed 一直是 true（core-state 的 lastTruncateAt 就是最后一条的时间，truncate 后 cursor 重置，那批旧事件会排到最新位置），界面按 crashed 拼文案，所以删文本/拦推送都无效。这里直接让界面看到的 crashed 恒为 false',
-    detect: (s) => s.includes('crashed: false'),
-    apply: (s) => {
-      const a = "touch: { kind: t.kind, count: typeof t.count === 'number' ? t.count : 1, woke: t.woke === true, crashed: t.crashed === true }";
-      if (!s.includes(a)) throw new Error('chatNoCrash：锚点未命中');
-      return s.replace(a, "// 2026-11-23：界面不再播放「摔晕」——历史事件里 crashed 恒为 true，\n        // truncate 后 cursor 被重置，那些旧事件会排到最新位置反复重建（用户以为一直在刷）。\n        // 事件数据本身不动，只让渲染层按 false 处理。\n        touch: { kind: t.kind, count: typeof t.count === 'number' ? t.count : 1, woke: t.woke === true, crashed: false }");
+      const a = "      if (t && typeof t.kind === 'string') {";
+      if (!s.includes(a)) throw new Error('ruaChat：锚点未命中');
+      return s.replace(a, a + "\n        // 2026-11-23（真因）：控制台 build/console/index.js 里 touch 渲染器的 default 分支是\n        //   default: return `${t} 重重落地，摔晕了一会儿`\n        // 只要 kind 不是 poke/pet/throw/drop 就全落进去。rua-* 正好都不认识 → 摸头每 2.5 秒一条。\n        // 事件照常给模型（她该知道的秒数一个字不少），只是不给对话页生成条目。\n        if (t.kind.startsWith('rua-')) return null;");
     },
   },
 ];
