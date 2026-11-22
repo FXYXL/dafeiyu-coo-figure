@@ -2677,7 +2677,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
         // 写早一步就被吃掉 —— 用户看到的「rua 时两个眼睛瞪得老大」就是这个。
         const _rv = frame.rua;
         const _ruaOn = !!_rv?.on;
-        const _ruaOpen = _ruaOn ? (ruaStartleK > .25 ? 1 : .45 * (1 - (_rv?.melt ?? 0))) : null;
+        // 摸后 mood 期间**保持半眯**（用户：松手后脸红和眯眯眼不能直接清零）。
+        // melt 那档的快眨两下由 mood 播放器在后面覆盖。
+        const _ruaOpen = _ruaOn ? (ruaStartleK > .25 ? 1 : .45 * (1 - (_rv?.melt ?? 0))) : (ruaAfter ? .45 : null);
         const _baseL = _ruaOpen ?? (_blinkRan ? lastOpenNoBase : 1);
         const _baseR = _ruaOpen ?? (_blinkRan ? lastOpenNoBase : 1);
         const _mulL = _baseL * lidMul.L * Math.max(0, 1 + lidAdd.L);
