@@ -998,11 +998,14 @@ export async function createLive2DBody(base, opts, entry, kit) {
 
   /** 撤掉所有通道（动作 + 表情层），回到干净的脸和姿势。
    *  2026-11-22：从 baseWord 的「恢复」分支抽出来 —— 剧本 step 里也能写「恢复」了。 */
-  function relaxChannels() {
+  /** @param onlyHand 只收手（他们 Body.cs:420 的 PutHandDown）：不动表情和姿势。 */
+  function relaxChannels(onlyHand) {
     // 2026-11-21：有 exit 的手势（竖手指/狗尾草/抚胸）不秒切——把通道条目换成播 exit.keys（1.25 秒收手），
     // 播完自己走。没 exit 的照旧写 0 清掉。
+    const isHand = (c) => !!(c.src && paramActs[c.src]?.hand);
     const toDelete = [];
     for (const [id, c] of [...channel]) {
+      if (onlyHand && !isHand(c)) continue;
       const def = c.src ? paramActs[c.src] : null;
       const frames = def?.exit?.keys?.filter((k) => k.id === id).map((k) => [k.t ?? 0, k.v ?? 0]);
       if (frames?.length) {
@@ -1019,6 +1022,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 动作轨道：有 exit 的就地换成收手关键帧，没 exit 的直接撤
     for (let n = tracks.length - 1; n >= 0; n--) {
       const c = tracks[n];
+      if (onlyHand && !isHand(c)) continue;
       const def = c.src ? paramActs[c.src] : null;
       const frames = def?.exit?.keys?.filter((k) => k.id === c.id).map((k) => [k.t ?? 0, k.v ?? 0]);
       if (frames?.length) {
@@ -1172,9 +1176,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
     skitSayUntil = 0;
     // 剧本期间把 kit 的闲时调度按住：不然她一边保持前倾一边自己溜达/跳/坐
     // （hold 是「多少秒内不自由漫游」，和 say 用的 holdRoam 同一路）
-    // hold 要盖住**整段保持期**（life），不是只盖演出时长 —— 用户：「做完剧本的保持动作时间里
-    // 会有随机动作跟进来，导致一边保持前倾一边移动」。life 到期她才恢复自由漫游。
-    body?.set?.({ hold: (def.life ?? (def.dur ?? 6) + 4) + 0.5 });
+    // hold 要盖住**整段保持期 + 淡出**：条目在 life 到期后才开始 RELAX_FADE(1.5s) 淡出，
+    // 只按 life 按住的话，淡出那 1.5 秒她已经能自己走了 —— 看起来就是「前倾着走路」。
+    body?.set?.({ hold: (def.life ?? (def.dur ?? 6) + 4) + RELAX_FADE + 0.5 });
     audit('skit-start ' + def.id);
     return true;
   }
@@ -1182,6 +1186,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
     if (!skit) return;
     audit('skit-stop ' + skit.def.id + ' ' + why);
     skit = null;
+    // 被打断（说话/拖动/换姿势）时，刚做出来的表情动作还要淡出 1.5 秒 ——
+    // 这期间别让她自己走起来，否则就是「保持前倾 → 边走边歪」
+    body?.set?.({ hold: RELAX_FADE + 1.5 });
   }
   /** 每帧推进剧本：到点的 step 走 applyOneWord（和散词同一条写入路径，通道/轨道/手部全都走）。 */
   function stepSkit(dt) {
@@ -1272,6 +1279,11 @@ export async function createLive2DBody(base, opts, entry, kit) {
     if (!useChannels || !channelWords.has(w)) { audit('reject ' + w + ' (通道守卫)'); return false; }
     const def = paramActs[w];
     if (!def) return false;
+    // 「放下手」：他们 Body.cs:420 是 `PutHandDown() { if (hand is {} up) send($"motion {up.Off}") }`
+    // —— 播**当前那只手**自带的收手动画。我们之前抄成固定一套 chest-hand 的 Off：
+    // 竖手指时那只手没有 Movement2，于是凭空放了一次不存在的右手（用户：「做两次放手，
+    // 第二次从右边突然出现」）。改成按当前手型播它自己的 exit。
+    if (w === 'put-hand-down') { relaxChannels(true); audit('write ' + w + ' (当前手型 exit)'); return true; }
     const now = clockT;
     // 3.6 :右 镜像——方向参数（头部横摆/眼珠横移）值取反
     const MIRROR = new Set(['AngleX', 'AngleZ', 'ParamEyeBallX']);

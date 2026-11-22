@@ -509,6 +509,10 @@ export default {
 
     // —— 脸部小动作（参数直驱，实测鼓腮最明显）——    // 放下手（Body.cs HandDown）：收手动画（motions/lower.js 举手切默认手 1.02s，含反向回弹
     // Param59 0.48→-0.048→0）+ 狗尾草/竖手指的静态归零。keys/params 不放同参数。
+    // 「放下手」：他们 Body.cs:420 是 PutHandDown() → 播**当前手型**自带的 Off 动画。
+    // 所以 figure 里对 put-hand-down 做了特判（走 relaxChannels(true)，按当前手型的 exit 收手），
+    // 下面这套 keys/params 已经**不会被执行**了 —— 留着只当 dur（1.6 秒）的来源和对照。
+    // 2026-11-22：之前照抄成固定 chest-hand 的 Off，竖手指时凭空放了一次右手（用户：两次放手）。
     'put-hand-down': { hand: true, state: true, dur: 1.6, keys: [
       { id: 'Movement2', t: 0, v: 1 }, { id: 'Movement2', t: 0.53, v: 1 }, { id: 'Movement2', t: 0.55, v: 0 }, { id: 'Movement2', t: 1.05, v: 0 },
       { id: 'Param56', t: 0, v: 1 }, { id: 'Param56', t: 1.05, v: 1 },
