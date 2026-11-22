@@ -1323,12 +1323,12 @@ function toneOf(text: string): string {
   },
   {
     file: 'world', id: 'noCrashEmit',
-    desc: '兜底：flushTouch 真正发文本前过滤「摔晕」，并记日志（哪条 kind 还在带这句）。不管上游哪条路径漏了，都发不出去',
+    desc: '兜底两层：flushTouch 生成文本时过滤「摔晕」；push 进界面时再过滤一次（对话页看到的走的是 push）',
     detect: (s) => /TEXT-FILTER/.test(s),
     apply: (s) => {
       const a = "    const wakes = !this.touchWoke && touchWakes(this.cfg.touch, t.kind);";
       if (!s.includes(a)) throw new Error('noCrashEmit：锚点未命中');
-      return s.replace(a, [
+      let out = s.replace(a, [
         "    // 2026-11-23 兜底：任何路径发出的文本都不许出现「摔晕」（用户：rua 时满屏）。",
         "    // 同时记一条日志：哪条 kind 还在带这句 —— 下次直接从日志定位上游。",
         "    if (text.includes('摔晕')) {",
@@ -1337,7 +1337,21 @@ function toneOf(text: string): string {
         "    }",
         "    if (!text) return;",
         a,
-      ].join('\\n'));
+      ].join('\n'));
+      // 第二层：pushEvent 是**所有消息进对话页的唯一出口**（flushTouch 只是其中一条）。
+      // 用户在对话页看到那十几条、但会话记录和控制台里都没有 —— 说明走的是 push 到 UI。
+      // 在这里按文本过滤，界面就不可能再出现这句。锚点用两行（onChat 里也有 const host，但后面不跟 if）。
+      const pub = "    const host = this.host;\n    if (!host) return null;";
+      if (!out.includes(pub)) throw new Error('noCrashEmit：push 锚点未命中');
+      out = out.replace(pub, [
+        "    // 2026-11-23：最后一道 —— 进界面前按文本过滤（任何 type / 任何来源）",
+        "    if (typeof text === 'string' && text.includes('摔晕')) {",
+        "      try { appendFileSync('D:/AI/rua-debug.log', new Date().toISOString() + ' PUSH-FILTER ' + type + '\\n'); } catch {}",
+        "      return null;",
+        "    }",
+        pub,
+      ].join('\n'));
+      return out;
     },
   },
 ];
