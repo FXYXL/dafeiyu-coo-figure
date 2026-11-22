@@ -1915,7 +1915,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
     } else ruaW = 0;
     // 前倾单独一条：摸的时候和 mood 期间都保持，mood 演完才 0.6 秒褪掉
     if (frame.rua?.on || ruaAfter) ruaLeanK = 1;
-    else if (ruaLeanK > 0.002) ruaLeanK += (0 - ruaLeanK) * (1 - Math.exp(-dt / 0.6));
+    // 2.0 秒而不是 0.6 —— 摸后的「抬手到胸口」要用 put-hand-down 收手（1.6 秒），
+    // 前倾必须盖住它，否则手还没放下身体就直了（用户：「抚胸手还没做完就拉回去了」）。
+    else if (ruaLeanK > 0.002) ruaLeanK += (0 - ruaLeanK) * (1 - Math.exp(-dt / 2.0));
     else { ruaLeanK = 0; ruaMeltHold = 0; }
 
     // 1) 全部 role 回到默认（写默认 == 模型默认姿势，所以是幂等的）
