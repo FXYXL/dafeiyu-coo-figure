@@ -632,6 +632,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
   let ruaW = 0;
   /** rua 期间最后一次的档位秒数：松手后 frame.rua 没了，档位不能跟着跌回 0。 */
   let ruaSecHold = 0;
+  /** 松手后淡出用的「最后一次手位 / 融化度」：frame.rua 一消失 ux/uy/melt 就归零，
+   *  直接读它们等于瞬间把前倾、歪头、眼珠弹回默认。 */
+  let ruaUxHold = 0, ruaUyHold = 0, ruaMeltHold = 0;
   let ruaWasOn = false;
   /** 摸后的四个 mood（Behavior.cs:59-67 全搬）。
    *  他们的 Mood 记录是 `record Mood(string[] Expressions, (string Id,double Value)[] Parameters,
@@ -691,6 +694,19 @@ export async function createLive2DBody(base, opts, entry, kit) {
     return fps[fps.length - 1][1];
   };
   /** 他们的参数名 → 我们模型的角色参数。ViewSquash 这类没有的返回 null 跳过。 */
+  /** 他们的参数名 → 我们模型里的名字。
+   *  2026-11-22：mood 的 sets 之前直接 sp(k, v)，而 k 是他们的名字 —— 我们模型里
+   *  FaceAngleX/Y/Z 根本不存在（叫 AngleX/Y/Z），ParamMouthPressLipOpen 也不存在（叫 MouthPressLipOpen）。
+   *  结果「摸后失落」的低头 FaceAngleY=-5、歪头 FaceAngleZ=4、抿嘴 .3 **全部静默丢失**，
+   *  用户看到的就只剩一个脸红（「松手第一档只有脸红，为什么没有低头看我」）。
+   *  统一走这一张表，sets / keys 都过它。 */
+  const PARAM_ALIAS = {
+    FaceAngleX: 'AngleX', FaceAngleY: 'AngleY', FaceAngleZ: 'AngleZ',
+    ParamMouthPressLipOpen: 'MouthPressLipOpen',
+    MouthPressLipOpen: 'MouthPressLipOpen',
+    EyeSmile: 'EyeSmile', ParamMouthForm: 'ParamMouthForm',
+  };
+  const resolveId = (k) => PARAM_ALIAS[k] ?? k;
   const MOOD_ARGS = { FaceAngleX: 'AngleX', FaceAngleY: 'AngleY', FaceAngleZ: 'AngleZ', LeanInput: 'LeanInput' };
   /** 模型没有、但 figure 会转给 kit 的整图参数（ViewSquash 压扁 / ViewRoll 滚转 / ViewX、Y 位移） */
   const VIRTUAL_KEYS = new Set(['ViewSquash', 'ViewRoll', 'ViewX', 'ViewY']);
@@ -698,6 +714,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
   function ruaKc() {
     if (ruaAfter?.melt) return [90, 9];
     if (ruaOnNow) return [150, 14];
+    // 他们 StepStroke 里 amp 归 0 但 springK/springC 还是「摸」的 150/14
+    // → 手离开头盒子那一下是**带惯性**地弹回去的。ruaW 淡出期沿用这一档。
+    if (ruaW > 0.02) return [150, 14];
     if (clockT - ruaLastEnd < 1.6) return [200, 28];
     return [130, 13];
   }
@@ -1878,6 +1897,20 @@ export async function createLive2DBody(base, opts, entry, kit) {
   function applyFrame(face, frame, dt, neutralPose = false) {
     const t = frame.t ?? 0;
 
+    // ---------- rua 的淡出权重（整帧唯一来源）----------
+    // 他们松手发 clear 给 Live2D 宿主，宿主带过渡把参数淡回默认；我们直写参数，
+    // 不写就下一帧回基准 —— 前倾/歪头/眼珠/笑眼全都会「啪」一下跳回去。
+    // ruaW：摸的时候 1，松手后 0.35 秒时间常数淡到 0；所有 rua 写入都乘它。
+    if (frame.rua?.on) {
+      ruaW = 1;
+      ruaUxHold = frame.rua.ux ?? 0;
+      ruaUyHold = frame.rua.uy ?? 0;
+      ruaMeltHold = frame.rua.melt ?? 0;
+      ruaSecHold = frame.rua.seconds ?? 0;
+    } else if (ruaW > 0.002) {
+      ruaW += (0 - ruaW) * (1 - Math.exp(-dt / 0.35));
+    } else ruaW = 0;
+
     // 1) 全部 role 回到默认（写默认 == 模型默认姿势，所以是幂等的）
     for (const [name, role] of roles) writeRole(name, role.def);
 
@@ -2005,6 +2038,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
     //   左右**同向** → AngleX 正 = 朝右，手在右 ux>0 → +ux
     //   上下**反向** → AngleY 正 = 低头，手在上 uy>0 → +uy（头往下）
     // （上一版两个都取了负号，所以左右反了、上下也反了）
+    // 2026-11-22 用户：他们手离开头盒子，头会「黏着」回弹；我们完全没有弹性。
+    // 关键不是让目标慢慢降（那样弹簧只是追踪，永远不过冲），而是**目标当帧归 0**
+    // 交给欠阻尼弹簧（150/14，见 ruaKc）自己弹回去 —— 惯性 + 过冲就是那个「黏着」。
     const ruaRX = ruaOn ? _rux * 22 : 0;
     const ruaRY = ruaOn ? _ruy * 14 : 0;
     const ruaSide = frame.rua?.side ?? 0;
@@ -2020,15 +2056,17 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 写在这里而不是 engine 分支里：这只模型没接表演层（engine 恒 null），
     // 放 engine 分支的话整块不会执行（第一版就是这么没生效的）。
     // engine 存在时下面还会再写一次，压过 engine 的心情值。
-    if (ruaOn) {
-      const m = ruaMelt, sec = ruaSecs;
-      writeRole('eyeSmile', 1);
-      writeRole('mouthForm', 1);
+    // 松手后**继续写 ruaW 秒**（0.35 秒淡出）：这样前倾是「慢慢直回来」而不是「啪」地弹回。
+    // 之前条件写的是 ruaOn，一松手整块跳过 -> 前倾当帧归零（用户：一松手直接跳回去）。
+    if (ruaW > 0.002) {
+      const sec = ruaOn ? ruaSecs : ruaSecHold;
+      writeRole('eyeSmile', ruaW);
+      writeRole('mouthForm', ruaW);
       // 眼睛不在这里写：eyeBlink（stepMotion）在这之后每帧把 ParamEyeL/ROpen 写成 1，
       // 写在这里会被它吃掉（用户：rua 时两个眼睛瞪得老大）。改在 Lids 段（blink 之后）绝对值写。
-      if (m > 0.001) writeRole('lean', -17 * m);
-      if (sec >= 8) { writeRole('browY', 0.5); writeRole('browAngle', 0.3); }
-      else if (sec >= 3) writeRole('browY', 0.2);
+      if (ruaMeltHold > 0.001) writeRole('lean', -17 * ruaMeltHold * ruaW);
+      if (sec >= 8) { writeRole('browY', 0.5 * ruaW); writeRole('browAngle', 0.3 * ruaW); }
+      else if (sec >= 3) { writeRole('browY', 0.2 * ruaW); }
     }
     // ---------- 摸后情绪（他们 PlayAfterStroke 的四个 mood，参数原样）----------
     // 我们之前走 applyOneWord('eye-squeeze') —— 那些词在形象包里根本不存在，等于什么都没发生
@@ -2075,8 +2113,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
       // 他们 StepStroke:327-329 三条原样：
       //   FaceAngleX = ux*22 · FaceAngleY = uy*14（我们取负，见上）
       //   FaceAngleZ = ux*7 - fx*5 + tilt，tilt = 6sin(π·melt) + 3·melt（合眼时轻轻歪）
-      const _ruaTilt = ruaOn
-        ? clamp(_rux * 7 - (frame.rua?.fx ?? 0) * 5 + 6 * Math.sin(Math.PI * ruaMelt) + 3 * ruaMelt, -30, 30)
+      const _ruaTilt = ruaW > 0.002
+        ? clamp((ruaUxHold * 7 - (frame.rua?.fx ?? 0) * 5
+          + 6 * Math.sin(Math.PI * ruaMeltHold) + 3 * ruaMeltHold) * ruaW, -30, 30)
         : 0;
       const angleXVal = clamp((lookHead[0] ?? 0) / 5 * 22 * _lookW + driftX + ruaRX, -30, 30);
       const angleYVal = clamp(ay * 30 + (lookHead[1] ?? 0) / 4 * 16 * _lookW + driftY + ruaRY, -30, 30);
@@ -2129,8 +2168,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
     } else {
       // 2026-11-21 同上：眼珠归一化（度数 ÷5/÷4），否则 ±5 直接饱和看不出走神
       // 2026-11-22 rua：眼睛看着手（他们 ParamEyeBallX = -ux*.9 / Y = -uy*.9）
-      writeRole('eyeBallX', ruaOn ? clamp(-_rux * .9, -1, 1) : clamp((lookEye[0] ?? 0) / 5 * 0.6 + sac.x * 0.6, -1, 1));
-      writeRole('eyeBallY', ruaOn ? clamp(-_ruy * .9, -1, 1) : clamp((lookEye[1] ?? 0) / 4 * 0.7 + sac.y * 0.7, -1, 1));   // 2026-11-21 去掉负号（原来上下和鼠标反）
+      writeRole('eyeBallX', ruaW > 0.002 ? clamp(-ruaUxHold * .9 * ruaW, -1, 1) : clamp((lookEye[0] ?? 0) / 5 * 0.6 + sac.x * 0.6, -1, 1));
+      writeRole('eyeBallY', ruaW > 0.002 ? clamp(-ruaUyHold * .9 * ruaW, -1, 1) : clamp((lookEye[1] ?? 0) / 4 * 0.7 + sac.y * 0.7, -1, 1));   // 2026-11-21 去掉负号（原来上下和鼠标反）
       // 2026-11-21 度数域（role space 已改 [-30,30]）
       // 2026-11-22 rua 补齐（engine 分支里有、这条 else 里一直没有 —— 这只模型走的就是这里）：
       //   look 归零（头完全由手决定）、Z 加 ux*7-fx*5+tilt、弹簧 k/c 按档位切
@@ -2696,14 +2735,11 @@ export async function createLive2DBody(base, opts, entry, kit) {
         // 写早一步就被吃掉 —— 用户看到的「rua 时两个眼睛瞪得老大」就是这个。
         const _rv = frame.rua;
         const _ruaOn = !!_rv?.on;
-        // 松手是**淡出**，不是清零 —— 他们的 clear 是宿主带过渡做的，我们只能自己补。
-        if (_ruaOn) { ruaW = 1; ruaSecHold = _rv?.seconds ?? 0; }
-        else if (ruaW > 0.002) ruaW += (0 - ruaW) * (1 - Math.exp(-dt / 0.35));
-        else ruaW = 0;
+        // ruaW 在 applyFrame 开头统一推进（整帧唯一来源），这里只读。
         // 档位用「松手前最后一次」的秒数：frame.rua 没了之后 seconds 会变 0，
         // 8 秒档的眉心会突然掉掉（用户：松手后什么都没了）。
         const _secR = _ruaOn ? (_rv?.seconds ?? 0) : ruaSecHold;
-        const _ruaOpenLive = ruaStartleK > .25 ? 1 : .45 * (1 - (_rv?.melt ?? 0));
+        const _ruaOpenLive = ruaStartleK > .25 ? 1 : .45 * (1 - ruaMeltHold);
         const _ruaOpen = ruaW > 0.002 ? _ruaOpenLive : null;
         const _blinkBase = _blinkRan ? lastOpenNoBase : 1;
         // 淡出时在「正常开度」和「rua 开度」之间按 ruaW 插值
@@ -2786,11 +2822,13 @@ export async function createLive2DBody(base, opts, entry, kit) {
         else {
           const t = A.t;
           const sp = (id, v) => { const _i = paramIndex.get(id); if (_i !== undefined) model._model.setParameterValueByIndex(_i, v); };
-          for (const [k, v] of Object.entries(D.sets)) sp(k, v);   // 参数名和他们一致（BrowInnerUp / ParamMouthForm / ParamEyeBallY…）
+          // 他们的名字 → 我们的名字。不过这张表的话 FaceAngleY/Z（低头、歪头）和
+          // ParamMouthPressLipOpen（抿嘴）会被 paramIndex 判成不存在、静默丢掉。
+          for (const [k, v] of Object.entries(D.sets)) sp(resolveId(k), v);
           // 诊断（临时）：mood 开始时打一行「我到底写了什么」，用来核对表情有没有真的进模型
           if (A.t < dt * 1.5) {
             const gv = (id) => { const i = paramIndex.get(id); return i === undefined ? null : +model._model.getParameterValueByIndex(i).toFixed(3); };
-            audit('mood-start ' + A.mood + ' sets=' + JSON.stringify(D.sets) + ' → EyeSmile=' + gv('EyeSmile') + ' MouthForm=' + gv('ParamMouthForm') + ' eL=' + gv('ParamEyeLOpen'));
+            audit('mood-start ' + A.mood + ' exps=' + JSON.stringify(D.exps ?? []) + ' → EyeSmile=' + gv('EyeSmile') + ' MouthForm=' + gv('ParamMouthForm') + ' eL=' + gv('ParamEyeLOpen') + ' AngleY=' + gv('AngleY') + ' AngleZ=' + gv('AngleZ') + ' Brow=' + gv('BrowInnerUp') + ' Lip=' + gv('MouthPressLipOpen') + ' BallY=' + gv('ParamEyeBallY'));
           }
           let eyeAdd = 0;
           for (const [k, fps] of Object.entries(D.keys)) {
@@ -2800,7 +2838,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
             // 当"虚拟参数"接给 kit 了（squash()/groupTilt()/groupMove() → kit 的挤压弹簧、
             // 整组旋转、整组平移）。叹气的压扁走的就是这条，所以摸后的压扁直接写虚拟表。
             if (VIRTUAL_KEYS.has(k)) { virtualParams.set(k, { v: (D.sets[k] ?? 0) + v, t: clockT }); continue; }
-            const arg = MOOD_ARGS[k];
+            const arg = resolveId(k);
             // **keys 是叠加在 sets 上的增量**，不是绝对值 —— 他们 Behavior.cs 的注释：
             // 「前倾：松手时按住 -17，表情里用动画加 0→+1 慢慢回到 -16」。
             // 所以 FaceAngleZ 的 0:3 / 1.6:-3 是「在 9 度上再晃 ±3」，LeanInput 的 .8:1 是「-17+1」。
