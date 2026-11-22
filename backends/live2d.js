@@ -2771,11 +2771,21 @@ export async function createLive2DBody(base, opts, entry, kit) {
           // 表情也要在这层再写：applyChannel 在 applyFrame 之后，会把 role 的笑眼/嘴形盖掉
           // （用户：rua 到后面就没表情了）。他们 Face() 每帧 set，同样压过心情。
           // 全部乘 ruaW —— 松手后 0.35 秒淡回 0，而不是「啪」一下没了。
-          const _sp = (id, v) => { const _i = paramIndex.get(id); if (_i !== undefined) model._model.setParameterValueByIndex(_i, v); };
+          // 自动过别名表：他们的名字（FaceAngleY / ParamMouthPressLipOpen…）在这里统一换成我们的。
+          // 2026-11-22：8 秒档的「微张嘴」写的就是 ParamMouthPressLipOpen，模型里没有 → 一次都没生效。
+          const _sp = (id, v) => { const _i = paramIndex.get(resolveId(id)); if (_i !== undefined) model._model.setParameterValueByIndex(_i, v); };
           _sp('EyeSmile', ruaW);
           _sp('ParamMouthForm', ruaW);
           // 8 秒档：眉心上抬 + 微张嘴（他们 BrowInnerUp .5 / MouthPressLipOpen .4）
-          if (_secR >= 8) { _sp('BrowInnerUp', .5 * ruaW); _sp('ParamMouthPressLipOpen', .4 * ruaW); }
+          if (_secR >= 8) {
+            _sp('BrowInnerUp', .5 * ruaW);
+            _sp('ParamMouthPressLipOpen', .4 * ruaW);
+            if (Date.now() - (globalThis.__tier8 ?? 0) > 1500) {
+              globalThis.__tier8 = Date.now();
+              const gi = (id) => { const i = paramIndex.get(resolveId(id)); return i === undefined ? 'n/a' : +model._model.getParameterValueByIndex(i).toFixed(3); };
+              audit('rua-tier8 sec=' + _secR.toFixed(1) + ' Brow=' + gi('BrowInnerUp') + ' Lip=' + gi('ParamMouthPressLipOpen') + ' smile=' + gi('EyeSmile'));
+            }
+          }
           else if (_secR >= 3) { _sp('BrowInnerUp', .2 * ruaW); }
         }
         // 脸红（key7）单独一段：**只能写在这里**（saveParameters 之后）。写进 applyFrame 会被
@@ -2821,7 +2831,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
         }
         else {
           const t = A.t;
-          const sp = (id, v) => { const _i = paramIndex.get(id); if (_i !== undefined) model._model.setParameterValueByIndex(_i, v); };
+          const sp = (id, v) => { const _i = paramIndex.get(resolveId(id)); if (_i !== undefined) model._model.setParameterValueByIndex(_i, v); };
           // 他们的名字 → 我们的名字。不过这张表的话 FaceAngleY/Z（低头、歪头）和
           // ParamMouthPressLipOpen（抿嘴）会被 paramIndex 判成不存在、静默丢掉。
           for (const [k, v] of Object.entries(D.sets)) sp(resolveId(k), v);
