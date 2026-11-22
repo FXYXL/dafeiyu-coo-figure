@@ -2254,9 +2254,6 @@ export async function createLive2DBody(base, opts, entry, kit) {
   };
 
   const figure = {
-    // 气泡锚点：kit 默认 [128, 0]（logo 中心）——她侧身时视觉上的头顶偏左一点，
-    // 用 profile.bubbleAnchor 微调（logo 单位，随窗口缩放）。
-    get anchors() { return profile.bubbleAnchor ? { bubble: profile.bubbleAnchor } : undefined; },
     // 彩蛋台词：交给页面临时显示一句话（页面侧不排队、不发给 World）。
     // 她正在说话/有问答挂着时页面自己忽略，所以不会和对话抢气泡。
     emitBubble(text, seconds) {

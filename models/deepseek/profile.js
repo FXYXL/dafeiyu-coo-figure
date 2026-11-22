@@ -310,10 +310,6 @@ export default {
     'alert-combo': ['face-front', 'stand-straight', 'brow-knit', 'look-left'],                       // 警觉 = 正视 站直 皱眉 看左边
   },
 
-  // 气泡锚点（logo 单位，128 = 画面中心）：她侧身站立时视觉上的头顶比身体中线偏左，
-  // 台词气泡按这个点对中。觉得偏右就调小、偏左调大（1 单位 ≈ 2px）。
-  bubbleAnchor: [116, 0],
-
   // ---------- 彩蛋小剧场（照他们的 skits.txt 抄，数据源 tools/data/skits.txt）----------
   // 每行 = 一句台词 + 一组动作（他们的「台词|动作 动作|停留秒数」）。
   //   at  = 这句开始的时间（前面各句停留秒数的累加）
