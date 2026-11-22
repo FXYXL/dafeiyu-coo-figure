@@ -2744,6 +2744,11 @@ export async function createLive2DBody(base, opts, entry, kit) {
           const t = A.t;
           const sp = (id, v) => { const _i = paramIndex.get(id); if (_i !== undefined) model._model.setParameterValueByIndex(_i, v); };
           for (const [k, v] of Object.entries(D.sets)) sp(k, v);   // 参数名和他们一致（BrowInnerUp / ParamMouthForm / ParamEyeBallY…）
+          // 诊断（临时）：mood 开始时打一行「我到底写了什么」，用来核对表情有没有真的进模型
+          if (A.t < dt * 1.5) {
+            const gv = (id) => { const i = paramIndex.get(id); return i === undefined ? null : +model._model.getParameterValueByIndex(i).toFixed(3); };
+            audit('mood-start ' + A.mood + ' sets=' + JSON.stringify(D.sets) + ' → EyeSmile=' + gv('EyeSmile') + ' MouthForm=' + gv('ParamMouthForm') + ' eL=' + gv('ParamEyeLOpen'));
+          }
           let eyeAdd = 0;
           for (const [k, fps] of Object.entries(D.keys)) {
             const v = moodAt(fps, t);
