@@ -1965,9 +1965,12 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 2026-11-22：**去掉 ruaS 那层弹簧**。他们只有一个弹簧（Aim 设目标 → 全局 spring 150/14），
     // 我们之前是 ruaS(150/14) 再串 angleS(130/13)，等于弹两次：跟手慢半拍、松手回正拖沓。
     // 现在直接给目标角度，弹簧（k/c 按档位切）只在这一层。
-    // 方向：他们写 FaceAngleX（正 = 朝屏幕左），手在右 ux>0 → 脸朝左；我们 AngleX 正 = 朝右，取负。
-    const ruaRX = ruaOn ? -_rux * 22 : 0;
-    const ruaRY = ruaOn ? -_ruy * 14 : 0;
+    // 方向（2026-11-22 用户实测校正：手在右，头要朝右迎合；手在上，头要低下反着来）：
+    //   左右**同向** → AngleX 正 = 朝右，手在右 ux>0 → +ux
+    //   上下**反向** → AngleY 正 = 低头，手在上 uy>0 → +uy（头往下）
+    // （上一版两个都取了负号，所以左右反了、上下也反了）
+    const ruaRX = ruaOn ? _rux * 22 : 0;
+    const ruaRY = ruaOn ? _ruy * 14 : 0;
     const ruaSide = frame.rua?.side ?? 0;
     const ruaSecs = frame.rua?.seconds ?? 0;
     const ruaMelt = frame.rua?.melt ?? 0;
@@ -2719,7 +2722,10 @@ export async function createLive2DBody(base, opts, entry, kit) {
             const v = moodAt(fps, t);
             if (k === 'EyeOpen') { eyeAdd = v; continue; }         // 负数 = 额外闭合
             const arg = MOOD_ARGS[k];
-            if (arg) sp(arg, v);
+            // **keys 是叠加在 sets 上的增量**，不是绝对值 —— 他们 Behavior.cs 的注释：
+            // 「前倾：松手时按住 -17，表情里用动画加 0→+1 慢慢回到 -16」。
+            // 所以 FaceAngleZ 的 0:3 / 1.6:-3 是「在 9 度上再晃 ±3」，LeanInput 的 .8:1 是「-17+1」。
+            if (arg) sp(arg, (D.sets[k] ?? 0) + v);
           }
           if (eyeAdd) {   // melt 的快眨两下
             const o = clamp(1 + eyeAdd, 0, 1);
