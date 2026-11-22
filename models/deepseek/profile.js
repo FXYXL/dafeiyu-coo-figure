@@ -76,7 +76,7 @@ export default {
     { word: 'tilt-look', kind: 'face', w: 3 },            // 歪头瞧（一次性，替代原 tilt 挂脸）
     { word: 'dazed', kind: 'face', w: 3, life: 6 },
     { word: 'happy', kind: 'face', w: 2, life: 5 },       // kit 六张脸收编
-    { word: 'wink', kind: 'face', w: 2 },                 // kit 原生脸（词表没有 wink 词，走 kit setExpr）
+    { word: 'wink-slow', kind: 'face', w: 2 },   // 2026-11-22：原来是 'wink'，形象包和 kit 都没有这个词 → 抽到等于空转                 // kit 原生脸（词表没有 wink 词，走 kit setExpr）
     { word: 'heart-eyes', kind: 'face', w: 2, life: 5 },  // love → 有爱心粒子 + love 音效
     { word: 'eye-half', kind: 'face', w: 2, life: 5 },    // sleepy → yawn 音效
     { word: 'surprised', kind: 'face', w: 2 },            // surprised 音效
