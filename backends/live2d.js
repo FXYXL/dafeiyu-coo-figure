@@ -1255,20 +1255,25 @@ export async function createLive2DBody(base, opts, entry, kit) {
   }
   /** rua 松手：按峰值时长给一个「摸后」反应（他们 PlayAfterStroke 的档位，台词交给她自己说）。 */
   function stepRuaState(frame) {
-    const on = !!frame.rua?.on;
+    // 判据用「rua 对象还在」而不是 rua.on —— on 是弹簧开关，手暂时离开头区就会 false，
+    // 会被误判成松手（测试里 12 秒的 rua 触发了两次 rua-after）
+    const on = !!frame.rua;
     if (on) { ruaPeak = Math.max(ruaPeak, frame.rua?.seconds ?? 0); ruaPrevOn = true; return; }
     if (!ruaPrevOn) return;
     ruaPrevOn = false;
     const peak = ruaPeak;
     ruaPeak = 0;
     if (peak < 3) return;                      // 按下去没怎么动：不算摸过（他们 touched 同款门槛）
-    pendingMod = { scale: 1, pace: 1, repeat: 1, explicit: true };
-    dirSide = 1;
-    applyOneWord('blush', true, {}, {});       // 脸红一路带到摸后（他们 Face(空 + 脸红)）
-    if (peak >= 8) {
-      pendingMod = { scale: 1, pace: 1, repeat: 1, explicit: true };
-      applyOneWord('eye-squeeze', true, {}, {});   // 8 秒以上：腻歪，眯眼笑
+    // 松手按档位给反应（他们 PlayAfterStroke：失落 / 不舍 / 腻歪 / 融化）
+    const after = peak >= 20 ? ['eye-squeeze', 'blush', 'tilt', 'lean-forward']
+      : peak >= 8 ? ['eye-squeeze', 'blush', 'tilt']
+        : ['blush'];
+    for (const w of after) {
+      pendingMod = { scale: 1, pace: w === 'lean-forward' ? 0.6 : 1, repeat: 1, explicit: true };
+      dirSide = 1;
+      applyOneWord(w, true, {}, {});
     }
+    audit('rua-after peak=' + peak.toFixed(1) + ' → ' + after.join(','));
   }
 
   /** 假口型：只在这句台词的时间里动嘴（两句之间的停顿闭嘴）。两条正弦交叉，像在念但没声音。 */
@@ -1899,7 +1904,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
     const _rux = frame.rua?.ux ?? 0, _ruy = frame.rua?.uy ?? 0;
     [ruaS.ax, ruaS.axv] = ruaSpring(ruaS.ax, ruaS.axv, ruaOn ? _rux : 0, 150, 14, dt);
     [ruaS.ay, ruaS.ayv] = ruaSpring(ruaS.ay, ruaS.ayv, ruaOn ? -_ruy : 0, 150, 14, dt);
-    const ruaRX = ruaS.ax * 22;   // ±22 度（他们的 FaceAngleX = lookX*22），度数域直接写
+    // 2026-11-22 反向：他们写的是 FaceAngleX（正 = 朝屏幕左），ux>0（手在右）→ 脸朝左。
+    // 我们直接写 AngleX（正 = 朝右），所以这里取负 —— 手在右，头偏向左（用户：白手和头要反向）。
+    const ruaRX = -ruaS.ax * 22;   // ±22 度
     const ruaRY = ruaS.ay * 14;   // ±14 度（PetWindow.Touch.cs FaceAngleY = uy*14，原来是 16）
     const ruaSide = frame.rua?.side ?? 0;
     const ruaSecs = frame.rua?.seconds ?? 0;
@@ -1922,6 +1929,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
       if (m > 0.001) writeRole('lean', -17 * m);
       if (sec >= 8) { writeRole('browY', 0.5); writeRole('browAngle', 0.3); }
       else if (sec >= 3) writeRole('browY', 0.2);
+      // 脸红要「一直在」：blush 词只挂 3 秒，摸久了就掉了（用户：rua 到后面没脸红了）。
+      // 这里每帧把脸红贴图直接顶到 1 —— key7 是 blush 写的那个参数。
+      if (sec >= 3) { const _ki = paramIndex.get('key7'); if (_ki !== undefined) model._model.setParameterValueByIndex(_ki, 1); }
     }
     const tilt = neutralPose ? 0 : (frame.tilt ?? 0);
     const lean = neutralPose ? 0 : (frame.lean ?? 0);
