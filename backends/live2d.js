@@ -994,6 +994,39 @@ export async function createLive2DBody(base, opts, entry, kit) {
     return clamp(1 + up * 0.5 - down * 0.4, 0.6, 1.4);
   }
 
+  /** 撤掉所有通道（动作 + 表情层），回到干净的脸和姿势。
+   *  2026-11-22：从 baseWord 的「恢复」分支抽出来 —— 剧本 step 里也能写「恢复」了。 */
+  function relaxChannels() {
+    // 2026-11-21：有 exit 的手势（竖手指/狗尾草/抚胸）不秒切——把通道条目换成播 exit.keys（1.25 秒收手），
+    // 播完自己走。没 exit 的照旧写 0 清掉。
+    const toDelete = [];
+    for (const [id, c] of [...channel]) {
+      const def = c.src ? paramActs[c.src] : null;
+      const frames = def?.exit?.keys?.filter((k) => k.id === id).map((k) => [k.t ?? 0, k.v ?? 0]);
+      if (frames?.length) {
+        // 转成一条轨道播收手动画（轨道是相加语义，留在 channel 里会被当成 hold 写，必须挪过去）
+        channel.delete(id);
+        tracks.push({ id, kind: 'keys', frames, t0: clockT, dur: def.exit.dur ?? 1.25, post: false, src: c.src, bornS: sentenceCount, bornT: clockT });
+        continue;
+      }
+      if (c.kind !== 'static' && c.to === undefined) { toDelete.push(id); continue; }
+      if (c.to !== 0) { const i = paramIndex.get(id); if (i !== undefined) model._model.setParameterValueByIndex(i, 0); }
+      toDelete.push(id);
+    }
+    for (const id of toDelete) dropParam(id);
+    // 动作轨道：有 exit 的就地换成收手关键帧，没 exit 的直接撤
+    for (let n = tracks.length - 1; n >= 0; n--) {
+      const c = tracks[n];
+      const def = c.src ? paramActs[c.src] : null;
+      const frames = def?.exit?.keys?.filter((k) => k.id === c.id).map((k) => [k.t ?? 0, k.v ?? 0]);
+      if (frames?.length) {
+        c.kind = 'keys'; c.frames = frames; c.t0 = clockT; c.dur = def.exit.dur ?? 1.25; c.eyeLid = isLidParam(c.id);
+      } else {
+        tracks.splice(n, 1);
+      }
+    }
+  }
+
   /**
    * kit 在 doWord 最前面调这个：返回基础 id 就继续走 act()，返回 null 表示没我什么事。
    * 认三种写法：`nod`、`点头`、`微点头×2`、`快摇头`。
@@ -1009,37 +1042,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 「恢复」/ neutral：撤掉所有通道（动作 + 表情层），回到干净的脸和姿势。
     // 关键：Live2D 参数保持最后写入值——只删条目不够（CheeckPuff/Movement 等残留 1），
     // 必须把被清条目的静态参数显式写回 0（角色参数如 eyeOpen 有 roles 每帧重写，不用管）。
-    if (s === '恢复' || s === 'restore' || s === 'neutral') {
-      // 2026-11-21：有 exit 的手势（竖手指/狗尾草/抚胸）不秒切——把通道条目换成播 exit.keys（1.25 秒收手），
-      // 播完自己走。没 exit 的照旧写 0 清掉。
-      const toDelete = [];
-      for (const [id, c] of [...channel]) {
-        const def = c.src ? paramActs[c.src] : null;
-        const frames = def?.exit?.keys?.filter((k) => k.id === id).map((k) => [k.t ?? 0, k.v ?? 0]);
-        if (frames?.length) {
-          // 转成一条轨道播收手动画（轨道是相加语义，留在 channel 里会被当成 hold 写，必须挪过去）
-          channel.delete(id);
-          tracks.push({ id, kind: 'keys', frames, t0: clockT, dur: def.exit.dur ?? 1.25, post: false, src: c.src, bornS: sentenceCount, bornT: clockT });
-          continue;
-        }
-        if (c.kind !== 'static' && c.to === undefined) { toDelete.push(id); continue; }
-        if (c.to !== 0) { const i = paramIndex.get(id); if (i !== undefined) model._model.setParameterValueByIndex(i, 0); }
-        toDelete.push(id);
-      }
-      for (const id of toDelete) dropParam(id);
-      // 动作轨道：有 exit 的就地换成收手关键帧，没 exit 的直接撤
-      for (let n = tracks.length - 1; n >= 0; n--) {
-        const c = tracks[n];
-        const def = c.src ? paramActs[c.src] : null;
-        const frames = def?.exit?.keys?.filter((k) => k.id === c.id).map((k) => [k.t ?? 0, k.v ?? 0]);
-        if (frames?.length) {
-          c.kind = 'keys'; c.frames = frames; c.t0 = clockT; c.dur = def.exit.dur ?? 1.25; c.eyeLid = isLidParam(c.id);
-        } else {
-          tracks.splice(n, 1);
-        }
-      }
-      return null;
-    }
+    if (s === '恢复' || s === 'restore' || s === 'neutral') { relaxChannels(); return null; }
     let scale = 1, pace = 1, repeat = 1, touched = false;
     // 前缀修饰，最多两层（「微快点头」这种也认）
     for (let n = 0; n < 2; n++) {
@@ -1065,6 +1068,10 @@ export async function createLive2DBody(base, opts, entry, kit) {
     return id;
   }
 
+  /** 眼睑参数（左右眼开度）：通道里当乘数、轨道里当增量。
+   *  2026-11-22：原来只定义在 actWord 内部，baseWord 的「恢复」分支引用它会 ReferenceError
+   *  （有 exit 的轨道碰上「恢复」就炸），提到闭包顶层。 */
+  const isLidParam = (id) => id === 'ParamEyeLOpen' || id === 'ParamEyeROpen';
   /** paramId -> { from, to, t0, dur, in, out }：每个通道自己管生命周期，到期自动退出 */
   const channel = new Map();
   /** 轨道（2026-11-21 照搬 main.cpp:563-593 的 tracks）：动作型条目（keys / 波形），
@@ -1152,15 +1159,15 @@ export async function createLive2DBody(base, opts, entry, kit) {
   const skits = profile.skits ?? [];
   let skit = null;   // { def, t, done:Set }
   let lastSkitId = null;   // 别连着抽到同一个
+  /** 当前这句台词说到 skit.t 的哪个时刻（超过就闭嘴）。他们每句台词自带停留秒数。 */
+  let skitSayUntil = 0;
   function startSkit() {
     if (!skits.length) return false;
     const pool = skits.length > 1 ? skits.filter((s) => s.id !== lastSkitId) : skits;
     const def = pool[Math.floor(Math.random() * pool.length)];
     lastSkitId = def.id;
     skit = { def, t: 0, done: new Set() };
-    // 台词（可选）：say 是字符串就在头顶显示一句。走 custom.emitEvent → 页面临时气泡，
-    // 不进 World 的 say 队列、不进聊天记录 —— AI 不知道这句、也不会读回上下文。
-    if (typeof def.say === 'string') figure.emitBubble(def.say, def.saySec ?? 3.6);
+    skitSayUntil = 0;
     audit('skit-start ' + def.id);
     return true;
   }
@@ -1177,16 +1184,41 @@ export async function createLive2DBody(base, opts, entry, kit) {
       const s = skit.def.steps[n];
       if (skit.t < (s.at ?? 0) || skit.done.has(n)) continue;
       skit.done.add(n);
-      const part = typeof s.w === 'string' ? { w: s.w } : s.w;
-      pendingMod = { scale: part.scale ?? 1, pace: part.pace ?? 1, repeat: part.repeat ?? 1, explicit: true };
-      dirSide = part.side ?? 1;
-      applyOneWord(part.w, null, {}, { group: 'skit-' + skit.def.id, life: skit.def.life });
+      // 台词：他们一行是「台词|动作 动作 动作|秒数」，先发字再演动作（说着说着做）。
+      // 走 custom.emitEvent → 页面临时气泡，不进 World 的 say 队列、不进聊天记录 ——
+      // AI 不知道这句、也不会读回上下文。口型只在这句的时间里动（sec 的 78%，说完停一下）。
+      if (s.say) {
+        // 气泡停留按字数算（彩蛋气泡是一次性全显示的，不是打字机）：
+        // 4 个字给 2 秒、28 个字给 5 秒，短句不闪、长句读得完。
+        figure.emitBubble(s.say, clamp(1.4 + s.say.length * 0.13, 2, 5));
+        skitSayUntil = skit.t + (s.sec ?? 3.4) * 0.78;
+      } else {
+        skitSayUntil = skit.t;   // 这句没台词（「……」「（嚼嚼嚼）」之外的纯动作行）→ 闭嘴
+      }
+      // 动作组：一行可以好几个词（皱眉 看左边 抿嘴），各走各的通道
+      const list = Array.isArray(s.w) ? s.w : (s.w ? [s.w] : []);
+      for (const item of list) {
+        const part = typeof item === 'string' ? { w: item } : item;
+        if (part.w === 'restore') {
+          relaxChannels();   // 他们的「恢复」= 把姿势/表情清干净再演
+          // 但道具（@道具 单片眼镜…）是他们单独管的：恢复不清、演完才摘 → 重戴
+          for (const pr of skit.def.props ?? []) {
+            pendingMod = { scale: 1, pace: 1, repeat: 1, explicit: true };
+            dirSide = 1;
+            applyOneWord(pr, null, {}, { group: 'skit-' + skit.def.id, life: skit.def.life, skit: true });
+          }
+          continue;
+        }
+        pendingMod = { scale: part.scale ?? 1, pace: part.pace ?? 1, repeat: part.repeat ?? 1, explicit: true };
+        dirSide = part.side ?? 1;
+        applyOneWord(part.w, null, {}, { group: 'skit-' + skit.def.id, life: skit.def.life, skit: true });
+      }
     }
     if (skit.t > (skit.def.dur ?? 6)) stopSkit('done');
   }
-  /** 假口型：剧本 say:true 才动嘴。两条正弦交叉，听起来像在念但没声音。 */
+  /** 假口型：只在这句台词的时间里动嘴（两句之间的停顿闭嘴）。两条正弦交叉，像在念但没声音。 */
   function skitTalk() {
-    if (!skit?.def.say) return 0;
+    if (!skit || skit.t > skitSayUntil) return 0;
     const t = skit.t;
     return clamp(0.45 + 0.5 * Math.sin(t * 13.1) * Math.sin(t * 3.7 + 1.1), 0, 1);
   }
@@ -1266,7 +1298,6 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 2026-11-21 眼睛：照搬他们的 lid 乘数（main.cpp:559 `lid(id, 1 + (value-1)*weight)`）。
     // 关键：基准恒是 1（睁眼），不是参数默认值 —— 这个模型的 ParamEyeLOpen 默认值是 0（绑定姿势闭眼），
     // 用 defVal 当 from 会让每个眼睛词开帧就先闭死一刀（用户：「先闭眼再半睁」「先闭眼再眯眼笑」）。
-    const isLidParam = (id) => id === 'ParamEyeLOpen' || id === 'ParamEyeROpen';
     // 笑眼/下眼睑：不是乘数参数，但要和眼皮同一条指数曲线（他们 heldParameters 同款 0.15s），
     // 否则「眼皮闭下去 0.45s 指数、下眼睑线性爬上来」两条曲线不同步，肉的。
     const isSmileParam = (id) => id === 'EyeSmile';
@@ -1320,7 +1351,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       const to = (lid || smile)
         ? 1 + (((p.to ?? 1) - 1) * effScale)
         : f0 + ((p.to ?? 0) - f0) * effScale;
-      channel.set(p.id, { kind: 'hold', lid, smile, from: lid || smile ? 0 : f0, to: mir(p.id, to), t0: now, dur, in: inT, out: outT, keep: !!(def.state || def.keep), faceLinked: !!fromFace, emo, bornS: sentenceCount, bornT: clockT, src: w, group: ctx.group, life: life ?? undefined });
+      channel.set(p.id, { kind: 'hold', lid, smile, from: lid || smile ? 0 : f0, to: mir(p.id, to), t0: now, dur, in: inT, out: outT, keep: !!(def.state || def.keep), faceLinked: !!fromFace, emo, bornS: sentenceCount, bornT: clockT, src: w, group: ctx.group, skit: ctx.skit, life: life ?? undefined });
     }
     // 波形动作（点头、摇头、甩草…）：正弦摆动叠在通道上。
     // 不支持这一种的话，点头永远只能走旧路，也就永远不能和别的东西叠加。
@@ -1339,7 +1370,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       dur,
       in: inT,
       out: outT,
-      bornS: sentenceCount, bornT: clockT, src: w, group: ctx.group,   // 条目独立生日（共享寿命钟的替代——后词不再重置别人的钟）
+      bornS: sentenceCount, bornT: clockT, src: w, group: ctx.group, skit: ctx.skit,   // 条目独立生日（共享寿命钟的替代——后词不再重置别人的钟）
     });
     for (const wv of def.waves ?? []) setWave(wv, false);
     // postWaves 写的是物理的输出参数（腰/胯），只能在 physics.evaluate() 之后写，
@@ -1367,7 +1398,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
         for (let r = 0; r < mod.repeat; r++) {
           for (const [t, v] of frames) out.push([(r * span + t) * mod.pace, mir(id, v) * effScale]);
         }
-        tracks.push({ id, kind: 'keys', frames: out, t0: now, dur, emo, post, eyeLid: isLidParam(id), bornS: sentenceCount, bornT: clockT, src: w, group: ctx.group });
+        tracks.push({ id, kind: 'keys', frames: out, t0: now, dur, emo, post, eyeLid: isLidParam(id), bornS: sentenceCount, bornT: clockT, src: w, group: ctx.group, skit: ctx.skit });
       }
     }
     audit('write ' + w);
@@ -1434,7 +1465,11 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 闲置语境（随机动作触发的影子）照旧限时 3 秒
     // 3.8：条目可以带自己的寿命（idleMoods 的心情挂更久），没有就用默认 3 秒
     const idleLife = c.life ?? IDLE_LIFE;
-    const expired = c.faceLinked
+    // 彩蛋剧本（skit:true）：只按自己的 life 判死。否则长剧本（跳舞 27 秒）
+    // 会在台词/句子边界被「跟 2 句」「说完 2 秒」提前收掉，动作演一半就散了。
+    const expired = c.skit
+      ? bornAge > idleLife
+      : c.faceLinked
       ? speakingCtx
         ? sinceEnd > SPEECH_END_DELAY
         : bornAge > idleLife
