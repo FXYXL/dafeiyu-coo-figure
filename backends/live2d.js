@@ -626,23 +626,38 @@ export async function createLive2DBody(base, opts, entry, kit) {
   let ruaStartleK = 0, ruaAfter = null, ruaLastEnd = -9;
   /** 脸红强度 0→1 的缓动（他们「脸红」是表情层，有淡入；我们直接写 key7=1 是硬切，红得很突然） */
   let blushK = 0, lastBlushAt = -9;
+  /** rua 表情的淡出权重：摸时 1，松手后 0.35 秒时间常数淡到 0。
+   *  他们的 Face(NoSets,…) 是给 Live2D 宿主发 clear 命令、宿主带过渡淡回默认；
+   *  我们直写参数，不写就下一帧回基准 → 瞬间归零（用户：「非常生硬」）。 */
+  let ruaW = 0;
+  /** rua 期间最后一次的档位秒数：松手后 frame.rua 没了，档位不能跟着跌回 0。 */
+  let ruaSecHold = 0;
   let ruaWasOn = false;
-  /** 摸后的四个 mood（Behavior.cs:59-67 全搬）：sets = 固定表情；keys = 关键帧（秒:值）；
-   *  hand = 手抬到胸口（他们 HandToChest「默认手切举手」）。melt 的 LeanInput 从 -17 起接松手时的前倾。 */
+  /** 摸后的四个 mood（Behavior.cs:59-67 全搬）。
+   *  他们的 Mood 记录是 `record Mood(string[] Expressions, (string Id,double Value)[] Parameters,
+   *  double Seconds, (string Id,string Keys)[]? Motion, (string On,string Off)? Gesture, bool Pushed)`：
+   *    Expressions → 表情层（exp），四个摸后档位**全部带 ["脸红"]**
+   *    Parameters  → 固定表情（sets），整段按 set 按住
+   *    Motion      → 关键帧（keys），叠加在 sets 上
+   *    Gesture     → 手型切换（默认手切举手 = 抬手到胸口）
+   *  我们的模型没有 exp 层，「脸红」就是贴图参数 key7 → exps 里写逻辑名，运行时映射成 key7。 */
   const RUA_MOODS = {
     lost: {   // 摸后失落（按了 3 秒以内）
       dur: 3.4,
+      exps: ['脸红'],
       sets: { BrowInnerUp: .7, ParamMouthPressLipOpen: .3, ParamMouthForm: -.1, ParamEyeBallY: -.4, FaceAngleY: -5, FaceAngleZ: 4 },
       keys: { FaceAngleZ: [[0, 0], [.5, 3], [1.3, -2], [2.1, 3], [3.4, 0]] },
     },
     reluctant: {   // 摸后不舍（3~8 秒）
       dur: 4,
+      exps: ['脸红'],
       sets: { EyeSmile: .45, BrowInnerUp: .9, ParamMouthPressLipOpen: .5, ParamMouthForm: .2, ParamEyeBallY: -.45, FaceAngleY: -8, FaceAngleZ: 7 },
       keys: { LeanInput: [[0, 0], [.5, -9], [3.3, -8], [4, 0]], FaceAngleZ: [[0, 0], [.7, 3], [1.5, -3], [2.3, 3], [3.1, -2], [4, 0]] },
       hand: true,
     },
     clingy: {   // 摸后腻歪（8~20 秒）
       dur: 4.8,
+      exps: ['脸红'],
       sets: { EyeSmile: .6, ParamMouthForm: 1, ParamMouthPressLipOpen: .4, BrowInnerUp: .6, FaceAngleY: -6, FaceAngleZ: 9 },
       keys: {
         LeanInput: [[0, 0], [.5, -15], [3.9, -14], [4.8, 0]],
@@ -653,6 +668,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
     },
     melt: {   // 摸后融化（20 秒彩蛋）
       dur: 6,
+      exps: ['脸红'],
       sets: { EyeSmile: .55, ParamMouthForm: .9, ParamMouthPressLipOpen: .35, BrowInnerUp: .5, FaceAngleY: -4, FaceAngleZ: 4 },
       keys: {
         LeanInput: [[0, -17], [.8, -16], [4.8, -16], [6, 0]],
@@ -1338,7 +1354,10 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 低于 3 秒就是**摸后失落**那一档 —— 之前这里 return 掉了，所以前三秒松手什么都没演。
     if (peak < 0.4) { audit('rua-after peak=' + peak.toFixed(1) + ' (按下去没动，不反应)'); return; }
     const mood = peak >= 20 ? 'melt' : peak >= 8 ? 'clingy' : peak >= 3 ? 'reluctant' : 'lost';
-    ruaAfter = { mood, def: RUA_MOODS[mood], t: 0, melt: mood === 'melt', hand: false, handOff: false };
+    // 他们松手后**不是马上**动情：EndStroke 里 afterStrokeAt = UtcNow + 1.5s，
+    // 这 1.5 秒只有「头回正 + 脸红还在」，之后 PlayAfterStroke 才播 mood。
+    // 之前我们 t 从 0 开始，松手瞬间就演，观感和他们对不上（用户：一松手就清零/立刻变）。
+    ruaAfter = { mood, def: RUA_MOODS[mood], t: -1.5, melt: mood === 'melt', hand: false, handOff: false };
     audit('rua-after peak=' + peak.toFixed(1) + ' → ' + mood);
   }
 
@@ -2677,12 +2696,19 @@ export async function createLive2DBody(base, opts, entry, kit) {
         // 写早一步就被吃掉 —— 用户看到的「rua 时两个眼睛瞪得老大」就是这个。
         const _rv = frame.rua;
         const _ruaOn = !!_rv?.on;
-        // 2026-11-22：**不额外保持 EyeOpen** —— 他们的机制里松手后眼睛是回到正常开度，
-        // 「眯眼」的观感来自 mood 的 EyeSmile（笑眼参数），不是把开度锁在 .45。
-        // （我上一版擅自加了 ruaAfter 时锁 .45，属于自己发明机制，已撤回。）
-        const _ruaOpen = _ruaOn ? (ruaStartleK > .25 ? 1 : .45 * (1 - (_rv?.melt ?? 0))) : null;
-        const _baseL = _ruaOpen ?? (_blinkRan ? lastOpenNoBase : 1);
-        const _baseR = _ruaOpen ?? (_blinkRan ? lastOpenNoBase : 1);
+        // 松手是**淡出**，不是清零 —— 他们的 clear 是宿主带过渡做的，我们只能自己补。
+        if (_ruaOn) { ruaW = 1; ruaSecHold = _rv?.seconds ?? 0; }
+        else if (ruaW > 0.002) ruaW += (0 - ruaW) * (1 - Math.exp(-dt / 0.35));
+        else ruaW = 0;
+        // 档位用「松手前最后一次」的秒数：frame.rua 没了之后 seconds 会变 0，
+        // 8 秒档的眉心会突然掉掉（用户：松手后什么都没了）。
+        const _secR = _ruaOn ? (_rv?.seconds ?? 0) : ruaSecHold;
+        const _ruaOpenLive = ruaStartleK > .25 ? 1 : .45 * (1 - (_rv?.melt ?? 0));
+        const _ruaOpen = ruaW > 0.002 ? _ruaOpenLive : null;
+        const _blinkBase = _blinkRan ? lastOpenNoBase : 1;
+        // 淡出时在「正常开度」和「rua 开度」之间按 ruaW 插值
+        const _baseL = _ruaOpen !== null ? _blinkBase * (1 - ruaW) + _ruaOpen * ruaW : _blinkBase;
+        const _baseR = _baseL;
         const _mulL = _baseL * lidMul.L * Math.max(0, 1 + lidAdd.L);
         const _mulR = _baseR * lidMul.R * Math.max(0, 1 + lidAdd.R);
         if (_el !== undefined && _mulL !== 1) model._model.setParameterValueByIndex(_el, model._model.getParameterValueByIndex(_el) * _mulL);
@@ -2703,24 +2729,35 @@ export async function createLive2DBody(base, opts, entry, kit) {
         // 绝对值写（不是乘）：他们 Face() 是 set，blink 之后写才不会被打回去。
         // 摸到脸上 → 双眼 0（闭）；手在屏幕右 → 闭模型左眼（ParamEyeLOpen），
         // 另一只保持笑眼半眯 .45；两边都没到 → 双眼半眯。
-        if (_ruaOn && _ruaOpen !== null) {
-          if (_el !== undefined) model._model.setParameterValueByIndex(_el, _ruaOpen * (1 - ruaEyeS.L));
-          if (_er !== undefined) model._model.setParameterValueByIndex(_er, _ruaOpen * (1 - ruaEyeS.R));
+        if (_ruaOpen !== null) {
+          if (_el !== undefined) model._model.setParameterValueByIndex(_el, _baseL * (1 - ruaEyeS.L * ruaW));
+          if (_er !== undefined) model._model.setParameterValueByIndex(_er, _baseR * (1 - ruaEyeS.R * ruaW));
           // 表情也要在这层再写：applyChannel 在 applyFrame 之后，会把 role 的笑眼/嘴形盖掉
           // （用户：rua 到后面就没表情了）。他们 Face() 每帧 set，同样压过心情。
+          // 全部乘 ruaW —— 松手后 0.35 秒淡回 0，而不是「啪」一下没了。
           const _sp = (id, v) => { const _i = paramIndex.get(id); if (_i !== undefined) model._model.setParameterValueByIndex(_i, v); };
-          _sp('EyeSmile', 1);
-          _sp('ParamMouthForm', 1);
+          _sp('EyeSmile', ruaW);
+          _sp('ParamMouthForm', ruaW);
           // 8 秒档：眉心上抬 + 微张嘴（他们 BrowInnerUp .5 / MouthPressLipOpen .4）
-          if ((_rv?.seconds ?? 0) >= 8) { _sp('BrowInnerUp', .5); _sp('ParamMouthPressLipOpen', .4); }
-          else if ((_rv?.seconds ?? 0) >= 3) { _sp('BrowInnerUp', .2); }
-          // 脸红（key7）：**只能写在这里**（saveParameters 之后）。写进 applyFrame 会被存成基准，
-          // 之后每帧 loadParameters 都从「红」开始 —— 表现就是脸一直红、消退不了。
-          // 2026-11-22：做成渐入渐出（他们「脸红」是表情层，有 0.3~0.5 秒淡入；
-          // 我们之前直接写 1，红得「一大块」突然出现）。
-          const _wantBlush = (_ruaOn && (_rv?.seconds ?? 0) >= 3) || !!ruaAfter ? 1 : 0;
+          if (_secR >= 8) { _sp('BrowInnerUp', .5 * ruaW); _sp('ParamMouthPressLipOpen', .4 * ruaW); }
+          else if (_secR >= 3) { _sp('BrowInnerUp', .2 * ruaW); }
+        }
+        // 脸红（key7）单独一段：**只能写在这里**（saveParameters 之后）。写进 applyFrame 会被
+        // 存成基准，之后每帧 loadParameters 都从「红」开始 —— 表现就是脸一直红、消退不了。
+        // 它不受 ruaW 影响：他们 EndStroke 是 Face(NoSets, ["脸红"])，脸红一路带到摸后。
+        {
+          // 他们：摸到 3 秒 PlayAfterStroke 前是 Face(NoSets, ["脸红"])，mood 里 Expressions 又带 ["脸红"]
+          // → 脸红从 3 秒起一直挂到**摸后动作演完**才退，不是松手就退。
+          const _wantBlush = (_ruaOn && _secR >= 3) || !!ruaAfter ? 1 : 0;
           blushK += (_wantBlush - blushK) * (1 - Math.exp(-dt / (_wantBlush ? 0.5 : 1.2)));
-          if (blushK > 0.003) _sp('key7', blushK);
+          if (Date.now() - (globalThis.__blushDbg ?? 0) > 400) {
+            globalThis.__blushDbg = Date.now();
+            audit('blush want=' + _wantBlush + ' k=' + blushK.toFixed(3) + ' rua=' + _ruaOn + ' sec=' + _secR.toFixed(1) + ' after=' + (ruaAfter?.mood ?? '-'));
+          }
+          if (blushK > 0.003) {
+            const _k7 = paramIndex.get('key7');
+            if (_k7 !== undefined) model._model.setParameterValueByIndex(_k7, blushK);
+          }
         }
         globalThis.__lidMul = [+lidMul.L.toFixed(3), +lidMul.R.toFixed(3)];
         // 打点：眼睛链路（乘数 / 最终开度 / role 算出来的 open）
@@ -2739,7 +2776,12 @@ export async function createLive2DBody(base, opts, entry, kit) {
         A.t += dt;
         if (A.t >= D.dur) {
           ruaAfter = null;
+          ruaSecHold = 0;
           for (const k of VIRTUAL_KEYS) virtualParams.delete(k);   // 压扁/滚转别残留
+        }
+        else if (A.t < 0) {
+          // 松手后的 1.5 秒空档期：他们这期间是 Face(NoSets, ["脸红"]) + AimAllZero，
+          // 也就是「手走了、头回正、脸红还在」，mood 还没开始。这里什么都不写。
         }
         else {
           const t = A.t;
