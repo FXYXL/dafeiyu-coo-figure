@@ -2505,10 +2505,16 @@ export async function createLive2DBody(base, opts, entry, kit) {
     touchZones() {
       const [x0, y0, x1, y1] = currentExtent();
       const w = x1 - x0, h = y1 - y0;
-      const cx = x0 + w * .5;
+      // 头心**不能**用包围盒中心：这个模型右侧有尾巴和头发，包围盒被撑宽，
+      // 中心会明显偏右（日志里 hx=2276，视觉头心在更左边）。
+      // 白手的透视用 (手 - 头心) 归一化，头心偏一点，手在眼睛位置就已经 r≈0.6 → 直接压扁。
+      // 所以中心的 x 沿用手写数据（128 = 画面中线），只有半径按包围盒比例随缩放走。
+      const _legacyHead = (profile.touchZones ?? []).find((z) => z.id === 'head');
+      const cx = _legacyHead?.x ?? (x0 + x1) / 2;
+      const cy = _legacyHead?.y ?? (y0 + h * .31);
       const heads = [
-        { id: 'head', x: cx, y: y0 + h * .31, rx: w * .26, ry: h * .22 },
-        { id: 'face', x: cx, y: y0 + h * .305, rx: w * .17, ry: h * .10 },
+        { id: 'head', x: cx, y: cy, rx: w * .26, ry: h * .22 },
+        { id: 'face', x: cx, y: cy, rx: w * .17, ry: h * .10 },
       ];
       // 下面几个沿用手写数据并夹进包围盒（胸部/裙子/腿/尾巴），只为「右键点在别处不触发」。
       const rest = (profile.touchZones ?? []).filter((z) => z.id !== 'head' && z.id !== 'face');
