@@ -476,7 +476,9 @@ const PATCHES = [
         "      case 'crash': text = m.crashed; break;",
         "      case 'crash': { const now = Date.now(); try { new Image().src = '/api/figure-log?m=' + encodeURIComponent('crash-src kind=crash t=' + JSON.stringify(t).slice(0, 80)); } catch {} if (this.__lastCrashText && now - this.__lastCrashText < 8000) return; this.__lastCrashText = now; text = m.crashed; break; }   // 4.2 去重 + 源头打点",
       );
-      if (!out.includes('__lastCrashText')) throw new Error('crashDedup：锚点未命中');
+      // ruaCrashGuard 已经把 case 'crash' 改成直接 return（这条文案彻底不存在），
+      // 这里找不到锚点是正常的，安静跳过。
+      if (!out.includes('__lastCrashText')) return out;
       return out;
     },
   },

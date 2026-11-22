@@ -2677,9 +2677,10 @@ export async function createLive2DBody(base, opts, entry, kit) {
         // 写早一步就被吃掉 —— 用户看到的「rua 时两个眼睛瞪得老大」就是这个。
         const _rv = frame.rua;
         const _ruaOn = !!_rv?.on;
-        // 摸后 mood 期间**保持半眯**（用户：松手后脸红和眯眯眼不能直接清零）。
-        // melt 那档的快眨两下由 mood 播放器在后面覆盖。
-        const _ruaOpen = _ruaOn ? (ruaStartleK > .25 ? 1 : .45 * (1 - (_rv?.melt ?? 0))) : (ruaAfter ? .45 : null);
+        // 2026-11-22：**不额外保持 EyeOpen** —— 他们的机制里松手后眼睛是回到正常开度，
+        // 「眯眼」的观感来自 mood 的 EyeSmile（笑眼参数），不是把开度锁在 .45。
+        // （我上一版擅自加了 ruaAfter 时锁 .45，属于自己发明机制，已撤回。）
+        const _ruaOpen = _ruaOn ? (ruaStartleK > .25 ? 1 : .45 * (1 - (_rv?.melt ?? 0))) : null;
         const _baseL = _ruaOpen ?? (_blinkRan ? lastOpenNoBase : 1);
         const _baseR = _ruaOpen ?? (_blinkRan ? lastOpenNoBase : 1);
         const _mulL = _baseL * lidMul.L * Math.max(0, 1 + lidAdd.L);
