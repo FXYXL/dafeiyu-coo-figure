@@ -103,7 +103,8 @@ export default {
     { word: 'chest-hand', kind: 'act', w: 4, life: 4 },
     { word: 'finger-point', kind: 'act', w: 4, life: 4 },
     { word: 'swing', kind: 'act', w: 2 },
-    { word: 'skit', kind: 'act', w: 8 },   // 彩蛋小剧场（见 profile.skits）：大动作，≈20 分钟碰到一次。
+    { word: 'skit', kind: 'act', w: 4 },   // 彩蛋小剧场（见 profile.skits）：13 段日常 + 6 段时间条件，
+    // 每次要占 15~30 秒（演出 + 保持），按「占用时间」算比同权重的单动作重得多，所以压到 4。
     // 权重只管「多久演一次」；演哪一段由 when 条件过滤（0~3 点催睡等），两者互不影响
   ],
 
