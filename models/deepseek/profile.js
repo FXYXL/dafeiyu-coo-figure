@@ -84,10 +84,10 @@ export default {
     { word: 'pout', kind: 'face', w: 2, life: 5 },
     { word: 'smug-face', kind: 'face', w: 2, life: 5 },
     { word: 'bunny-teeth', kind: 'face', w: 1, life: 5 }, // 以下彩蛋权重
-    { word: 'tongue-out', kind: 'face', w: 1, life: 5 },
+    { word: 'tongue-out', kind: 'face', w: 2, life: 5 },   // 吐舌系列提权
     { word: 'puff-cheek', kind: 'face', w: 1, life: 5 },
-    { word: 'tongue-tilt', kind: 'face', w: 1, life: 5 },
-    { word: 'wink-tongue', kind: 'face', w: 1 },
+    { word: 'tongue-tilt', kind: 'face', w: 2, life: 5 },
+    { word: 'wink-tongue', kind: 'face', w: 2 },
     // —— 动作类 ——
     { word: 'glance', kind: 'act', w: 3 },
     { word: 'look-around', kind: 'act', w: 3 },
@@ -97,13 +97,14 @@ export default {
     { word: 'sigh', kind: 'act', w: 2 },
     { word: 'drowsy-combo', kind: 'act', w: 2, life: 5 },
     { word: 'slow-sway', kind: 'act', w: 2 },
-    { word: 'theater-sway-1', kind: 'act', w: 1 },
-    { word: 'theater-sway-2', kind: 'act', w: 1 },
+    { word: 'theater-sway-1', kind: 'act', w: 3 },   // 2026-11-22 提权：整套摇摆太少见（原来 3 小时一次）
+    { word: 'theater-sway-2', kind: 'act', w: 3 },
     { word: 'grass-hand', kind: 'act', w: 4, life: 4 },   // 手部词上调（用户点名难触发）
     { word: 'chest-hand', kind: 'act', w: 4, life: 4 },
     { word: 'finger-point', kind: 'act', w: 4, life: 4 },
     { word: 'swing', kind: 'act', w: 2 },
-    { word: 'skit', kind: 'act', w: 200 },   // 彩蛋小剧场（见 profile.skits）。测试期 200 ≈ 3~4 分钟一次；正式用改回 8（≈20 分钟）
+    { word: 'skit', kind: 'act', w: 8 },   // 彩蛋小剧场（见 profile.skits）：大动作，≈20 分钟碰到一次。
+    // 权重只管「多久演一次」；演哪一段由 when 条件过滤（0~3 点催睡等），两者互不影响
   ],
 
   // 指针跟随身体：光标左右 → 躯干跟着倾。walk 是走路时的倾斜方向（负号=朝行进方向倒，
