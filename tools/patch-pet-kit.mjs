@@ -333,27 +333,41 @@ const PATCHES = [
     else { ruaHeadTime = Math.max(0, ruaHeadTime - dt * .25); ruaDeepTime = Math.max(0, ruaDeepTime - (onHead ? dt * .1 : dt)); }
     ruaMax = Math.max(ruaMax, ruaHeadTime);
     if (!ruaMelted && ruaDeepTime >= 20) ruaMelted = true;
-    const head = (custom?.touchZones?.() ?? []).find((z) => z.id === 'head') ?? { x: 128, y: 50, rx: 74, ry: 40 };
-    const c = toStage(head.x, head.y);
+    // 2026-11-23 用户：「头盒子…这个能抄吗？」—— 抄。
+    // 他们 Behavior.HeadBox(shape) 按**形象包围盒的比例**给头中心/半宽/半高：
+    //   chibi (X .5, Y .31, Rx .26, Ry .22) / full (.5,.19,.12,.085) / 其它 (.5,.225,.19,.095)
+    // 我们之前用 touchZones 里那套 256 逻辑坐标 —— 实测 rx=205，视觉头宽只有 ~120，
+    // 虚高 1.6 倍，所以 side .65 要手离头心 133px 才触发（摸右脸永远够不着 → 单闭眼失效）。
+    // 中心仍沿用 touchZones 的 head（已验证能摸到），只有半径换成他们的比例。
+    const _zones = custom?.touchZones?.() ?? [];
+    const _zHead = _zones.find((z) => z.id === 'head') ?? { x: 128, y: 50, rx: 74, ry: 40 };
+    const c = toStage(_zHead.x, _zHead.y);
     const xf2 = pet.xf ?? {};
-    const hkx = xf2.kx ?? S, hky = xf2.ky ?? S;   // 动态头盒：半径用模型自身缩放（形象可缩放/拖拽拉伸都跟着走）
+    const hkx = xf2.kx ?? S, hky = xf2.ky ?? S;
+    // touchZones 现在是 figure 按包围盒比例算的（模型坐标），这里乘缩放转屏幕像素。
+    const headRx = _zHead.rx * hkx, headRy = _zHead.ry * hky;
+    const head = { x: _zHead.x, y: _zHead.y, rx: headRx, ry: headRy };
     // 2026-11-22 用户：左右摆得比他们大得多。之前 *.35 等于 2.86 倍增益（当时为了脸上小范围也能动），\n    // 但 touchZones.rx 本身虚高（实测 205，真实头半宽约 125），再放大就一碰就顶到极限。改回 .75。\n    // 2026-11-23 用户：rua 到右脸要闭右眼、摸脸中间要双眼闭 —— 现在都不行。
     // 根因：side / face 判定和「头角度摆动幅度」共用了一个带 .75 增益的 ux（那个增益是为了
     // 压左右摆幅），结果侧向阈值被一起调迟钝。他们把两件事分得很清楚：
     //   ux = clamp((x-hx)/rx)  ← 没有增益，头边缘 = ±1，side .65 就在这个尺度上
     // 所以这里恢复他们的口径：uxRaw 给 side/face，ux（打折后的）只给头角度。
-    const uxRaw = Math.max(-1.3, Math.min(1.3, (p.x - c.x) / (head.rx * hkx)));
+    const uxRaw = Math.max(-1.3, Math.min(1.3, (p.x - c.x) / headRx));
     const ux = Math.max(-1.3, Math.min(1.3, uxRaw / .75));   // 驱动头角度：我们 touchZones.rx 虚高，打折
-    const uy = Math.max(-1.3, Math.min(1.3, (p.y - c.y) / (head.ry * hky)));
-    if (t - (globalThis.__ruaDbg ?? 0) > 2000) { globalThis.__ruaDbg = t; try { new Image().src = '/api/figure-log?m=' + encodeURIComponent('rua p=' + Math.round(p.x) + ',' + Math.round(p.y) + ' c=' + Math.round(c.x) + ',' + Math.round(c.y) + ' uxRaw=' + uxRaw.toFixed(2) + ' uy=' + uy.toFixed(2) + ' side=' + rua.side + ' face=' + rua.face + ' on=' + onHead); } catch {} }
+    const uy = Math.max(-1.3, Math.min(1.3, (p.y - c.y) / headRy));
+    if (t - (globalThis.__ruaDbg ?? 0) > 2000) { globalThis.__ruaDbg = t; try { new Image().src = '/api/figure-log?m=' + encodeURIComponent('rua p=' + Math.round(p.x) + ',' + Math.round(p.y) + ' c=' + Math.round(c.x) + ',' + Math.round(c.y) + ' uxRaw=' + uxRaw.toFixed(2) + ' uy=' + uy.toFixed(2) + ' side=' + rua.side + ' face=' + rua.face + ' on=' + onHead + ' rx=' + Math.round(headRx) + ' ry=' + Math.round(headRy)); } catch {} }
     if (engaged && !rua) { rua = { ux: 0, uy: 0, side: 0, face: false, seconds: 0, melt: 0, moving: false, fx: 0 }; onEvent('touch', { kind: 'rua-start' }); }
     if (!rua) return;
     // 单闭哪只眼：手越过头的左右两侧才闭，进出各有一道门槛（带滞后，别在交界处来回抖）
     // 他们对齐（Touch.cs:311）：越过 .65 才算在侧面，回到 .5 以内算回中间。
     // 我们之前 .35/.22 太敏感 —— 摸脸中间也判成侧面，rua.face 永远是 false（用户：摸不到脸）。
-    if (rua.side === 0) rua.side = uxRaw > .65 ? 1 : uxRaw < -.65 ? -1 : 0;
-    else if (rua.side > 0 && uxRaw < .5) rua.side = 0;
-    else if (rua.side < 0 && uxRaw > -.5) rua.side = 0;
+    // 他们的阈值 .65/.5 是相对**他们的头半宽**。我们的头盒子按包围盒算是 236px 半宽，
+    // 等比例换算 .65 = 离头心 153px —— 摸脸颊（100~150px）永远够不到，所以一次都没闭过。
+    // 这里按手感换算成 .35/.25（≈83px / 59px）：手明显偏向一边就闭那只眼，回中间就松开。
+    // （滞后区间保留，避免在交界处抖。）
+    if (rua.side === 0) rua.side = uxRaw > .35 ? 1 : uxRaw < -.35 ? -1 : 0;
+    else if (rua.side > 0 && uxRaw < .25) rua.side = 0;
+    else if (rua.side < 0 && uxRaw > -.25) rua.side = 0;
     rua.ux = ux; rua.uy = uy; rua.on = engaged && onHead;   // 后端弹簧的开关（他们 amp 同口径）
     // 2026-11-22：不再只认 zone id。touchZones 的 face 椭圆是按 256 逻辑坐标手写的，
     // 和视觉上的脸对不上（用户：摸脸颊双眼闭不上）。按他们的语义来：
@@ -1093,7 +1107,7 @@ function toneOf(text: string): string {
     apply: (s) => {
       const a = "onEvent('touch', { kind: 'rua-start' });";
       if (!s.includes(a)) throw new Error('ruaHeadBox：锚点未命中');
-      return s.replace(a, "onEvent('touch', { kind: 'rua-start', hx: c.x, hy: c.y, rx: head.rx * hkx, ry: head.ry * hky });");
+      return s.replace(a, "onEvent('touch', { kind: 'rua-start', hx: c.x, hy: c.y, rx: headRx, ry: headRy });");
     },
   },
   {
@@ -1305,6 +1319,25 @@ function toneOf(text: string): string {
       if (out.includes(a3)) { out = out.replace(a3, b3); n++; }
       if (!n) return null;   // 已经改过（revert 后的原始文件才有这些串）
       return out;
+    },
+  },
+  {
+    file: 'world', id: 'noCrashEmit',
+    desc: '兜底：flushTouch 真正发文本前过滤「摔晕」，并记日志（哪条 kind 还在带这句）。不管上游哪条路径漏了，都发不出去',
+    detect: (s) => /TEXT-FILTER/.test(s),
+    apply: (s) => {
+      const a = "    const wakes = !this.touchWoke && touchWakes(this.cfg.touch, t.kind);";
+      if (!s.includes(a)) throw new Error('noCrashEmit：锚点未命中');
+      return s.replace(a, [
+        "    // 2026-11-23 兜底：任何路径发出的文本都不许出现「摔晕」（用户：rua 时满屏）。",
+        "    // 同时记一条日志：哪条 kind 还在带这句 —— 下次直接从日志定位上游。",
+        "    if (text.includes('摔晕')) {",
+        "      try { appendFileSync('D:/AI/rua-debug.log', new Date().toISOString() + ' TEXT-FILTER ' + t.kind + ' crashed=' + t.crashed + ' ' + text + '\\n'); } catch {}",
+        "      text = text.replace(/[,，]?(你)?重重落地[,，]?摔晕了一会儿/g, '').replace(/[,，]?(你)?摔晕了一会儿/g, '').trim();",
+        "    }",
+        "    if (!text) return;",
+        a,
+      ].join('\\n'));
     },
   },
 ];

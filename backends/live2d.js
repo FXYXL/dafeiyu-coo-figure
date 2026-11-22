@@ -635,6 +635,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
   /** 松手后淡出用的「最后一次手位 / 融化度」：frame.rua 一消失 ux/uy/melt 就归零，
    *  直接读它们等于瞬间把前倾、歪头、眼珠弹回默认。 */
   let ruaUxHold = 0, ruaUyHold = 0, ruaMeltHold = 0;
+  /** 前倾的退出权重：mood 演完才开始褪（他们 clear 是宿主带过渡，我们只能自己补）。
+   *  用户：前倾保持了，但「动作都没做完直接硬拉回去，甚至没有曲线回拉」。 */
+  let ruaLeanK = 1;
   let ruaWasOn = false;
   /** 摸后的四个 mood（Behavior.cs:59-67 全搬）。
    *  他们的 Mood 记录是 `record Mood(string[] Expressions, (string Id,double Value)[] Parameters,
@@ -1910,6 +1913,10 @@ export async function createLive2DBody(base, opts, entry, kit) {
     } else if (ruaW > 0.002) {
       ruaW += (0 - ruaW) * (1 - Math.exp(-dt / 0.35));
     } else ruaW = 0;
+    // 前倾单独一条：摸的时候和 mood 期间都保持，mood 演完才 0.6 秒褪掉
+    if (frame.rua?.on || ruaAfter) ruaLeanK = 1;
+    else if (ruaLeanK > 0.002) ruaLeanK += (0 - ruaLeanK) * (1 - Math.exp(-dt / 0.6));
+    else { ruaLeanK = 0; ruaMeltHold = 0; }
 
     // 1) 全部 role 回到默认（写默认 == 模型默认姿势，所以是幂等的）
     for (const [name, role] of roles) writeRole(name, role.def);
@@ -2068,7 +2075,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       // 关键帧从 -17 接到 -16，mood 演完才随 clear 淡出（Behavior.cs:66 注释原话）。
       // 所以这条**不乘 ruaW** —— 乘了就是「一松手 0.35 秒就直回去」（用户实测）。
       // mood 播放器是后写的，会盖住这里的值，不需要额外判断。
-      if (ruaMeltHold > 0.001) writeRole('lean', -17 * ruaMeltHold);
+      if (ruaMeltHold > 0.001 && ruaLeanK > 0.002) writeRole('lean', -17 * ruaMeltHold * ruaLeanK);
       if (sec >= 8) { writeRole('browY', 0.5 * ruaW); writeRole('browAngle', 0.3 * ruaW); }
       else if (sec >= 3) { writeRole('browY', 0.2 * ruaW); }
     }
@@ -2481,9 +2488,23 @@ export async function createLive2DBody(base, opts, entry, kit) {
   };
 
   const figure = {
-    // 摸摸分区（kit 的 zoneAt 读这个）：profile.touchZones 是 256 逻辑坐标的椭圆。
-    // 2026-11-22：之前根本没暴露 —— kit 的 zoneAt 一直返回 null，4.2 的分区等于没做。
-    touchZones() { return profile.touchZones; },
+    // 摸摸分区（kit 的 zoneAt 读这个，坐标是**模型坐标**，kit 会乘 kx/ky 转屏幕）。
+    // 2026-11-23：不再用手写的 profile.touchZones —— 那份 head.rx=49 和模型真实头宽对不上
+    // （×4.2 缩放后 205px，实际头半宽只有 ~120），导致 side .65 要离头心 133px 才成立，
+    // 摸右脸永远够不着 → 单闭眼完全不触发。改成按**包围盒比例**算，比例照他们 Behavior.HeadBox：
+    //   chibi (X .5, Y .31, Rx .26, Ry .22)，模型坐标，随包围盒/缩放自动正确。
+    touchZones() {
+      const [x0, y0, x1, y1] = currentExtent();
+      const w = x1 - x0, h = y1 - y0;
+      const cx = x0 + w * .5;
+      const heads = [
+        { id: 'head', x: cx, y: y0 + h * .31, rx: w * .26, ry: h * .22 },
+        { id: 'face', x: cx, y: y0 + h * .305, rx: w * .17, ry: h * .10 },
+      ];
+      // 下面几个沿用手写数据并夹进包围盒（胸部/裙子/腿/尾巴），只为「右键点在别处不触发」。
+      const rest = (profile.touchZones ?? []).filter((z) => z.id !== 'head' && z.id !== 'face');
+      return [...heads, ...rest];
+    },
     // 彩蛋台词：交给页面临时显示一句话（页面侧不排队、不发给 World）。
     // 她正在说话/有问答挂着时页面自己忽略，所以不会和对话抢气泡。
     emitBubble(text, seconds) {
@@ -2827,7 +2848,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
         if (A.t >= D.dur) {
           ruaAfter = null;
           ruaSecHold = 0;
-          ruaMeltHold = 0;   // 前倾锁存到这里结束（他们 mood 走完才 clear LeanInput）
+          ruaLeanK = 1;   // 从这里开始 0.6 秒曲线退出（不清 ruaMeltHold，清了就是硬切）
           for (const k of VIRTUAL_KEYS) virtualParams.delete(k);   // 压扁/滚转别残留
         }
         else if (A.t < 0) {
