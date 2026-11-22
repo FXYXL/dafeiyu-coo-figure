@@ -624,6 +624,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
   let ruaPeak = 0, ruaFastT = 0, ruaStartleAt = -9, ruaStartle = -9, ruaPrevOn = false;
   // 2026-11-22：猛摸瞪眼的包络、松手后的"摸后"情绪（他们 PlayAfterStroke 的 mood）、上次结束时刻
   let ruaStartleK = 0, ruaAfter = null, ruaLastEnd = -9;
+  /** 脸红强度 0→1 的缓动（他们「脸红」是表情层，有淡入；我们直接写 key7=1 是硬切，红得很突然） */
+  let blushK = 0, lastBlushAt = -9;
+  let ruaWasOn = false;
   /** 摸后的四个 mood（Behavior.cs:59-67 全搬）：sets = 固定表情；keys = 关键帧（秒:值）；
    *  hand = 手抬到胸口（他们 HandToChest「默认手切举手」）。melt 的 LeanInput 从 -17 起接松手时的前倾。 */
   const RUA_MOODS = {
@@ -673,6 +676,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
   };
   /** 他们的参数名 → 我们模型的角色参数。ViewSquash 这类没有的返回 null 跳过。 */
   const MOOD_ARGS = { FaceAngleX: 'AngleX', FaceAngleY: 'AngleY', FaceAngleZ: 'AngleZ', LeanInput: 'LeanInput' };
+  /** 模型没有、但 figure 会转给 kit 的整图参数（ViewSquash 压扁 / ViewRoll 滚转 / ViewX、Y 位移） */
+  const VIRTUAL_KEYS = new Set(['ViewSquash', 'ViewRoll', 'ViewX', 'ViewY']);
   /** 他们的 springK/springC：摸 150/14、松手 200/28（临界阻尼快速回正）、融化 90/9、平时 130/13 */
   function ruaKc() {
     if (ruaAfter?.melt) return [90, 9];
@@ -1328,9 +1333,10 @@ export async function createLive2DBody(base, opts, entry, kit) {
     ruaLastEnd = clockT;
     const peak = ruaPeak;
     ruaPeak = 0;
-    if (peak < 3) { audit('rua-after peak=' + peak.toFixed(1) + ' (太短，不反应)'); return; }
-    // 他们 EndStroke：Face(NoSets, ['脸红'])；PlayAfterStroke 1.5 秒后换成 mood
-    const mood = peak >= 20 ? 'melt' : peak >= 8 ? 'clingy' : 'reluctant';
+    // 他们的门槛只有「真的移动过」（strokeTravel>8 && strokeMoving>=.4），
+    // 低于 3 秒就是**摸后失落**那一档 —— 之前这里 return 掉了，所以前三秒松手什么都没演。
+    if (peak < 0.4) { audit('rua-after peak=' + peak.toFixed(1) + ' (按下去没动，不反应)'); return; }
+    const mood = peak >= 20 ? 'melt' : peak >= 8 ? 'clingy' : peak >= 3 ? 'reluctant' : 'lost';
     ruaAfter = { mood, def: RUA_MOODS[mood], t: 0, melt: mood === 'melt', hand: false, handOff: false };
     audit('rua-after peak=' + peak.toFixed(1) + ' → ' + mood);
   }
@@ -1960,6 +1966,14 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // kit 发 frame.rua = { on, ux, uy, side, face, seconds, melt, moving, fx }
     // 方向：左右同向（手在右→脸朝右）、上下反向（手在上→头低下去）
     const ruaOn = !!frame.rua?.on;
+    // 摸上来的第一帧：打断正在播的动作/表情（他们 StrokeDown 里 behavior.Interrupt()）。
+    // 之前 rua 开始时如果她正好在演闲时动作（竖手指/狗尾草），会一直演到寿命结束 ——
+    // 用户：「rua 头还会有随机动作出现，竖手指哪来的」。
+    if (ruaOn && !ruaWasOn) {
+      relaxChannels();
+      audit('rua-interrupt 打断当前动作');
+    }
+    ruaWasOn = ruaOn;
     ruaOnNow = ruaOn;
     const _rux = frame.rua?.ux ?? 0, _ruy = frame.rua?.uy ?? 0;
     // 2026-11-22：**去掉 ruaS 那层弹簧**。他们只有一个弹簧（Aim 设目标 → 全局 spring 150/14），
@@ -2696,7 +2710,12 @@ export async function createLive2DBody(base, opts, entry, kit) {
           else if ((_rv?.seconds ?? 0) >= 3) { _sp('BrowInnerUp', .2); }
           // 脸红（key7）：**只能写在这里**（saveParameters 之后）。写进 applyFrame 会被存成基准，
           // 之后每帧 loadParameters 都从「红」开始 —— 表现就是脸一直红、消退不了。
-          if ((_rv?.seconds ?? 0) >= 3) _sp('key7', 1);
+          // 2026-11-22：做成渐入渐出（他们「脸红」是表情层，有 0.3~0.5 秒淡入；
+          // 我们之前直接写 1，红得「一大块」突然出现）。
+          if ((_rv?.seconds ?? 0) >= 3) lastBlushAt = clockT;
+          const _wantBlush = (clockT - lastBlushAt < 0.12 || ruaAfter) ? 1 : 0;
+          blushK += (_wantBlush - blushK) * (1 - Math.exp(-dt / (_wantBlush ? 0.45 : 0.7)));
+          if (blushK > 0.003) _sp('key7', blushK);
         }
         globalThis.__lidMul = [+lidMul.L.toFixed(3), +lidMul.R.toFixed(3)];
         // 打点：眼睛链路（乘数 / 最终开度 / role 算出来的 open）
@@ -2712,7 +2731,10 @@ export async function createLive2DBody(base, opts, entry, kit) {
       if (ruaAfter) {
         const A = ruaAfter, D = A.def;
         A.t += dt;
-        if (A.t >= D.dur) ruaAfter = null;
+        if (A.t >= D.dur) {
+          ruaAfter = null;
+          for (const k of VIRTUAL_KEYS) virtualParams.delete(k);   // 压扁/滚转别残留
+        }
         else {
           const t = A.t;
           const sp = (id, v) => { const _i = paramIndex.get(id); if (_i !== undefined) model._model.setParameterValueByIndex(_i, v); };
@@ -2721,6 +2743,10 @@ export async function createLive2DBody(base, opts, entry, kit) {
           for (const [k, fps] of Object.entries(D.keys)) {
             const v = moodAt(fps, t);
             if (k === 'EyeOpen') { eyeAdd = v; continue; }         // 负数 = 额外闭合
+            // ViewSquash / ViewRoll / ViewX / ViewY：模型里没有这些参数，但 figure 早就把它们
+            // 当"虚拟参数"接给 kit 了（squash()/groupTilt()/groupMove() → kit 的挤压弹簧、
+            // 整组旋转、整组平移）。叹气的压扁走的就是这条，所以摸后的压扁直接写虚拟表。
+            if (VIRTUAL_KEYS.has(k)) { virtualParams.set(k, { v: (D.sets[k] ?? 0) + v, t: clockT }); continue; }
             const arg = MOOD_ARGS[k];
             // **keys 是叠加在 sets 上的增量**，不是绝对值 —— 他们 Behavior.cs 的注释：
             // 「前倾：松手时按住 -17，表情里用动画加 0→+1 慢慢回到 -16」。
@@ -2731,7 +2757,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
             const o = clamp(1 + eyeAdd, 0, 1);
             for (const id of ['ParamEyeLOpen', 'ParamEyeROpen']) sp(id, o);
           }
-          sp('key7', 1);   // 脸红一路带到摸后
+          lastBlushAt = clockT;   // 脸红一路带到摸后（渐入值在 Lids 段统一算）
           // 手抬到胸口（他们 HandToChest「默认手切举手」），结束前 0.9 秒放下
           if (D.hand && !A.hand) { A.hand = true; applyOneWord('chest-hand', null, {}, {}); }
           else if (D.hand && !A.handOff && t > D.dur - 0.9) {
