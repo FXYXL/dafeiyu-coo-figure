@@ -2064,7 +2064,11 @@ export async function createLive2DBody(base, opts, entry, kit) {
       writeRole('mouthForm', ruaW);
       // 眼睛不在这里写：eyeBlink（stepMotion）在这之后每帧把 ParamEyeL/ROpen 写成 1，
       // 写在这里会被它吃掉（用户：rua 时两个眼睛瞪得老大）。改在 Lids 段（blink 之后）绝对值写。
-      if (ruaMeltHold > 0.001) writeRole('lean', -17 * ruaMeltHold * ruaW);
+      // 他们 EndStroke 里有 KeepLean()：融化档按住 -17 **不清掉**，交给 mood 的 LeanInput
+      // 关键帧从 -17 接到 -16，mood 演完才随 clear 淡出（Behavior.cs:66 注释原话）。
+      // 所以这条**不乘 ruaW** —— 乘了就是「一松手 0.35 秒就直回去」（用户实测）。
+      // mood 播放器是后写的，会盖住这里的值，不需要额外判断。
+      if (ruaMeltHold > 0.001) writeRole('lean', -17 * ruaMeltHold);
       if (sec >= 8) { writeRole('browY', 0.5 * ruaW); writeRole('browAngle', 0.3 * ruaW); }
       else if (sec >= 3) { writeRole('browY', 0.2 * ruaW); }
     }
@@ -2823,6 +2827,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
         if (A.t >= D.dur) {
           ruaAfter = null;
           ruaSecHold = 0;
+          ruaMeltHold = 0;   // 前倾锁存到这里结束（他们 mood 走完才 clear LeanInput）
           for (const k of VIRTUAL_KEYS) virtualParams.delete(k);   // 压扁/滚转别残留
         }
         else if (A.t < 0) {

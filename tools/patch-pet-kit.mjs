@@ -337,24 +337,30 @@ const PATCHES = [
     const c = toStage(head.x, head.y);
     const xf2 = pet.xf ?? {};
     const hkx = xf2.kx ?? S, hky = xf2.ky ?? S;   // 动态头盒：半径用模型自身缩放（形象可缩放/拖拽拉伸都跟着走）
-    // 2026-11-22 用户：左右摆得比他们大得多。之前 *.35 等于 2.86 倍增益（当时为了脸上小范围也能动），\n    // 但 touchZones.rx 本身虚高（实测 205，真实头半宽约 125），再放大就一碰就顶到极限。改回 .75。\n    const ux = Math.max(-1.3, Math.min(1.3, (p.x - c.x) / (head.rx * hkx * .75)));
-    if (t - (globalThis.__ruaDbg ?? 0) > 2000) { globalThis.__ruaDbg = t; try { new Image().src = '/api/figure-log?m=' + encodeURIComponent('rua p=' + Math.round(p.x) + ',' + Math.round(p.y) + ' c=' + Math.round(c.x) + ',' + Math.round(c.y) + ' ux=' + ux.toFixed(2) + ' uy=' + uy.toFixed(2) + ' on=' + onHead + ' S=' + S.toFixed(2)); } catch {} }
+    // 2026-11-22 用户：左右摆得比他们大得多。之前 *.35 等于 2.86 倍增益（当时为了脸上小范围也能动），\n    // 但 touchZones.rx 本身虚高（实测 205，真实头半宽约 125），再放大就一碰就顶到极限。改回 .75。\n    // 2026-11-23 用户：rua 到右脸要闭右眼、摸脸中间要双眼闭 —— 现在都不行。
+    // 根因：side / face 判定和「头角度摆动幅度」共用了一个带 .75 增益的 ux（那个增益是为了
+    // 压左右摆幅），结果侧向阈值被一起调迟钝。他们把两件事分得很清楚：
+    //   ux = clamp((x-hx)/rx)  ← 没有增益，头边缘 = ±1，side .65 就在这个尺度上
+    // 所以这里恢复他们的口径：uxRaw 给 side/face，ux（打折后的）只给头角度。
+    const uxRaw = Math.max(-1.3, Math.min(1.3, (p.x - c.x) / (head.rx * hkx)));
+    const ux = Math.max(-1.3, Math.min(1.3, uxRaw / .75));   // 驱动头角度：我们 touchZones.rx 虚高，打折
     const uy = Math.max(-1.3, Math.min(1.3, (p.y - c.y) / (head.ry * hky)));
+    if (t - (globalThis.__ruaDbg ?? 0) > 2000) { globalThis.__ruaDbg = t; try { new Image().src = '/api/figure-log?m=' + encodeURIComponent('rua p=' + Math.round(p.x) + ',' + Math.round(p.y) + ' c=' + Math.round(c.x) + ',' + Math.round(c.y) + ' uxRaw=' + uxRaw.toFixed(2) + ' uy=' + uy.toFixed(2) + ' side=' + rua.side + ' face=' + rua.face + ' on=' + onHead); } catch {} }
     if (engaged && !rua) { rua = { ux: 0, uy: 0, side: 0, face: false, seconds: 0, melt: 0, moving: false, fx: 0 }; onEvent('touch', { kind: 'rua-start' }); }
     if (!rua) return;
     // 单闭哪只眼：手越过头的左右两侧才闭，进出各有一道门槛（带滞后，别在交界处来回抖）
     // 他们对齐（Touch.cs:311）：越过 .65 才算在侧面，回到 .5 以内算回中间。
     // 我们之前 .35/.22 太敏感 —— 摸脸中间也判成侧面，rua.face 永远是 false（用户：摸不到脸）。
-    if (rua.side === 0) rua.side = ux > .65 ? 1 : ux < -.65 ? -1 : 0;
-    else if (rua.side > 0 && ux < .5) rua.side = 0;
-    else if (rua.side < 0 && ux > -.5) rua.side = 0;
-    else if (rua.side > 0 && ux < .22) rua.side = 0;
-    else if (rua.side < 0 && ux > -.22) rua.side = 0;
+    if (rua.side === 0) rua.side = uxRaw > .65 ? 1 : uxRaw < -.65 ? -1 : 0;
+    else if (rua.side > 0 && uxRaw < .5) rua.side = 0;
+    else if (rua.side < 0 && uxRaw > -.5) rua.side = 0;
     rua.ux = ux; rua.uy = uy; rua.on = engaged && onHead;   // 后端弹簧的开关（他们 amp 同口径）
     // 2026-11-22：不再只认 zone id。touchZones 的 face 椭圆是按 256 逻辑坐标手写的，
     // 和视觉上的脸对不上（用户：摸脸颊双眼闭不上）。按他们的语义来：
     // face = 头的**下半部分**且手在中间（他们 SmallZone 里 face 就是 y .125~.245 的中间段）。
-    rua.face = onHead && rua.side === 0 && uy > .2;
+    // 他们的 SmallZone：y 在 .125~.245 之间且 x 在 .3~.7（中间 40%）才算 face。
+    // 换成头盒子坐标就是：头心以下（uyRaw > 0）+ 中间 70% 宽（|uxRaw| < .7）。
+    rua.face = onHead && rua.side === 0 && uy > 0 && Math.abs(uxRaw) < .7;
     rua.seconds = Math.round(ruaHeadTime * 10) / 10;
     rua.melt = Math.round(Math.min(1, Math.max(0, (ruaDeepTime - 17) / 3)) * 30) / 30;
     rua.moving = moving;
