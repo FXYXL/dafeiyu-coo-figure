@@ -400,6 +400,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
    * 我们之前只写 AngleX/Y/Z（物理输入），没写 Position，头动了身体不动。
    * 这里在动作写参数时同步派生 Position —— 只作用于词/动作，不影响程序内的鼠标跟随（bodyX 另有系数）。
    */
+  // 2026-11-22 实测结论：模型里 `AngleX/Y/Z` 和 `ParamAngleX/Y/Z` **两套都有**，
+  // 但 `ParamAngle*` 每帧被 idle motion 重写（写成 0），写它等于被吃掉；
+  // `Angle*` 是这套模型独占的头部输入，motion 不碰 → 头角度必须写 Angle。
   const ANGLE_TO_POS = { AngleX: 'PositionX', AngleY: 'PositionY', AngleZ: 'PositionZ' };
   function setParamByName(id, v) {
     const i = paramIndex.get(id);
@@ -619,6 +622,65 @@ export async function createLive2DBody(base, opts, entry, kit) {
   const ruaEyeS = { L: 0, R: 0 };
   // rua 档位状态（2026-11-22 重做）：峰值时长、猛摸计时/瞪眼冷却、松手检测
   let ruaPeak = 0, ruaFastT = 0, ruaStartleAt = -9, ruaStartle = -9, ruaPrevOn = false;
+  // 2026-11-22：猛摸瞪眼的包络、松手后的"摸后"情绪（他们 PlayAfterStroke 的 mood）、上次结束时刻
+  let ruaStartleK = 0, ruaAfter = null, ruaLastEnd = -9;
+  /** 摸后的四个 mood（Behavior.cs:59-67 全搬）：sets = 固定表情；keys = 关键帧（秒:值）；
+   *  hand = 手抬到胸口（他们 HandToChest「默认手切举手」）。melt 的 LeanInput 从 -17 起接松手时的前倾。 */
+  const RUA_MOODS = {
+    lost: {   // 摸后失落（按了 3 秒以内）
+      dur: 3.4,
+      sets: { BrowInnerUp: .7, ParamMouthPressLipOpen: .3, ParamMouthForm: -.1, ParamEyeBallY: -.4, FaceAngleY: -5, FaceAngleZ: 4 },
+      keys: { FaceAngleZ: [[0, 0], [.5, 3], [1.3, -2], [2.1, 3], [3.4, 0]] },
+    },
+    reluctant: {   // 摸后不舍（3~8 秒）
+      dur: 4,
+      sets: { EyeSmile: .45, BrowInnerUp: .9, ParamMouthPressLipOpen: .5, ParamMouthForm: .2, ParamEyeBallY: -.45, FaceAngleY: -8, FaceAngleZ: 7 },
+      keys: { LeanInput: [[0, 0], [.5, -9], [3.3, -8], [4, 0]], FaceAngleZ: [[0, 0], [.7, 3], [1.5, -3], [2.3, 3], [3.1, -2], [4, 0]] },
+      hand: true,
+    },
+    clingy: {   // 摸后腻歪（8~20 秒）
+      dur: 4.8,
+      sets: { EyeSmile: .6, ParamMouthForm: 1, ParamMouthPressLipOpen: .4, BrowInnerUp: .6, FaceAngleY: -6, FaceAngleZ: 9 },
+      keys: {
+        LeanInput: [[0, 0], [.5, -15], [3.9, -14], [4.8, 0]],
+        FaceAngleZ: [[0, 0], [.8, 3], [1.6, -3], [2.4, 3], [3.2, -3], [4, 2], [4.8, 0]],
+        FaceAngleX: [[0, 0], [.8, -4], [1.8, 4], [2.8, -4], [3.8, 3], [4.8, 0]],
+      },
+      hand: true,
+    },
+    melt: {   // 摸后融化（20 秒彩蛋）
+      dur: 6,
+      sets: { EyeSmile: .55, ParamMouthForm: .9, ParamMouthPressLipOpen: .35, BrowInnerUp: .5, FaceAngleY: -4, FaceAngleZ: 4 },
+      keys: {
+        LeanInput: [[0, -17], [.8, -16], [4.8, -16], [6, 0]],
+        FaceAngleZ: [[0, 0], [.8, 5], [2, -2], [3.6, 3], [6, 0]],
+        FaceAngleX: [[0, 0], [.7, -3], [2.2, 2], [3.8, -2], [6, 0]],
+        EyeOpen: [[0, 0], [.2, -1], [.28, -.2], [.45, 0], [.95, -1], [1.03, -.2], [1.2, 0], [6, 0]],   // 快眨两下
+      },
+      hand: true,
+    },
+  };
+  /** 关键帧插值：[[秒,值],…] → 当前值（线性）。 */
+  const moodAt = (fps, t) => {
+    if (t <= fps[0][0]) return fps[0][1];
+    for (let i = 1; i < fps.length; i++) {
+      if (t <= fps[i][0]) {
+        const [t0, v0] = fps[i - 1], [t1, v1] = fps[i];
+        return t1 === t0 ? v1 : v0 + (v1 - v0) * (t - t0) / (t1 - t0);
+      }
+    }
+    return fps[fps.length - 1][1];
+  };
+  /** 他们的参数名 → 我们模型的角色参数。ViewSquash 这类没有的返回 null 跳过。 */
+  const MOOD_ARGS = { FaceAngleX: 'AngleX', FaceAngleY: 'AngleY', FaceAngleZ: 'AngleZ', LeanInput: 'LeanInput' };
+  /** 他们的 springK/springC：摸 150/14、松手 200/28（临界阻尼快速回正）、融化 90/9、平时 130/13 */
+  function ruaKc() {
+    if (ruaAfter?.melt) return [90, 9];
+    if (ruaOnNow) return [150, 14];
+    if (clockT - ruaLastEnd < 1.6) return [200, 28];
+    return [130, 13];
+  }
+  let ruaOnNow = false;
   // vtube 映射的平滑状态（main.cpp:606 `lag = smoothing*0.005`）：
   // 大肥鱼.vtube.json 里 FaceAngleX→15、Y→4、Z→30，对应 lag 0.075 / 0.02 / 0.15 秒。
   const mapS = { X: 0, Y: 0, Z: 0, started: false };
@@ -1255,25 +1317,22 @@ export async function createLive2DBody(base, opts, entry, kit) {
   }
   /** rua 松手：按峰值时长给一个「摸后」反应（他们 PlayAfterStroke 的档位，台词交给她自己说）。 */
   function stepRuaState(frame) {
-    // 判据用「rua 对象还在」而不是 rua.on —— on 是弹簧开关，手暂时离开头区就会 false，
-    // 会被误判成松手（测试里 12 秒的 rua 触发了两次 rua-after）
+    // 判据用「rua 对象还在」而不是 rua.on —— on 是弹簧开关，手暂时离开头区就会 false。
+    // 另加 1.2 秒保护：实测一次 12 秒的 rua 触发了 6 次（kit 的 rua 中间被清了几次），
+    // 每次只剩 peak 3~5 秒，档位自然全错。
     const on = !!frame.rua;
     if (on) { ruaPeak = Math.max(ruaPeak, frame.rua?.seconds ?? 0); ruaPrevOn = true; return; }
     if (!ruaPrevOn) return;
     ruaPrevOn = false;
+    if (clockT - ruaLastEnd < 1.2) { audit('rua-after skip(within 1.2s)'); return; }
+    ruaLastEnd = clockT;
     const peak = ruaPeak;
     ruaPeak = 0;
-    if (peak < 3) return;                      // 按下去没怎么动：不算摸过（他们 touched 同款门槛）
-    // 松手按档位给反应（他们 PlayAfterStroke：失落 / 不舍 / 腻歪 / 融化）
-    const after = peak >= 20 ? ['eye-squeeze', 'blush', 'tilt', 'lean-forward']
-      : peak >= 8 ? ['eye-squeeze', 'blush', 'tilt']
-        : ['blush'];
-    for (const w of after) {
-      pendingMod = { scale: 1, pace: w === 'lean-forward' ? 0.6 : 1, repeat: 1, explicit: true };
-      dirSide = 1;
-      applyOneWord(w, true, {}, {});
-    }
-    audit('rua-after peak=' + peak.toFixed(1) + ' → ' + after.join(','));
+    if (peak < 3) { audit('rua-after peak=' + peak.toFixed(1) + ' (太短，不反应)'); return; }
+    // 他们 EndStroke：Face(NoSets, ['脸红'])；PlayAfterStroke 1.5 秒后换成 mood
+    const mood = peak >= 20 ? 'melt' : peak >= 8 ? 'clingy' : 'reluctant';
+    ruaAfter = { mood, def: RUA_MOODS[mood], t: 0, melt: mood === 'melt', hand: false, handOff: false };
+    audit('rua-after peak=' + peak.toFixed(1) + ' → ' + mood);
   }
 
   /** 假口型：只在这句台词的时间里动嘴（两句之间的停顿闭嘴）。两条正弦交叉，像在念但没声音。 */
@@ -1901,13 +1960,14 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // kit 发 frame.rua = { on, ux, uy, side, face, seconds, melt, moving, fx }
     // 方向：左右同向（手在右→脸朝右）、上下反向（手在上→头低下去）
     const ruaOn = !!frame.rua?.on;
+    ruaOnNow = ruaOn;
     const _rux = frame.rua?.ux ?? 0, _ruy = frame.rua?.uy ?? 0;
-    [ruaS.ax, ruaS.axv] = ruaSpring(ruaS.ax, ruaS.axv, ruaOn ? _rux : 0, 150, 14, dt);
-    [ruaS.ay, ruaS.ayv] = ruaSpring(ruaS.ay, ruaS.ayv, ruaOn ? -_ruy : 0, 150, 14, dt);
-    // 2026-11-22 反向：他们写的是 FaceAngleX（正 = 朝屏幕左），ux>0（手在右）→ 脸朝左。
-    // 我们直接写 AngleX（正 = 朝右），所以这里取负 —— 手在右，头偏向左（用户：白手和头要反向）。
-    const ruaRX = -ruaS.ax * 22;   // ±22 度
-    const ruaRY = ruaS.ay * 14;   // ±14 度（PetWindow.Touch.cs FaceAngleY = uy*14，原来是 16）
+    // 2026-11-22：**去掉 ruaS 那层弹簧**。他们只有一个弹簧（Aim 设目标 → 全局 spring 150/14），
+    // 我们之前是 ruaS(150/14) 再串 angleS(130/13)，等于弹两次：跟手慢半拍、松手回正拖沓。
+    // 现在直接给目标角度，弹簧（k/c 按档位切）只在这一层。
+    // 方向：他们写 FaceAngleX（正 = 朝屏幕左），手在右 ux>0 → 脸朝左；我们 AngleX 正 = 朝右，取负。
+    const ruaRX = ruaOn ? -_rux * 22 : 0;
+    const ruaRY = ruaOn ? -_ruy * 14 : 0;
     const ruaSide = frame.rua?.side ?? 0;
     const ruaSecs = frame.rua?.seconds ?? 0;
     const ruaMelt = frame.rua?.melt ?? 0;
@@ -1916,7 +1976,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
     const ruaSpeed = frame.rua?.speed ?? 0;
     if (ruaOn && ruaSpeed > 850) ruaFastT += dt; else ruaFastT = Math.max(0, ruaFastT - dt);
     if (ruaFastT > 0.35 && clockT > ruaStartleAt) { ruaStartleAt = clockT + 4; ruaStartle = clockT; }
-    const ruaStartleK = ruaStartle > 0 ? clamp(1 - (clockT - ruaStartle) / 0.45, 0, 1) : 0;
+    ruaStartleK = ruaStartle > 0 ? clamp(1 - (clockT - ruaStartle) / 0.45, 0, 1) : 0;
     // ---------- rua 档位表情（照 StrokeFace）----------
     // 写在这里而不是 engine 分支里：这只模型没接表演层（engine 恒 null），
     // 放 engine 分支的话整块不会执行（第一版就是这么没生效的）。
@@ -1925,14 +1985,15 @@ export async function createLive2DBody(base, opts, entry, kit) {
       const m = ruaMelt, sec = ruaSecs;
       writeRole('eyeSmile', 1);
       writeRole('mouthForm', 1);
-      writeRole('eyeOpen', ruaStartleK > 0.25 ? 1 : 0.45 * (1 - m));
+      // 眼睛不在这里写：eyeBlink（stepMotion）在这之后每帧把 ParamEyeL/ROpen 写成 1，
+      // 写在这里会被它吃掉（用户：rua 时两个眼睛瞪得老大）。改在 Lids 段（blink 之后）绝对值写。
       if (m > 0.001) writeRole('lean', -17 * m);
       if (sec >= 8) { writeRole('browY', 0.5); writeRole('browAngle', 0.3); }
       else if (sec >= 3) writeRole('browY', 0.2);
-      // 脸红要「一直在」：blush 词只挂 3 秒，摸久了就掉了（用户：rua 到后面没脸红了）。
-      // 这里每帧把脸红贴图直接顶到 1 —— key7 是 blush 写的那个参数。
-      if (sec >= 3) { const _ki = paramIndex.get('key7'); if (_ki !== undefined) model._model.setParameterValueByIndex(_ki, 1); }
     }
+    // ---------- 摸后情绪（他们 PlayAfterStroke 的四个 mood，参数原样）----------
+    // 我们之前走 applyOneWord('eye-squeeze') —— 那些词在形象包里根本不存在，等于什么都没发生
+    // （用户：松手还是不会触发对应档位的动作，全没有）。
     const tilt = neutralPose ? 0 : (frame.tilt ?? 0);
     const lean = neutralPose ? 0 : (frame.lean ?? 0);
     const ax = engine?.angleX ?? 0;
@@ -1963,19 +2024,29 @@ export async function createLive2DBody(base, opts, entry, kit) {
     if (engine) {
       // 2026-11-21 眼睛归一化（之前 lookEye 是度数 ±5，×0.55=±2.75 被 clamp 卡在 ±1 一直饱和 →
       // 走神衰减前 60% 眼睛毫无变化、只有头在转，看着就是「头先走」）。对齐他们 -0.9*(eyeLook+saccade)。
-      writeRole('eyeBallX', clamp(ex * 0.6 + (lookEye[0] ?? 0) / 5 * 0.6 + sac.x * 0.6, -1, 1));
-      writeRole('eyeBallY', clamp(ey * 0.6 + (lookEye[1] ?? 0) / 4 * 0.7 + sac.y * 0.7, -1, 1));   // 2026-11-21 去掉负号：他们 EyeRightY = +0.7*(eyeLookY+saccadeY)
+      // 他们 StepStroke:330-331：眼睛看向手 —— ParamEyeBallX = -ux*.9（负 = 朝屏幕右）、Y = -uy*.9
+      writeRole('eyeBallX', ruaOn ? clamp(-_rux * .9, -1, 1) : clamp(ex * 0.6 + (lookEye[0] ?? 0) / 5 * 0.6 + sac.x * 0.6, -1, 1));
+      writeRole('eyeBallY', ruaOn ? clamp(-_ruy * .9, -1, 1) : clamp(ey * 0.6 + (lookEye[1] ?? 0) / 4 * 0.7 + sac.y * 0.7, -1, 1));   // 2026-11-21 去掉负号：他们 EyeRightY = +0.7*(eyeLookY+saccadeY)
     // 2026-11-21 单位修正：kit 的 look/tilt/lean 都是度数（look ±5、tilt ±7、lean -6~11），
       // 之前当 -1~1 用 → 放大 5 倍鼠标敏感 + lean 接错位置。全部÷范围归一化。
       // 2026-11-21 度数域（role space 已改 [-30,30]）：直接对齐 DeepFish 度数（FaceAngleX=lookX*22 等）
       // 2026-11-21 main.cpp 原样：FaceAngleX = lookX*22 + drift；Y = lookY*16 + drift；Z = drift（没有 tilt）
-      const angleXVal = clamp((lookHead[0] ?? 0) / 5 * 22 + driftX + ruaRX, -30, 30);
-      const angleYVal = clamp(ay * 30 + (lookHead[1] ?? 0) / 4 * 16 + driftY + ruaRY, -30, 30);
-      const angleZVal = clamp(az * 30 + driftZ, -30, 30);
+      // rua 时头部**完全由手决定**（他们 amp=1 的 Aim 覆盖 look；不然她一边看鼠标一边被摸会打架）
+      const _lookW = ruaOn ? 0 : 1;
+      // 他们 StepStroke:327-329 三条原样：
+      //   FaceAngleX = ux*22 · FaceAngleY = uy*14（我们取负，见上）
+      //   FaceAngleZ = ux*7 - fx*5 + tilt，tilt = 6sin(π·melt) + 3·melt（合眼时轻轻歪）
+      const _ruaTilt = ruaOn
+        ? clamp(_rux * 7 - (frame.rua?.fx ?? 0) * 5 + 6 * Math.sin(Math.PI * ruaMelt) + 3 * ruaMelt, -30, 30)
+        : 0;
+      const angleXVal = clamp((lookHead[0] ?? 0) / 5 * 22 * _lookW + driftX + ruaRX, -30, 30);
+      const angleYVal = clamp(ay * 30 + (lookHead[1] ?? 0) / 4 * 16 * _lookW + driftY + ruaRY, -30, 30);
+      const angleZVal = clamp(az * 30 + driftZ + _ruaTilt, -30, 30);
       // 2026-11-21 照搬他们 Spring（springK=130/springC=13）：头角度过弹簧，有惯性/过冲才自然
-      [angleS.x, angleS.xv] = ruaSpring(angleS.x, angleS.xv, angleXVal, 130, 13, dt);
-      [angleS.y, angleS.yv] = ruaSpring(angleS.y, angleS.yv, angleYVal, 130, 13, dt);
-      [angleS.z, angleS.zv] = ruaSpring(angleS.z, angleS.zv, angleZVal, 130, 13, dt);
+      const [sK, sC] = ruaKc();   // 摸 150/14 · 松手 200/28 · 融化 90/9 · 平时 130/13
+      [angleS.x, angleS.xv] = ruaSpring(angleS.x, angleS.xv, angleXVal, sK, sC, dt);
+      [angleS.y, angleS.yv] = ruaSpring(angleS.y, angleS.yv, angleYVal, sK, sC, dt);
+      [angleS.z, angleS.zv] = ruaSpring(angleS.z, angleS.zv, angleZVal, sK, sC, dt);
       writeRole('angleX', angleS.x);
       writeRole('angleY', angleS.y);
       writeRole('angleZ', angleS.z);
@@ -2018,16 +2089,26 @@ export async function createLive2DBody(base, opts, entry, kit) {
       { const _bi = paramIndex.get('ParamBreath'); if (_bi !== undefined) model._model.setParameterValueByIndex(_bi, 0.5 + 0.5 * Math.sin(clockT * 2 * Math.PI / 3.2345)); }
     } else {
       // 2026-11-21 同上：眼珠归一化（度数 ÷5/÷4），否则 ±5 直接饱和看不出走神
-      writeRole('eyeBallX', clamp((lookEye[0] ?? 0) / 5 * 0.6 + sac.x * 0.6, -1, 1));
-      writeRole('eyeBallY', clamp((lookEye[1] ?? 0) / 4 * 0.7 + sac.y * 0.7, -1, 1));   // 2026-11-21 去掉负号（原来上下和鼠标反）
+      // 2026-11-22 rua：眼睛看着手（他们 ParamEyeBallX = -ux*.9 / Y = -uy*.9）
+      writeRole('eyeBallX', ruaOn ? clamp(-_rux * .9, -1, 1) : clamp((lookEye[0] ?? 0) / 5 * 0.6 + sac.x * 0.6, -1, 1));
+      writeRole('eyeBallY', ruaOn ? clamp(-_ruy * .9, -1, 1) : clamp((lookEye[1] ?? 0) / 4 * 0.7 + sac.y * 0.7, -1, 1));   // 2026-11-21 去掉负号（原来上下和鼠标反）
       // 2026-11-21 度数域（role space 已改 [-30,30]）
-      const angleXVal = clamp((lookHead[0] ?? 0) / 5 * 22 + driftX + ruaRX, -30, 30);
-      const angleYVal = clamp((lookHead[1] ?? 0) / 4 * 16 + driftY + ruaRY, -30, 30);
-      const angleZVal = clamp(driftZ, -30, 30);
+      // 2026-11-22 rua 补齐（engine 分支里有、这条 else 里一直没有 —— 这只模型走的就是这里）：
+      //   look 归零（头完全由手决定）、Z 加 ux*7-fx*5+tilt、弹簧 k/c 按档位切
+      const _lookW = ruaOn ? 0 : 1;
+      const _ruaTilt = ruaOn
+        ? clamp(_rux * 7 - (frame.rua?.fx ?? 0) * 5 + 6 * Math.sin(Math.PI * ruaMelt) + 3 * ruaMelt, -30, 30)
+        : 0;
+      const angleXVal = clamp((lookHead[0] ?? 0) / 5 * 22 * _lookW + driftX + ruaRX, -30, 30);
+      const angleYVal = clamp((lookHead[1] ?? 0) / 4 * 16 * _lookW + driftY + ruaRY, -30, 30);
+      const angleZVal = clamp(driftZ + _ruaTilt, -30, 30);
       // 2026-11-21 照搬他们 Spring（springK=130/springC=13）：头角度过弹簧，有惯性/过冲才自然
-      [angleS.x, angleS.xv] = ruaSpring(angleS.x, angleS.xv, angleXVal, 130, 13, dt);
-      [angleS.y, angleS.yv] = ruaSpring(angleS.y, angleS.yv, angleYVal, 130, 13, dt);
-      [angleS.z, angleS.zv] = ruaSpring(angleS.z, angleS.zv, angleZVal, 130, 13, dt);
+      {
+        const [sK, sC] = ruaKc();   // 摸 150/14 · 松手 200/28 · 融化 90/9 · 平时 130/13
+        [angleS.x, angleS.xv] = ruaSpring(angleS.x, angleS.xv, angleXVal, sK, sC, dt);
+        [angleS.y, angleS.yv] = ruaSpring(angleS.y, angleS.yv, angleYVal, sK, sC, dt);
+        [angleS.z, angleS.zv] = ruaSpring(angleS.z, angleS.zv, angleZVal, sK, sC, dt);
+      }
       writeRole('angleX', angleS.x);
       writeRole('angleY', angleS.y);
       writeRole('angleZ', angleS.z);
@@ -2570,8 +2651,17 @@ export async function createLive2DBody(base, opts, entry, kit) {
         // eyeBlink 把参数整个写成 r（不含 applyFrame 的 open），所以这里要乘回
         // role 的非配方开度系数（shape/困意/睡姿）——之前半睁的 role 0.37 就是这么丢的。
         // 三类相乘：hold 词的乘数（闭眼/半睁）× 关键帧增量（1+Σ，单眨眼/sigh 微闭）× role 的非配方开度
-        const _mulL = (_blinkRan ? lastOpenNoBase : 1) * lidMul.L * Math.max(0, 1 + lidAdd.L);
-        const _mulR = (_blinkRan ? lastOpenNoBase : 1) * lidMul.R * Math.max(0, 1 + lidAdd.R);
+        // ---- rua 的档位开度（照他们 StrokeFace）----
+        // 笑眼 open=.45*(1-melt)，融化到 0（眯眼笑）；猛摸瞪眼时 1（睁大）。
+        // 关键：**必须写在这里**（eyeBlink 之后），因为它每帧把 ParamEyeL/ROpen 整个写成 1：
+        // 写早一步就被吃掉 —— 用户看到的「rua 时两个眼睛瞪得老大」就是这个。
+        const _rv = frame.rua;
+        const _ruaOn = !!_rv?.on;
+        const _ruaOpen = _ruaOn ? (ruaStartleK > .25 ? 1 : .45 * (1 - (_rv?.melt ?? 0))) : null;
+        const _baseL = _ruaOpen ?? (_blinkRan ? lastOpenNoBase : 1);
+        const _baseR = _ruaOpen ?? (_blinkRan ? lastOpenNoBase : 1);
+        const _mulL = _baseL * lidMul.L * Math.max(0, 1 + lidAdd.L);
+        const _mulR = _baseR * lidMul.R * Math.max(0, 1 + lidAdd.R);
         if (_el !== undefined && _mulL !== 1) model._model.setParameterValueByIndex(_el, model._model.getParameterValueByIndex(_el) * _mulL);
         if (_er !== undefined && _mulR !== 1) model._model.setParameterValueByIndex(_er, model._model.getParameterValueByIndex(_er) * _mulR);
         // rua 单闭眼：手在哪侧闭哪只眼（side=1 右、-1 左）。
@@ -2587,14 +2677,63 @@ export async function createLive2DBody(base, opts, entry, kit) {
         const _rEase = 1 - Math.exp(-dt / 0.15);
         ruaEyeS.L += (_wantL - ruaEyeS.L) * _rEase;
         ruaEyeS.R += (_wantR - ruaEyeS.R) * _rEase;
-        if (_el !== undefined && ruaEyeS.L > 0.002) model._model.setParameterValueByIndex(_el, model._model.getParameterValueByIndex(_el) * (1 - ruaEyeS.L));
-        if (_er !== undefined && ruaEyeS.R > 0.002) model._model.setParameterValueByIndex(_er, model._model.getParameterValueByIndex(_er) * (1 - ruaEyeS.R));
+        // 绝对值写（不是乘）：他们 Face() 是 set，blink 之后写才不会被打回去。
+        // 摸到脸上 → 双眼 0（闭）；手在屏幕右 → 闭模型左眼（ParamEyeLOpen），
+        // 另一只保持笑眼半眯 .45；两边都没到 → 双眼半眯。
+        if (_ruaOn && _ruaOpen !== null) {
+          if (_el !== undefined) model._model.setParameterValueByIndex(_el, _ruaOpen * (1 - ruaEyeS.L));
+          if (_er !== undefined) model._model.setParameterValueByIndex(_er, _ruaOpen * (1 - ruaEyeS.R));
+          // 表情也要在这层再写：applyChannel 在 applyFrame 之后，会把 role 的笑眼/嘴形盖掉
+          // （用户：rua 到后面就没表情了）。他们 Face() 每帧 set，同样压过心情。
+          const _sp = (id, v) => { const _i = paramIndex.get(id); if (_i !== undefined) model._model.setParameterValueByIndex(_i, v); };
+          _sp('EyeSmile', 1);
+          _sp('ParamMouthForm', 1);
+          // 8 秒档：眉心上抬 + 微张嘴（他们 BrowInnerUp .5 / MouthPressLipOpen .4）
+          if ((_rv?.seconds ?? 0) >= 8) { _sp('BrowInnerUp', .5); _sp('ParamMouthPressLipOpen', .4); }
+          else if ((_rv?.seconds ?? 0) >= 3) { _sp('BrowInnerUp', .2); }
+          // 脸红（key7）：**只能写在这里**（saveParameters 之后）。写进 applyFrame 会被存成基准，
+          // 之后每帧 loadParameters 都从「红」开始 —— 表现就是脸一直红、消退不了。
+          if ((_rv?.seconds ?? 0) >= 3) _sp('key7', 1);
+        }
         globalThis.__lidMul = [+lidMul.L.toFixed(3), +lidMul.R.toFixed(3)];
         // 打点：眼睛链路（乘数 / 最终开度 / role 算出来的 open）
         if (Date.now() - (globalThis.__lidDbg ?? 0) > 100) {
           globalThis.__lidDbg = Date.now();
           const gv = (id) => { const i = paramIndex.get(id); return i !== undefined ? +model._model.getParameterValueByIndex(i).toFixed(3) : null; };
           audit('lid L=' + lidMul.L.toFixed(3) + ' R=' + lidMul.R.toFixed(3) + ' eL=' + gv('ParamEyeLOpen') + ' eR=' + gv('ParamEyeROpen') + ' open=' + (globalThis.__l2dLast?.open ?? '?') + ' ec=' + (globalThis.__l2dLast?.ec ?? '?'));
+        }
+      }
+      // ---------- 摸后的四个 mood（Behavior.cs:59-67）----------
+      // 全部写在这里（saveParameters 之后、物理之前）：直写参数不会进基准，
+      // 播完下一帧 loadParameters 就恢复（写进 applyFrame 会永久残留）。
+      if (ruaAfter) {
+        const A = ruaAfter, D = A.def;
+        A.t += dt;
+        if (A.t >= D.dur) ruaAfter = null;
+        else {
+          const t = A.t;
+          const sp = (id, v) => { const _i = paramIndex.get(id); if (_i !== undefined) model._model.setParameterValueByIndex(_i, v); };
+          for (const [k, v] of Object.entries(D.sets)) sp(k, v);   // 参数名和他们一致（BrowInnerUp / ParamMouthForm / ParamEyeBallY…）
+          let eyeAdd = 0;
+          for (const [k, fps] of Object.entries(D.keys)) {
+            const v = moodAt(fps, t);
+            if (k === 'EyeOpen') { eyeAdd = v; continue; }         // 负数 = 额外闭合
+            const arg = MOOD_ARGS[k];
+            if (arg) sp(arg, v);
+          }
+          if (eyeAdd) {   // melt 的快眨两下
+            const o = clamp(1 + eyeAdd, 0, 1);
+            for (const id of ['ParamEyeLOpen', 'ParamEyeROpen']) sp(id, o);
+          }
+          sp('key7', 1);   // 脸红一路带到摸后
+          // 手抬到胸口（他们 HandToChest「默认手切举手」），结束前 0.9 秒放下
+          if (D.hand && !A.hand) { A.hand = true; applyOneWord('chest-hand', null, {}, {}); }
+          else if (D.hand && !A.handOff && t > D.dur - 0.9) {
+            A.handOff = true;
+            pendingMod = { scale: 1, pace: 1, repeat: 1, explicit: true };
+            dirSide = 1;
+            applyOneWord('put-hand-down', null, {}, {});
+          }
         }
       }
       try { model._physics?.evaluate(model._model, dt); } catch { /* 物理失败不致命 */ }

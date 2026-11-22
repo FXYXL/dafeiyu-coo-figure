@@ -616,16 +616,16 @@ const PATCHES = [
   },
   {
     file: 'petapp', id: 'ruaHand',
-    desc: 'rua 的几何白手：右键摸头时替代指针（rua-start/end 驱动），96px、朝头倾斜、指针用 !important 藏掉',
-    detect: (s) => /rua-hand/.test(s),
+    desc: 'rua 的白手：照他们 HandWindow.cs 的顶点 + 逐顶点透视（手指并排、缝 2.5、拇指斜出），每帧重算 SVG path；大小/倾斜用 HandPoseFor 原公式',
+    detect: (s) => /HAND_FINGER_X/.test(s),
     apply: (s) => {
-      let out = s.replace('/* ---------- body events → World ---------- */', "/* ---------- rua 的白手（照他们 HandWindow：一只几何白手替代指针） ---------- */\nconst ruaHand = document.createElement('div');\nruaHand.className = 'rua-hand';\nruaHand.hidden = true;\n/* 96px：他们 HandSize=.4（效果图里那只的 40%）。第一版按 160px 铺满，脸全被挡住。 */\nruaHand.style.cssText = 'position:fixed;left:0;top:0;width:96px;height:96px;pointer-events:none;z-index:2;opacity:0;transition:opacity .12s ease;will-change:transform;filter:drop-shadow(0 3px 6px rgba(0,0,0,.16))';\nruaHand.innerHTML = `<svg viewBox=\"0 0 160 160\" width=\"96\" height=\"96\" aria-hidden=\"true\">\n  <g fill=\"#fff\" stroke=\"#c2c6d2\" stroke-width=\"2.6\" stroke-linejoin=\"round\">\n    <ellipse cx=\"80\" cy=\"106\" rx=\"25\" ry=\"21\"/>\n    <rect x=\"57\" y=\"58\" width=\"13\" height=\"49\" rx=\"6.5\" transform=\"rotate(-24 80 102)\"/>\n    <rect x=\"71\" y=\"44\" width=\"13\" height=\"60\" rx=\"6.5\" transform=\"rotate(-8 80 102)\"/>\n    <rect x=\"86\" y=\"47\" width=\"13\" height=\"56\" rx=\"6.5\" transform=\"rotate(5 80 102)\"/>\n    <rect x=\"100\" y=\"60\" width=\"12\" height=\"44\" rx=\"6\" transform=\"rotate(18 80 102)\"/>\n    <rect x=\"42\" y=\"94\" width=\"34\" height=\"13\" rx=\"6.5\" transform=\"rotate(34 80 102)\"/>\n  </g>\n</svg>`;\nstage.append(ruaHand);\n/* 指针：inline cursor 会被 stage 的 grab 手形盖掉，用一张 !important 的样式表藏 */\nlet ruaCursorCss = null;\nfunction showRuaHand() {\n  if (!ruaHand.hidden) return;\n  ruaHand.hidden = false;\n  ruaCursorCss = document.createElement('style');\n  ruaCursorCss.textContent = 'html, body, body * { cursor: none !important; }';\n  document.head.append(ruaCursorCss);\n  requestAnimationFrame(() => { ruaHand.style.opacity = '1'; });\n  updateRuaHand();\n}\nfunction hideRuaHand() {\n  if (ruaHand.hidden) return;\n  ruaHand.style.opacity = '0';\n  if (ruaCursorCss) { ruaCursorCss.remove(); ruaCursorCss = null; }\n  setTimeout(() => { ruaHand.hidden = true; }, 120);\n}\n/** 手跟着鼠标，朝头部中心倾（他们 HandPoseFor：离中心越远越斜、略压扁）。 */\nfunction updateRuaHand() {\n  if (ruaHand.hidden) return;\n  const p0 = cursor.at;\n  const a = at()?.bubble;\n  if (!p0) return;\n  let rot = -38, sx = 1;\n  if (a) {\n    const ux = clamp((p0.x - a.x) / 64, -1.2, 1.2);\n    const uy = clamp((p0.y - a.y) / 46, -1.2, 1.2);\n    const r = Math.min(Math.hypot(ux, uy), 1.05);\n    const nz = Math.max(.55, Math.sqrt(Math.max(0, 1 - r * r * .7)));\n    rot = -38 + clamp(ux, -1, 1) * 12;\n    sx = .82 + .18 * nz;   // 越往侧面越\"扁\"（伪 3D）\n  }\n  ruaHand.style.transform = `translate(${p0.x - 48}px, ${p0.y - 56}px) rotate(${rot}deg) scale(${sx.toFixed(3)}, 1)`;\n}\ndocument.addEventListener('pointermove', updateRuaHand, { passive: true });\n" + '\n/* ---------- body events → World ---------- */');
+      let out = s.replace('/* ---------- body events → World ---------- */', "/* ---------- rua 的白手（照他们 HandWindow.cs：顶点 + 逐顶点透视，不是一张平贴图）---------- */\nconst ruaHand = document.createElement('div');\nruaHand.className = 'rua-hand';\nruaHand.hidden = true;\nruaHand.style.cssText = 'position:fixed;left:0;top:0;width:160px;height:160px;pointer-events:none;z-index:2;opacity:0;transition:opacity .1s ease;will-change:transform';\nruaHand.innerHTML = '<svg viewBox=\"0 0 160 160\" width=\"160\" height=\"160\" aria-hidden=\"true\">'\n  + '<path class=\"h-edge\" fill=\"#ffffff\" stroke=\"#b9bdc9\" stroke-width=\"2.2\" stroke-linejoin=\"round\"/>'\n  + '</svg>';\nstage.append(ruaHand);\nconst ruaHandPath = ruaHand.querySelector('.h-edge');\n\n/* 他们的几何（HandWindow.cs:78-95）。局部坐标：x 向右、y 向指尖，原点在手掌中心。\n   手掌 = 切角矩形；四根手指 = **并排**的直边方块（FingerX 间距 11.5、宽 9 → 缝只有 2.5，\n   所以看起来是并拢的四指，不是张开的）；拇指从左下斜出去。 */\nconst HAND_PALM = [[-22, 17], [22, 17], [22, -6], [11, -17], [-11, -17], [-22, -6]];\nconst HAND_FINGER_X = [-17.25, -5.75, 5.75, 17.25];\nconst HAND_FINGER_LEN = [36, 41, 37, 29];\n\n/** 一根手指：宽 w、长 len，指尖两角切 cut；从 (bx,by) 往上，绕根部转 angle。 */\nfunction handBlock(bx, by, len, w, cut, angle) {\n  const h = w / 2;\n  const pts = [[bx - h, by], [bx - h, by + len - cut], [bx - h + cut, by + len],\n    [bx + h - cut, by + len], [bx + h, by + len - cut], [bx + h, by]];\n  if (!angle) return pts;\n  const c = Math.cos(angle), s = Math.sin(angle);\n  return pts.map(([x, y]) => {\n    const dx = x - bx, dy = y - by;\n    return [bx + dx * c - dy * s, by + dx * s + dy * c];\n  });\n}\nconst HAND_SHAPES = [\n  HAND_PALM,\n  handBlock(HAND_FINGER_X[0], 15, HAND_FINGER_LEN[0], 9, 2.8, 0),\n  handBlock(HAND_FINGER_X[1], 15, HAND_FINGER_LEN[1], 9, 2.8, 0),\n  handBlock(HAND_FINGER_X[2], 15, HAND_FINGER_LEN[2], 9, 2.8, 0),\n  handBlock(HAND_FINGER_X[3], 15, HAND_FINGER_LEN[3], 9, 2.8, 0),\n  handBlock(-12, -9, 36, 10.5, 3, 1.0),   // 拇指：从左下往左上斜出去\n];\n/* 他们 HandVisual.Persp：沿「头心→手」方向的距离越小，远端越扁、越缩。 */\nconst HAND_PERSP = .0065;\n\n/** 每个顶点单独做透视（他们 Project()：先按手朝向转+缩放，再沿方向压扁、远的变小）。 */\nfunction handProject([px, py], pose, cx, cy) {\n  const sx = px, sy = -py;                     // 局部 y 向指尖 → 屏幕 y 向下，取负\n  const c = Math.cos(pose.rot), s = Math.sin(pose.rot);\n  let vx = (sx * c - sy * s) * pose.k, vy = (sx * s + sy * c) * pose.k;\n  if (pose.sin > 0) {\n    const along = vx * pose.ux + vy * pose.uy;\n    const qx = vx - along * pose.ux, qy = vy - along * pose.uy;\n    const f = 1 / (1 + along * pose.sin * HAND_PERSP);\n    const a2 = along * pose.cos * f;\n    vx = qx * f + a2 * pose.ux; vy = qy * f + a2 * pose.uy;\n  }\n  return [cx + vx, cy + vy];\n}\n\n/* 头盒（屏幕上）：rua-start 时由 kit 带上来（他们 Behavior.HeadBox）。 */\nlet ruaHandHead = null;\n/* 他们的姿态（HandPoseFor）：按光标相对头心的位置倾斜，掌心朝头心，指尖朝左上约 40°。 */\nfunction ruaHandPose(cur) {\n  const hb = ruaHandHead;\n  if (!hb) return { rot: -40 * Math.PI / 180, k: .46, cos: 1, sin: 0, ux: 0, uy: 0 };\n  const ux0 = (cur.x - hb.x) / hb.rx, uy0 = (cur.y - hb.y) / hb.ry;\n  const r = Math.min(Math.hypot(ux0, uy0), 1.05);\n  const nz = Math.max(.52, Math.sqrt(Math.max(0, 1 - r * r * .7)));\n  const rest = -Math.PI / 2 - 40 * Math.PI / 180;\n  const angle = rest + clamp(ux0, -1, 1) * .22;\n  // 他们：rx / 78 * (1.15 + .1*(1-r)) * .4（78 = 效果图里头的半宽，.4 = 手的大小）\n  const k = hb.rx / 78 * (1.15 + .1 * (1 - r)) * .4;\n  const len = Math.hypot(cur.x - hb.x, cur.y - hb.y);\n  const dx = len < 1 ? 0 : (cur.x - hb.x) / len, dy = len < 1 ? 0 : (cur.y - hb.y) / len;\n  return { rot: angle + Math.PI / 2, k, cos: nz, sin: Math.sqrt(1 - nz * nz), ux: dx, uy: dy };\n}\n/** 重算 path：每帧 6 组多边形逐顶点投影（和他们的 OnRender 一样）。 */\nfunction ruaHandDraw() {\n  if (ruaHand.hidden) return;\n  const p0 = cursor.at;\n  if (!p0) return;\n  const pose = ruaHandPose(p0);\n  const cx = 80, cy = 80;                       // 窗口 160 的中心 = 手掌中心\n  let d = '';\n  for (const shape of HAND_SHAPES) {\n    const [x0, y0] = handProject(shape[0], pose, cx, cy);\n    d += 'M' + x0.toFixed(2) + ' ' + y0.toFixed(2);\n    for (let i = 1; i < shape.length; i++) {\n      const [x, y] = handProject(shape[i], pose, cx, cy);\n      d += 'L' + x.toFixed(2) + ' ' + y.toFixed(2);\n    }\n    d += 'Z';\n  }\n  ruaHandPath.setAttribute('d', d);\n  ruaHand.style.transform = 'translate(' + (p0.x - 80) + 'px,' + (p0.y - 80) + 'px)';\n}\nlet ruaCursorCss = null;\nfunction showRuaHand(d) {\n  if (d && typeof d.hx === 'number') ruaHandHead = { x: d.hx, y: d.hy, rx: d.rx, ry: d.ry };\n  if (!ruaHand.hidden) return;\n  ruaHand.hidden = false;\n  ruaCursorCss = document.createElement('style');\n  ruaCursorCss.textContent = 'html, body, body * { cursor: none !important; }';\n  document.head.append(ruaCursorCss);\n  ruaHandDraw();\n  requestAnimationFrame(() => { ruaHand.style.opacity = '1'; });\n}\nfunction hideRuaHand() {\n  if (ruaHand.hidden) return;\n  ruaHand.style.opacity = '0';\n  if (ruaCursorCss) { ruaCursorCss.remove(); ruaCursorCss = null; }\n  setTimeout(() => { ruaHand.hidden = true; }, 110);\n}\ndocument.addEventListener('pointermove', ruaHandDraw, { passive: true });\n" + '\n/* ---------- body events → World ---------- */');
       if (!out.includes('function showRuaHand')) throw new Error('ruaHand：插入锚点未命中');
       out = out.replace(
         "    if (d.kind === 'grab') closeMenu();",
-        "    if (d.kind === 'grab') closeMenu();\n    // rua 的白手（他们 HandWindow）：开始摸出现、松手淡出\n    if (d.kind === 'rua-start') showRuaHand();\n    else if (d.kind === 'rua-end') hideRuaHand();",
+        "    if (d.kind === 'grab') closeMenu();\n    // rua 的白手（他们 HandWindow）：开始摸出现（带头的盒子）、松手淡出\n    if (d.kind === 'rua-start') showRuaHand(d);\n    else if (d.kind === 'rua-end') hideRuaHand();",
       );
-      if (!out.includes('showRuaHand();')) throw new Error('ruaHand：onBody 分支未命中');
+      if (!out.includes('showRuaHand(d);')) throw new Error('ruaHand：onBody 分支未命中');
       return out;
     },
   },
@@ -1021,12 +1021,59 @@ function toneOf(text: string): string {
   },
   {
     file: 'body', id: 'ruaDtCap',
-    desc: 'rua 的 dt 加上限 50ms：鼠标停住一会儿再动，dt 会把停顿整段算成「在摸」，时间虚高（用户：45 秒被算成 70 多秒）',
-    detect: (s) => /Math\.min\(\.05, Math\.max\(\.016/.test(s),
+    desc: 'rua 的 dt 照他们的定时器 clamp(.001,.05)。下限不能用 .016 —— stepRua 是每个 pointermove 调一次，高回报率鼠标 1~2ms 一个事件全被抬到 16ms，时间按倍数膨胀（15 秒变 25 秒）',
+    detect: (s) => /Math\.min\(\.05, Math\.max\(0,/.test(s),
     apply: (s) => {
       const a = "    const dt = Math.max(.016, (t - ((ruaLast && ruaLast.t) || t)) / 1000);";
       if (!s.includes(a)) return null;   // 容错：ruaHead 没打上时安静跳过
-      return s.replace(a, "    // 2026-11-22：上限 50ms —— 他们那边定时器 dt 是 clamp(.004,.05)，我们原来只有下限，\n    // 鼠标停住 3 秒再动一下，那一帧就 += 3 秒（用户实测 45 秒被算成 70 多）。\n    const dt = Math.min(.05, Math.max(.016, (t - ((ruaLast && ruaLast.t) || t)) / 1000));");
+      return s.replace(a, "    // 2026-11-22：上下限照他们的定时器 clamp(.001,.05)。\n    // 下限原来是 .016 —— 那是「一帧」，但 stepRua 是每个 pointermove 调一次，\n    // 高回报率鼠标 1~2ms 一个事件，全被抬到 16ms，rua 15 秒被算成 25 秒（1.67 倍）。\n    // 上限 .05 保留：鼠标停住再动，不该把停顿算成在摸。\n    const dt = Math.min(.05, Math.max(0, (t - ((ruaLast && ruaLast.t) || t)) / 1000));");
+    },
+  },
+  {
+    file: 'body', id: 'ruaNoIdle',
+    desc: 'rua 期间不做闲时动作（他们 behavior.Touching：摸头时她不会自己走/跳/坐，只保持站着被摸）',
+    detect: (s) => /rua\\.\\n\\.\\n\\.\\n/.test(s) || s.includes('rua 期间不做闲时动作'),
+    apply: (s) => {
+      const a = "  function decide() {";
+      if (!s.includes(a)) throw new Error('ruaNoIdle：锚点未命中');
+      return s.replace(a, a + "\n    if (ruaDown) return;   // rua 期间不做闲时动作（他们 behavior.Touching = true）");
+    },
+  },
+  {
+    file: 'body', id: 'ruaHeadBox',
+    desc: 'rua-start 带上头的盒子（hx/hy/rx/ry）：白手要按他们的 HandPoseFor 算大小和倾斜，必须知道头心与半宽',
+    detect: (s) => /hx: c\.x, hy: c\.y, rx:/.test(s),
+    apply: (s) => {
+      const a = "onEvent('touch', { kind: 'rua-start' });";
+      if (!s.includes(a)) throw new Error('ruaHeadBox：锚点未命中');
+      return s.replace(a, "onEvent('touch', { kind: 'rua-start', hx: c.x, hy: c.y, rx: head.rx * hkx, ry: head.ry * hky });");
+    },
+  },
+  {
+    file: 'world', id: 'ruaCrashGuard',
+    desc: 'rua 期间丢弃 crash/drop/throw：右键摸头会顺带发出 drag 链的 touch，World 把残留 crash 聚合成「你重重落地，摔晕了一会儿」刷进聊天',
+    detect: (s) => /ruaActive/.test(s),
+    apply: (s) => {
+      let out = s.replace(
+        "  private touch: TouchBatch | null = null;",
+        "  private touch: TouchBatch | null = null;\n  /** rua（右键摸头）进行中：这期间的拖拽/掉落事件一律丢弃（2026-11-22 修刷屏） */\n  private ruaActive = false;",
+      );
+      if (!out.includes('ruaActive')) throw new Error('ruaCrashGuard：字段未插入');
+      out = out.replace(
+        "    const kind = String(msg.kind);\n    if (kind === 'grab') return;",
+        "    const kind = String(msg.kind);\n    if (kind === 'grab') return;\n    // 2026-11-22：rua 期间丢掉 crash/drop/throw —— 右键长按摸头时页面偶尔还顺着拖拽链\n    // 发出 throw/crash，World 把残留的 crash 聚合成「你重重落地，摔晕了一会儿」刷进聊天。\n    if (this.ruaActive && (kind === 'crash' || kind === 'drop' || kind === 'throw')) return;",
+      );
+      if (!out.includes("kind === 'crash' || kind === 'drop'")) throw new Error('ruaCrashGuard：丢弃分支未命中');
+      out = out.replace(
+        "      if (this.touch) { clearTimeout(this.touch.timer); this.touch = null; }",
+        "      if (this.touch) { clearTimeout(this.touch.timer); this.touch = null; }\n      this.ruaActive = kind !== 'rua-end';",
+      );
+      if (!out.includes("this.ruaActive = kind !== 'rua-end';")) throw new Error('ruaCrashGuard：开关未插入');
+      // 更根本的一条：crash 只是 throw/drop 的「摔晕了」补充标记，单独出现一律丢弃。
+      const oldCrash = "    if (kind === 'crash' && this.touch && (this.touch.kind === 'throw' || this.touch.kind === 'drop')) {\n      this.touch.crashed = true;\n      return;\n    }";
+      if (!out.includes(oldCrash)) throw new Error('ruaCrashGuard：crash 分支未命中');
+      out = out.replace(oldCrash, "    // 2026-11-22：crash 只给 throw/drop 打标记，**单独出现一律丢弃**。\n    // 之前没有对应 throw/drop 时会新建一个 touch，2.5 秒后 flush 成「你重重落地，摔晕了一会儿」\n    // —— rua 时页面顺着拖拽链反复发 crash，聊天里就刷屏了（用户截图 10 条相同）。\n    if (kind === 'crash') {\n      if (this.touch && (this.touch.kind === 'throw' || this.touch.kind === 'drop')) this.touch.crashed = true;\n      return;\n    }");
+      return out;
     },
   },
   {
