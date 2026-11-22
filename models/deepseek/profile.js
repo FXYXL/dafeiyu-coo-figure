@@ -310,6 +310,10 @@ export default {
     'alert-combo': ['face-front', 'stand-straight', 'brow-knit', 'look-left'],                       // 警觉 = 正视 站直 皱眉 看左边
   },
 
+  // 气泡锚点（logo 单位，128 = 画面中心）：她侧身站立时视觉上的头顶比身体中线偏左，
+  // 台词气泡按这个点对中。觉得偏右就调小、偏左调大（1 单位 ≈ 2px）。
+  bubbleAnchor: [116, 0],
+
   // ---------- 彩蛋小剧场（照他们的 skits.txt 抄，数据源 tools/data/skits.txt）----------
   // 每行 = 一句台词 + 一组动作（他们的「台词|动作 动作|停留秒数」）。
   //   at  = 这句开始的时间（前面各句停留秒数的累加）
@@ -402,6 +406,40 @@ export default {
         { at: 21.41, w: ['look-around', 'blush', 'press-lips'], sec: 1.9 },
         { at: 23.31, w: ['head-down', { w: 'blink', pace: 0.65, repeat: 2 }, 'blush'], sec: 1.1 },
         { at: 24.41, w: ['restore', 'blush', 'glance', 'press-lips', 'brow-frown'], say: '那个……你都看到了？不要这样盯着我……可以当做没看见吗？', sec: 2.6 },
+    ] },
+    { id: 'newyear', title: '跨年倒数', dur: 8.8, life: 13, when: {hours: [0,1,2,3,19,20,21,22,23],date: [[12,31],[1,1]]}, steps: [
+        { at: 0, w: ['look-up', 'eye-wide'], say: '十、九、八……', sec: 2.5 },
+        { at: 2.5, w: ['lean-forward', 'eye-wide', 'press-lips'], say: '三、二、一……', sec: 2.5 },
+        { at: 5, w: ['laugh', 'eye-squeeze'], say: '新年快乐！！', sec: 3 },
+    ] },
+    { id: 'friday', title: '周五放松', dur: 9.8, life: 14, when: {hours: [17,18,19,20,21,22],weekday: [5]}, steps: [
+        { at: 0, w: ['sigh', 'mouth-smile'], say: '终于周五了……', sec: 3 },
+        { at: 3, w: ['drowsy-combo', 'head-swing'], say: '今晚什么都不想，只想躺平', sec: 3 },
+        { at: 6, w: ['eye-squeeze', { w: 'nod', scale: 0.5 }], say: '老大也一起放松一下吧', sec: 3 },
+    ] },
+    { id: 'sleep-late', title: '深夜催睡', dur: 10.8, life: 15, when: {hours: [0,1,2,3]}, steps: [
+        { at: 0, w: ['brow-frown', 'face-front'], say: '老大，已经很晚了', sec: 3 },
+        { at: 3, w: ['mouth-smile', { w: 'shake', scale: 0.5 }, 'finger-point'], say: '明天的事，交给明天的你', sec: 3.5 },
+        { at: 6.5, w: ['restore', 'mouth-smile'], say: '去睡觉，我替你看着', sec: 3.5 },
+    ] },
+    { id: 'sleep-tsundere', title: '傲娇催睡', dur: 14.3, life: 18, when: {hours: [0,1,2,3]}, steps: [
+        { at: 0, w: [{ w: 'turn-head', side: -1 }, 'puff-cheek', 'squint'], say: '哼，你还不睡？', sec: 3 },
+        { at: 3, w: ['glance', 'press-lips', 'blush'], say: '我才不是担心你，只是你熬夜太吵了', sec: 4 },
+        { at: 7, w: ['head-down', 'mouth-pout', 'brow-frown'], say: '……黑眼圈出来就不好看了啦', sec: 3.5 },
+        { at: 10.5, w: ['restore', 'brow-knit', 'finger-point'], say: '快去睡！别让我说第二遍！', sec: 3 },
+    ] },
+    { id: 'sleep-mom', title: '妈妈催睡', dur: 18.3, life: 22, when: {hours: [0,1,2,3]}, steps: [
+        { at: 0, w: ['sigh', 'brow-frown', 'face-front'], say: '老大啊——', sec: 2.5 },
+        { at: 2.5, w: ['squint', 'finger-point'], say: '不是我说你，你自己看看现在几点了', sec: 3.5 },
+        { at: 6, w: ['brow-knit', { w: 'shake', pace: 1.6 }, 'mouth-pout'], say: '熬夜可对身体不好……', sec: 4 },
+        { at: 10, w: ['squint', 'puff-cheek'], say: '明天起来头疼、没精神，又要说是我没提醒你', sec: 4 },
+        { at: 14, w: ['restore', 'put-hand-down', 'sigh', { w: 'nod', scale: 0.5 }], say: '……行了，别磨蹭了，赶紧睡觉去', sec: 3.5 },
+    ] },
+    { id: 'sleep-dummy', title: '憨憨催睡', dur: 13.3, life: 17, when: {hours: [0,1,2,3]}, steps: [
+        { at: 0, w: ['tilt', 'finger-point', 'look-up'], say: '老大老大，我数了一下', sec: 3 },
+        { at: 3, w: ['look-left', { w: 'nod', repeat: 2 }], say: '现在是……一只羊、两只羊……', sec: 3.5 },
+        { at: 6.5, w: ['eye-close', 'head-down', 'eye-half'], say: '……呼……', sec: 2.5 },
+        { at: 9, w: ['restore', 'startle', 'eye-wide', 'sweat'], say: '诶？我怎么先睡着了！你也快去睡！', sec: 3.5 },
     ] },
   ],
 

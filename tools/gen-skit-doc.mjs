@@ -30,6 +30,27 @@ const zh = (x) => {
   return (back[x.w] ?? x.w) + MOD(x);
 };
 
+/** 连续数字压成区间：0,1,2,3,19,20 → 「0~3、19~20」 */
+function spans(list) {
+  const a = [...list].sort((x, y) => x - y), out = [];
+  let i = 0;
+  while (i < a.length) {
+    let j = i;
+    while (j + 1 < a.length && a[j + 1] === a[j] + 1) j++;
+    out.push(i === j ? String(a[i]) : a[i] + '~' + a[j]);
+    i = j + 1;
+  }
+  return out.join('、');
+}
+const WHEN = (w) => {
+  if (!w) return '随时';
+  const bits = [];
+  if (w.hours) bits.push(spans(w.hours) + ' 点');
+  if (w.weekday) bits.push('周' + w.weekday.map((d) => '日一二三四五六'[d]).join('/'));
+  if (w.date) bits.push(w.date.map(([m, d]) => m + '/' + d).join(' 或 '));
+  return bits.join(' · ');
+};
+
 const lines = [];
 lines.push('# 小剧场台词（13 段）');
 lines.push('');
@@ -39,17 +60,18 @@ lines.push('演到一半她真的开口说话、或者被拖动/走路，会立�
 lines.push('');
 lines.push('想改哪句直接说，或者改 `repo/tools/data/skits.txt` 再重新生成。');
 lines.push('');
-lines.push('| # | 名字 | 句数 | 时长 | 道具 |');
-lines.push('|---|---|---|---|---|');
+lines.push('| # | 名字 | 句数 | 时长 | 触发条件 | 道具 |');
+lines.push('|---|---|---|---|---|---|');
 profile.skits.forEach((s, i) => {
   const lines2 = s.steps.filter((x) => x.say).length;
-  lines.push(`| ${i + 1} | ${s.title ?? s.id} | ${lines2} | ${s.dur}s | ${(s.props ?? []).map((p) => back[p] ?? p).join('、') || '—'} |`);
+  lines.push(`| ${i + 1} | ${s.title ?? s.id} | ${lines2} | ${s.dur}s | ${WHEN(s.when)} | ${(s.props ?? []).map((p) => back[p] ?? p).join('、') || '—'} |`);
 });
 lines.push('');
 
 for (const s of profile.skits) {
   const sayN = s.steps.filter((x) => x.say).length;
   lines.push(`## ${s.title ?? s.id}（${s.dur} 秒，${sayN} 句）`);
+  if (s.when) lines.push(`\n**只有 ${WHEN(s.when)} 才演**\n`);
   if (s.props?.length) lines.push(`\n道具：${s.props.map((p) => back[p] ?? p).join('、')}（开演戴上，演完自己摘）\n`);
   lines.push('');
   lines.push('| 时间 | 台词 | 同时做的动作 |');

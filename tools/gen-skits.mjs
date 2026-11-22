@@ -31,7 +31,28 @@ const IDS = {
   名侦探: 'detective', 认真加班: 'overtime', 偷吃零食: 'snack', 突然入戏: 'entrance',
   魔法少女: 'magical', 学习打瞌睡: 'doze', 自己吓自己: 'selfscare', 吸血鬼: 'vampire',
   小学老师: 'teacher', 减肥计划: 'diet', 寻宝: 'treasure', 保安大叔: 'guard', 跳舞: 'dancefloor',
+  // 条件剧本（时间类）
+  跨年倒数: 'newyear', 周五放松: 'friday',
+  深夜催睡: 'sleep-late', 傲娇催睡: 'sleep-tsundere', 妈妈催睡: 'sleep-mom', 憨憨催睡: 'sleep-dummy',
 };
+
+/** 他们标题里的 @条件 → 我们认的 when。不认识的（生日/农历/亲密度）返回 { skip }。 */
+function parseCond(text) {
+  if (!text) return null;
+  if (/生日|除夕|春节|亲密/.test(text)) return { skip: '要用户配置或农历' };
+  const when = {};
+  const hours = new Set();
+  for (const m of text.matchAll(/(\d{1,2})点/g)) hours.add(Number(m[1]));
+  if (text.includes('傍晚')) [17, 18].forEach((h) => hours.add(h));
+  if (text.includes('晚上')) [19, 20, 21, 22].forEach((h) => hours.add(h));
+  if (text.includes('深夜')) [23, 0, 1, 2, 3].forEach((h) => hours.add(h));
+  if (hours.size) when.hours = [...hours].sort((a, b) => a - b);
+  const WD = { 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 日: 0, 天: 0 };
+  const wd = [...text.matchAll(/周([一二三四五六日天])/g)].map((m) => WD[m[1]]);
+  if (wd.length) when.weekday = wd;
+  if (text.includes('跨年')) when.date = [[12, 31], [1, 1]];
+  return Object.keys(when).length ? when : { skip: '条件没认出来' };
+}
 
 // 他们的「修饰词 + 基础词」连写在别的语言里是一个词，我们拆成 base + 修饰
 const COMBO = {
@@ -88,8 +109,9 @@ for (const raw of lines) {
   if (line.startsWith('# ')) {
     const title = line.slice(2).trim();
     const base = title.split(/\s+/)[0];
-    const cond = title.includes('@');
-    cur = { title: base, id: IDS[base] ?? null, cond, prop: null, rows: [] };
+    const at = title.indexOf('@');
+    const condText = at >= 0 ? title.slice(at + 1).trim() : '';
+    cur = { title: base, id: IDS[base] ?? null, condText, prop: null, rows: [] };
     skits.push(cur);
     continue;
   }
@@ -109,7 +131,9 @@ const out = [];
 let at = 0;
 const pad = (n) => String(n).replace(/(\.\d)$/, '$10');
 for (const sk of skits) {
-  if (sk.cond || !sk.id) continue;          // 条件彩蛋先不做
+  if (!sk.id) continue;                     // 没映射 id 的（生日/亲密度）先不做
+  const when = parseCond(sk.condText);
+  if (when?.skip) { console.log(`跳过 ${sk.title}：${when.skip}`); continue; }
   const steps = [];
   let t = 0;
   // 道具（@道具 单片眼镜…）：他们单独管理、演完才摘，所以「恢复」不该把它清掉。
@@ -127,7 +151,7 @@ for (const sk of skits) {
     t += row.sec;
   }
   const dur = Number((t + 0.8).toFixed(2));
-  out.push({ id: sk.id, title: sk.title, dur, life: Math.round(dur + 4), props, steps });
+  out.push({ id: sk.id, title: sk.title, dur, life: Math.round(dur + 4), props, when, steps });
 }
 
 // ---------- 报告 ----------
@@ -159,7 +183,8 @@ if (WRITE) {
       return `        { ${bits.join(', ')} },`;
     }).join('\n');
     const props = s.props.length ? `props: [${s.props.map((x) => `'${x}'`).join(', ')}], ` : '';
-    return `    { id: '${s.id}', title: '${s.title}', dur: ${s.dur}, life: ${s.life}, ${props}steps: [\n${steps}\n    ] },`;
+    const wtxt = s.when ? `when: ${JSON.stringify(s.when).replace(/"(\w+)":/g, '$1: ').replace(/"/g, "'").replace(/'/g, "'")}, ` : '';
+    return `    { id: '${s.id}', title: '${s.title}', dur: ${s.dur}, life: ${s.life}, ${props}${wtxt}steps: [\n${steps}\n    ] },`;
   }).join('\n');
 
   let src = fs.readFileSync(PROFILE, 'utf8');

@@ -1167,9 +1167,25 @@ export async function createLive2DBody(base, opts, entry, kit) {
   let lastSkitId = null;   // 别连着抽到同一个
   /** 当前这句台词说到 skit.t 的哪个时刻（超过就闭嘴）。他们每句台词自带停留秒数。 */
   let skitSayUntil = 0;
+  /** 条件剧本（时间类）：when 的 hours / weekday / date 全中才演。 */
+  function skitOk(def) {
+    const w = def.when;
+    if (!w) return true;
+    const d = new Date();
+    if (w.hours && !w.hours.includes(d.getHours())) return false;
+    if (w.weekday && !w.weekday.includes(d.getDay())) return false;
+    if (w.date && !w.date.some(([m, day]) => d.getMonth() + 1 === m && d.getDate() === day)) return false;
+    return true;
+  }
   function startSkit() {
     if (!skits.length) return false;
-    const pool = skits.length > 1 ? skits.filter((s) => s.id !== lastSkitId) : skits;
+    const ready = skits.filter(skitOk);
+    const special = ready.filter((s) => s.when);
+    // 条件剧本更"应景"（0~3 点催睡、周五傍晚放松）：满足时六成演它，
+    // 让"今晚几点"真的有区别；其余仍走 13 个日常剧本。
+    let pool = special.length && Math.random() < 0.6 ? special : ready.filter((s) => !s.when);
+    if (!pool.length) pool = ready.length ? ready : skits;
+    if (pool.length > 1) pool = pool.filter((s) => s.id !== lastSkitId);
     const def = pool[Math.floor(Math.random() * pool.length)];
     lastSkitId = def.id;
     skit = { def, t: 0, done: new Set() };
@@ -1185,10 +1201,11 @@ export async function createLive2DBody(base, opts, entry, kit) {
   function stopSkit(why) {
     if (!skit) return;
     audit('skit-stop ' + skit.def.id + ' ' + why);
+    const life = skit.def.life ?? 15;
     skit = null;
-    // 被打断（说话/拖动/换姿势）时，刚做出来的表情动作还要淡出 1.5 秒 ——
+    // 被打断（说话/拖动/换姿势）时，已经做出来的动作还要挂完 life 再淡出 1.5 秒 ——
     // 这期间别让她自己走起来，否则就是「保持前倾 → 边走边歪」
-    body?.set?.({ hold: RELAX_FADE + 1.5 });
+    body?.set?.({ hold: life + RELAX_FADE + 0.5 });
   }
   /** 每帧推进剧本：到点的 step 走 applyOneWord（和散词同一条写入路径，通道/轨道/手部全都走）。 */
   function stepSkit(dt) {
@@ -1227,6 +1244,10 @@ export async function createLive2DBody(base, opts, entry, kit) {
         dirSide = part.side ?? 1;
         applyOneWord(part.w, null, {}, { group: 'skit-' + skit.def.id, life: skit.def.life, skit: true });
       }
+      // 每句都刷一次「别自由漫游」：条目寿命是从**它自己出生**算的 ——
+      // 最后一句（9.5s 出生 + life 18s）要到 27.5s 才淡出完，比剧本结束晚十几秒。
+      // 只在开演时按一次 hold 的话，20 秒后她就会带着前倾走起来（用户实测名侦探）。
+      body?.set?.({ hold: (skit.def.life ?? 15) + RELAX_FADE + 0.5 });
     }
     if (skit.t > (skit.def.dur ?? 6)) stopSkit('done');
   }
@@ -2233,6 +2254,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
   };
 
   const figure = {
+    // 气泡锚点：kit 默认 [128, 0]（logo 中心）——她侧身时视觉上的头顶偏左一点，
+    // 用 profile.bubbleAnchor 微调（logo 单位，随窗口缩放）。
+    get anchors() { return profile.bubbleAnchor ? { bubble: profile.bubbleAnchor } : undefined; },
     // 彩蛋台词：交给页面临时显示一句话（页面侧不排队、不发给 World）。
     // 她正在说话/有问答挂着时页面自己忽略，所以不会和对话抢气泡。
     emitBubble(text, seconds) {
