@@ -159,7 +159,7 @@ if (WRITE) {
       return `        { ${bits.join(', ')} },`;
     }).join('\n');
     const props = s.props.length ? `props: [${s.props.map((x) => `'${x}'`).join(', ')}], ` : '';
-    return `    { id: '${s.id}', dur: ${s.dur}, life: ${s.life}, ${props}steps: [\n${steps}\n    ] },`;
+    return `    { id: '${s.id}', title: '${s.title}', dur: ${s.dur}, life: ${s.life}, ${props}steps: [\n${steps}\n    ] },`;
   }).join('\n');
 
   let src = fs.readFileSync(PROFILE, 'utf8');

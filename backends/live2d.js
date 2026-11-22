@@ -964,7 +964,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
   const handParamIds = new Set(['Movement1', 'Movement2', 'Movement3']);
   for (const [k, v] of Object.entries(paramActs)) {
     if (!v?.hand) continue;
-    for (const p of [...(v.params ?? []), ...(v.waves ?? []), ...(v.postWaves ?? [])]) handParamIds.add(p.id);
+    // 2026-11-22：原来只收 params/waves，**没收 keys** —— 手型动画的关键帧参数（Param59~62 等）
+    // 换手时清不掉，旧手型残留值会和新手型打架（用户：「带手部动作的动画都不完整」）。
+    for (const p of [...(v.params ?? []), ...(v.waves ?? []), ...(v.postWaves ?? []), ...(v.keys ?? []), ...(v.exit?.keys ?? [])]) handParamIds.add(p.id);
   }
 
   // ---------- 修饰词（微/大/快/慢/×几）与中文别名 ----------
@@ -1168,6 +1170,11 @@ export async function createLive2DBody(base, opts, entry, kit) {
     lastSkitId = def.id;
     skit = { def, t: 0, done: new Set() };
     skitSayUntil = 0;
+    // 剧本期间把 kit 的闲时调度按住：不然她一边保持前倾一边自己溜达/跳/坐
+    // （hold 是「多少秒内不自由漫游」，和 say 用的 holdRoam 同一路）
+    // hold 要盖住**整段保持期**（life），不是只盖演出时长 —— 用户：「做完剧本的保持动作时间里
+    // 会有随机动作跟进来，导致一边保持前倾一边移动」。life 到期她才恢复自由漫游。
+    body?.set?.({ hold: (def.life ?? (def.dur ?? 6) + 4) + 0.5 });
     audit('skit-start ' + def.id);
     return true;
   }
@@ -1351,7 +1358,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
       const to = (lid || smile)
         ? 1 + (((p.to ?? 1) - 1) * effScale)
         : f0 + ((p.to ?? 0) - f0) * effScale;
-      channel.set(p.id, { kind: 'hold', lid, smile, from: lid || smile ? 0 : f0, to: mir(p.id, to), t0: now, dur, in: inT, out: outT, keep: !!(def.state || def.keep), faceLinked: !!fromFace, emo, bornS: sentenceCount, bornT: clockT, src: w, group: ctx.group, skit: ctx.skit, life: life ?? undefined });
+      // p.in：单个参数可以自己定淡入时长（「放下手」那种要慢慢收的手势用）——
+      // 统一 min(0.45, dur*0.2) 对它是瞬间清零，手就「啪」一下掉了
+      channel.set(p.id, { kind: 'hold', lid, smile, from: lid || smile ? 0 : f0, to: mir(p.id, to), t0: now, dur, in: p.in ?? inT, out: outT, keep: !!(def.state || def.keep), faceLinked: !!fromFace, emo, bornS: sentenceCount, bornT: clockT, src: w, group: ctx.group, skit: ctx.skit, life: life ?? undefined });
     }
     // 波形动作（点头、摇头、甩草…）：正弦摆动叠在通道上。
     // 不支持这一种的话，点头永远只能走旧路，也就永远不能和别的东西叠加。
@@ -1554,6 +1563,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 多条时后写覆盖 —— 和以前完全一致。
     if (tracks.length) {
       const sums = new Map();
+      const handDirect = new Map();   // 手型参数：覆盖（不相加）
+      // 倒序遍历 → 先遇到的是数组里**最新**那条，所以用 has 判断「第一次写入即最新」，旧的不覆盖
       for (let n = tracks.length - 1; n >= 0; n--) {
         const c = tracks[n];
         const age = t - c.t0;
@@ -1579,8 +1590,13 @@ export async function createLive2DBody(base, opts, entry, kit) {
           if (c.id === 'ParamEyeLOpen') lidAdd.L += v; else lidAdd.R += v;
           continue;
         }
+        // 手部骨架（竖手指/抚胸/狗尾草/放下手）是**切手型**，不是叠加：
+        // 他们 Hand 枚举同一时刻只有一只手（Body.cs:100-101），两条轨道的参数相加会把胳膊算歪
+        // （用户：「抚胸手突然很快放下」「带手部的动画都不完整」）。按轨道顺序取最新一条覆盖。
+        if (c.src && paramActs[c.src]?.hand) { if (!handDirect.has(c.id)) handDirect.set(c.id, v); continue; }   // 倒序遍历：先遇到的是最新那条
         sums.set(c.id, (sums.get(c.id) ?? 0) + v);
       }
+      for (const [id, v] of handDirect) setParamByName(id, v);   // 手型：绝对值覆盖
       for (const [id, sum] of sums) addParam(id, sum);
     }
     // 叠加层（2.8）：主通道写完后，把外力增量**加**到当前值上（rua 头反向叠在歪头词上 = 更歪）
