@@ -2730,6 +2730,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
           audit('lid L=' + lidMul.L.toFixed(3) + ' R=' + lidMul.R.toFixed(3) + ' eL=' + gv('ParamEyeLOpen') + ' eR=' + gv('ParamEyeROpen') + ' open=' + (globalThis.__l2dLast?.open ?? '?') + ' ec=' + (globalThis.__l2dLast?.ec ?? '?'));
         }
       }
+      try { model._physics?.evaluate(model._model, dt); } catch { /* 物理失败不致命 */ }
       // ---------- 摸后的四个 mood（Behavior.cs:59-67）----------
       // 全部写在这里（saveParameters 之后、物理之前）：直写参数不会进基准，
       // 播完下一帧 loadParameters 就恢复（写进 applyFrame 会永久残留）。
@@ -2778,7 +2779,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
           }
         }
       }
-      try { model._physics?.evaluate(model._model, dt); } catch { /* 物理失败不致命 */ }
+
       // 打点：眨眼只在眨时打（0.05 秒一次，精确测时长）+ 每秒打身体/呼吸
       {
         const gv = (id) => { const i = paramIndex.get(id); return i !== undefined ? model._model.getParameterValueByIndex(i) : null; };
