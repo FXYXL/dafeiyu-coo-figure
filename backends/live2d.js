@@ -1329,7 +1329,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
     if (on) { ruaPeak = Math.max(ruaPeak, frame.rua?.seconds ?? 0); ruaPrevOn = true; return; }
     if (!ruaPrevOn) return;
     ruaPrevOn = false;
-    if (clockT - ruaLastEnd < 1.2) { audit('rua-after skip(within 1.2s)'); return; }
+    // 2026-11-22：原来这里有个「1.2 秒内不重复结算」的保护，结果 rua 一结束就 return，
+    // 摸后 mood 永远不播、脸红也立刻断（用户：一停手脸立马变白）。删掉。
     ruaLastEnd = clockT;
     const peak = ruaPeak;
     ruaPeak = 0;
@@ -1971,6 +1972,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 用户：「rua 头还会有随机动作出现，竖手指哪来的」。
     if (ruaOn && !ruaWasOn) {
       relaxChannels();
+      // 上一次的「摸后」还在演的话清掉：不然一摸上来就带着上次的脸红和表情
+      if (ruaAfter) { ruaAfter = null; for (const k of VIRTUAL_KEYS) virtualParams.delete(k); }
       audit('rua-interrupt 打断当前动作');
     }
     ruaWasOn = ruaOn;
@@ -2712,9 +2715,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
           // 之后每帧 loadParameters 都从「红」开始 —— 表现就是脸一直红、消退不了。
           // 2026-11-22：做成渐入渐出（他们「脸红」是表情层，有 0.3~0.5 秒淡入；
           // 我们之前直接写 1，红得「一大块」突然出现）。
-          if ((_rv?.seconds ?? 0) >= 3) lastBlushAt = clockT;
-          const _wantBlush = (clockT - lastBlushAt < 0.12 || ruaAfter) ? 1 : 0;
-          blushK += (_wantBlush - blushK) * (1 - Math.exp(-dt / (_wantBlush ? 0.45 : 0.7)));
+          const _wantBlush = (_ruaOn && (_rv?.seconds ?? 0) >= 3) || !!ruaAfter ? 1 : 0;
+          blushK += (_wantBlush - blushK) * (1 - Math.exp(-dt / (_wantBlush ? 0.5 : 1.2)));
           if (blushK > 0.003) _sp('key7', blushK);
         }
         globalThis.__lidMul = [+lidMul.L.toFixed(3), +lidMul.R.toFixed(3)];
@@ -2757,7 +2759,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
             const o = clamp(1 + eyeAdd, 0, 1);
             for (const id of ['ParamEyeLOpen', 'ParamEyeROpen']) sp(id, o);
           }
-          lastBlushAt = clockT;   // 脸红一路带到摸后（渐入值在 Lids 段统一算）
+          // 脸红由 Lids 段的 _wantBlush（ruaAfter 非空即保持）统一处理
           // 手抬到胸口（他们 HandToChest「默认手切举手」），结束前 0.9 秒放下
           if (D.hand && !A.hand) { A.hand = true; applyOneWord('chest-hand', null, {}, {}); }
           else if (D.hand && !A.handOff && t > D.dur - 0.9) {
