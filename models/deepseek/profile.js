@@ -318,7 +318,7 @@ export default {
   // 名字不进词表（AI 不知道这些，也不会去点）。任何新词 / 说话 / 走路 / 拖动都会硬打断。
   skits: [
     {
-      id: 'detective', dur: 6.6, life: 8,
+      id: 'detective', dur: 6.6, life: 8, say: '嗯……真相只有一个。', saySec: 3.4,
       // 名侦探：挑眉 → 眯眼打量 → 瞟一眼左边 → 晃头 → 坏笑 → 点头
       steps: [
         { at: 0.0, w: 'brow-up' },
@@ -330,7 +330,7 @@ export default {
       ],
     },
     {
-      id: 'overtime', dur: 8.0, life: 10,
+      id: 'overtime', dur: 8.0, life: 10, say: '再改最后一版……真的最后一版。', saySec: 3.8,
       // 认真加班：低头盯屏幕 → 皱眉 → 眯眼 → 点两下头 → 长叹一口气 → 重新坐直
       steps: [
         { at: 0.0, w: 'head-down' },
@@ -343,7 +343,7 @@ export default {
       ],
     },
     {
-      id: 'snack', dur: 7.0, life: 9,
+      id: 'snack', dur: 7.0, life: 9, say: '就一口，没人看见吧？', saySec: 3.2,
       // 偷吃零食：左右张望（没人）→ 往左瞟 → 往右瞟 → 咬一口 → 眯眼笑 → 又心虚地张望
       steps: [
         { at: 0.0, w: 'look-around' },
@@ -355,7 +355,7 @@ export default {
       ],
     },
     {
-      id: 'entrance', dur: 6.8, life: 9, say: true,
+      id: 'entrance', dur: 6.8, life: 9, say: '灯光，就位——我准备好了。', saySec: 3.8,
       // 突然入戏：站直 → 挑眉 → 瞪眼 → 抬手一指 → 晃头念台词 → 歪头收尾（假口型）
       steps: [
         { at: 0.0, w: 'stand-straight' },
@@ -367,7 +367,7 @@ export default {
       ],
     },
     {
-      id: 'magical', dur: 6.6, life: 9,
+      id: 'magical', dur: 6.6, life: 9, say: '以星光之名，变身！', saySec: 3.2,
       // 魔法少女：歪头 → 眯眼笑 → 举手念咒 → 转个圈 → 瞪眼（变身完成）
       steps: [
         { at: 0.0, w: 'tilt' },
@@ -378,7 +378,7 @@ export default {
       ],
     },
     {
-      id: 'doze', dur: 7.4, life: 9,
+      id: 'doze', dur: 7.4, life: 9, say: '我没睡……我在思考。', saySec: 3.4,
       // 学习打瞌睡：半睁 → 低头 → 慢眨眼 → 点头打盹 → 惊醒瞪眼 → 左右张望
       steps: [
         { at: 0.0, w: 'eye-half' },
@@ -391,7 +391,7 @@ export default {
       ],
     },
     {
-      id: 'selfscare', dur: 6.4, life: 8,
+      id: 'selfscare', dur: 6.4, life: 8, say: '刚刚……是不是有影子动了一下？', saySec: 3.8,
       // 自己吓自己：张望 → 自己被吓一跳 → 缩起来 → 瞪着眼 → 又张望（确认没东西）
       steps: [
         { at: 0.0, w: 'look-around' },
@@ -402,7 +402,7 @@ export default {
       ],
     },
     {
-      id: 'vampire', dur: 7.0, life: 9,
+      id: 'vampire', dur: 7.0, life: 9, say: '今晚的血，甜了一点。', saySec: 3.4,
       // 吸血鬼：黑脸 → 坏笑 → 歪头 → 慢眨一下 → 低头（凑近）→ 坏笑
       steps: [
         { at: 0.0, w: 'dark-face' },
@@ -414,7 +414,7 @@ export default {
       ],
     },
     {
-      id: 'teacher', dur: 8.2, life: 10, say: true,
+      id: 'teacher', dur: 8.2, life: 10, say: '同学们，翻开第七页。', saySec: 3.4,
       // 小学老师：站直 → 挑眉 → 抬手一指（点名）→ 点头 → 张嘴讲课 → 晃头 → 点头
       steps: [
         { at: 0.0, w: 'stand-straight' },
@@ -427,7 +427,7 @@ export default {
       ],
     },
     {
-      id: 'diet', dur: 7.0, life: 9,
+      id: 'diet', dur: 7.0, life: 9, say: '明天开始，真的。', saySec: 3,
       // 减肥计划：张嘴（想吃）→ 低头看肚子 → 叹气 → 站直 → 微摇头 → 撇嘴
       steps: [
         { at: 0.0, w: 'mouth-open' },
@@ -439,7 +439,7 @@ export default {
       ],
     },
     {
-      id: 'treasure', dur: 7.6, life: 9,
+      id: 'treasure', dur: 7.6, life: 9, say: '这边……有东西！', saySec: 3,
       // 寻宝：张望 → 往左瞟 → 蹲低（缩一下）→ 瞪眼（发现了）→ 往右瞟 → 点头 → 坏笑
       steps: [
         { at: 0.0, w: 'look-around' },
@@ -452,7 +452,7 @@ export default {
       ],
     },
     {
-      id: 'guard', dur: 8.0, life: 10, say: true,
+      id: 'guard', dur: 8.0, life: 10, say: '登记一下，你找谁？', saySec: 3.2,
       // 保安大叔：站直 → 皱眉 → 左右张望 → 晃头 → 点头 → 点头（训话）
       steps: [
         { at: 0.0, w: 'stand-straight' },

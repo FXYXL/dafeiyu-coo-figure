@@ -1158,6 +1158,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
     const def = pool[Math.floor(Math.random() * pool.length)];
     lastSkitId = def.id;
     skit = { def, t: 0, done: new Set() };
+    // 台词（可选）：say 是字符串就在头顶显示一句。走 custom.emitEvent → 页面临时气泡，
+    // 不进 World 的 say 队列、不进聊天记录 —— AI 不知道这句、也不会读回上下文。
+    if (typeof def.say === 'string') figure.emitBubble(def.say, def.saySec ?? 3.6);
     audit('skit-start ' + def.id);
     return true;
   }
@@ -2167,6 +2170,12 @@ export async function createLive2DBody(base, opts, entry, kit) {
   };
 
   const figure = {
+    // 彩蛋台词：交给页面临时显示一句话（页面侧不排队、不发给 World）。
+    // 她正在说话/有问答挂着时页面自己忽略，所以不会和对话抢气泡。
+    emitBubble(text, seconds) {
+      audit('skit-say 「' + text + '」 桥=' + typeof figure.emitEvent);
+      try { figure.emitEvent?.('bubble', { text, seconds }); } catch { /* 页面没这桥就静默 */ }
+    },
     get extent() { return currentExtent(); },
     get hits() { return currentHits(); },
     get anchors() { return currentAnchors(); },

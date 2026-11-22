@@ -567,6 +567,33 @@ const PATCHES = [
   },
   // ===== pet-app.js：主线程 rAF 探测 + 触摸时间戳 =====
   {
+    file: 'body', id: 'emitEvent',
+    desc: 'figure → 页面的事件桥：custom.emitEvent(kind, d) 透传 opts.onEvent（彩蛋台词气泡用）',
+    detect: (s) => /custom\.emitEvent = /.test(s),
+    apply: (s) => {
+      const a = "  const onEvent = opts.onEvent || (() => {});";
+      if (!s.includes(a)) throw new Error('emitEvent：onEvent 锚点未命中');
+      return s.replace(a, a + "\n  custom.emitEvent = (kind, d) => onEvent(kind, d);   // figure 自己发的事件（彩蛋台词等）走同一条上报路");
+    },
+  },
+  {
+    file: 'petapp', id: 'skitNote',
+    desc: '彩蛋台词气泡：figure 发 bubble 事件 → 页面临时显示一句（不进 queue、不发给 World、不进上下文）',
+    detect: (s) => /function showSkitNote/.test(s),
+    apply: (s) => {
+      let out = s.replace('/* ---------- body events → World ---------- */', "/* ---------- 彩蛋气泡：figure 自己的台词，不排队、不发给 World ---------- */\nconst skitNote = document.createElement('div');\nskitNote.className = 'bubble say skit-note';\nskitNote.hidden = true;\nskitNote.style.pointerEvents = 'none';\nstage.append(skitNote);\nlet skitNoteAt = -Infinity;\n/** 她说的小声一句：只在气泡空着时出现，到点自己消失，跟着身体走。 */\nfunction showSkitNote(text, seconds) {\n  const a = at();\n  if (!text || !a || item || !bubble.hidden) return;   // 正在对话/有问答挂着：不插嘴\n  skitNote.textContent = text;\n  skitNote.hidden = false;\n  skitNote.classList.remove('pop');\n  void skitNote.offsetWidth;\n  skitNote.classList.add('pop');\n  place(skitNote, a, 18 * prefs.bubbleSize);\n  skitNoteAt = T + clamp(Number(seconds) || 3.4, 1, 10);\n}\nfunction stepSkitNote() {\n  if (skitNote.hidden) return;\n  const a = at();\n  if (T >= skitNoteAt || !a) { skitNote.hidden = true; return; }\n  if (item || !bubble.hidden) { skitNote.hidden = true; return; }   // 她开口了：气泡归 World 管\n  place(skitNote, a, 18 * prefs.bubbleSize);\n}\n" + '\n/* ---------- body events → World ---------- */');
+      if (!out.includes('function showSkitNote')) throw new Error('skitNote：插入锚点未命中');
+      out = out.replace(
+        "  } else if (kind === 'mode') {\n    reportPosition();",
+        "  } else if (kind === 'bubble') {\n    showSkitNote(d?.text, d?.seconds);\n  } else if (kind === 'mode') {\n    reportPosition();",
+      );
+      if (!out.includes("kind === 'bubble'")) throw new Error('skitNote：onBody 分支未命中');
+      out = out.replace('      stepStatus();\n', '      stepStatus();\n      stepSkitNote();\n');
+      if (!out.includes('stepSkitNote();')) throw new Error('skitNote：frame 推进未命中');
+      return out;
+    },
+  },
+  {
     file: 'petapp', id: 'rafGapLog',
     desc: '诊断：pet 页 rAF 间隙 >800ms 时打点——主线程被同步工作卡住（呼吸/浮动全停的画面定住）在这里现形',
     detect: (s) => /rAF-gap/.test(s),
