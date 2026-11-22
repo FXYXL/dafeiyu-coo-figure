@@ -2857,7 +2857,14 @@ export async function createLive2DBody(base, opts, entry, kit) {
         if (A.t >= D.dur) {
           ruaAfter = null;
           ruaSecHold = 0;
-          ruaLeanK = 1;   // 从这里开始 0.6 秒曲线退出（不清 ruaMeltHold，清了就是硬切）
+          // 他们 EndMood：Gesture.Off（举手切默认手）和前倾的 clear 同时发生。
+          // 之前手在 dur-0.9 就提前收，前倾还在演、手已经放到一半（用户：抚胸手没放下就回去了）。
+          if (D.hand) {
+            pendingMod = { scale: 1, pace: 1, repeat: 1, explicit: true };
+            dirSide = 1;
+            applyOneWord('put-hand-down', null, {}, {});
+          }
+          ruaLeanK = 1;   // 从这里开始按 put-hand-down 的时长曲线退出
           for (const k of VIRTUAL_KEYS) virtualParams.delete(k);   // 压扁/滚转别残留
         }
         else if (A.t < 0) {
@@ -2895,13 +2902,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
           }
           // 脸红由 Lids 段的 _wantBlush（ruaAfter 非空即保持）统一处理
           // 手抬到胸口（他们 HandToChest「默认手切举手」），结束前 0.9 秒放下
+          // 他们 Gesture 的语义：Show(mood) 时抬手，**EndMood 才放下**（不是演出中途提前 0.9 秒收）。
+          // 之前提前收手 → 前倾还在、手已经放到一半（用户：「抚胸手都没放下就回去了」）。
           if (D.hand && !A.hand) { A.hand = true; applyOneWord('chest-hand', null, {}, {}); }
-          else if (D.hand && !A.handOff && t > D.dur - 0.9) {
-            A.handOff = true;
-            pendingMod = { scale: 1, pace: 1, repeat: 1, explicit: true };
-            dirSide = 1;
-            applyOneWord('put-hand-down', null, {}, {});
-          }
         }
       }
 
