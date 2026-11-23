@@ -1434,6 +1434,12 @@ export async function createLive2DBody(base, opts, entry, kit) {
    *  2026-11-22：原来只定义在 actWord 内部，baseWord 的「恢复」分支引用它会 ReferenceError
    *  （有 exit 的轨道碰上「恢复」就炸），提到闭包顶层。 */
   const isLidParam = (id) => id === 'ParamEyeLOpen' || id === 'ParamEyeROpen';
+  /** 纯贴图 key（key1 黑脸 / key2 流泪 / key3~6 眼睛画法 / key7 脸红 / key13 冷汗…）。
+   *  这些是**叠层**，不参与"换一张脸"的互斥 —— 他们自己的组合就是证据：
+   *  委屈=流泪+脸红、心慌=冷汗+脸红、无语=黑脸+圈圈眼。
+   *  以前按整词互斥会把贴图一起清掉（用户 23:47：委屈只剩流泪、心慌只剩冷汗、黑脸叠不上圈圈眼）。
+   *  key3~6 四种眼睛画法之间仍然互斥，但那个由词自己写兄弟参数 0 保证，不靠这里。 */
+  const isTexKey = (id) => /^key\d+$/.test(id);
   /** paramId -> { from, to, t0, dur, in, out }：每个通道自己管生命周期，到期自动退出 */
   /** ---------- Layer（S2 统一写入表）----------
    *  以前是两张表：`channel`（同参数后写覆盖）和 `tracks`（同参数相加），各有各的包络、
@@ -1823,6 +1829,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
         const od = paramActs[other];
         if (!od) continue;
         for (const qid of [...(od.params ?? []).map((q) => q.id), ...(od.keys ?? []).map((k) => k.id)]) {
+          if (isTexKey(qid)) continue;   // 贴图是叠层：换情绪不清别人的贴图（委屈/心慌/黑脸+圈圈眼靠这条）
           const cur = layerSet(qid);
           const curOwner = cur?.group ?? cur?.src;
           if (curOwner === me) continue;                         // 同一次展开的零件，别自己清自己（感动=眉毛+眼泪+手+嘴）
@@ -2246,7 +2253,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 委屈：流泪 + 眉心抬满 + 嘟嘴 + 低头 10° + 歪头 −6° + 委屈地左右小幅晃
     aggrieved: {
       dur: 3, tag: 'emo:aggrieved',
-      sets: { key2: 1, BrowInnerUp: 1, Mouthpucker: 1, FaceAngleY: -10, FaceAngleZ: -6 },
+      // 委屈 = 流泪 + 脸红（channel 版是 key2+key7，S4 搬成 clip 时漏了 key7 —— 用户 23:47 实测只流泪）
+      sets: { key2: 1, key7: 1, BrowInnerUp: 1, Mouthpucker: 1, FaceAngleY: -10, FaceAngleZ: -6 },
       keys: {
         ViewSquash: [[0, 0], [.4, .03], [2.4, .025], [3, 0]],
         FaceAngleX: [[0, 0], [.4, -3], [.9, 2], [1.4, -3], [1.9, 2], [3, 0]],
@@ -2265,7 +2273,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 心虚：流冷汗 + 眼珠躲开 + 嘴角撇 + 转头 14° + 前倾 6°；Pushed（戳的时候跟着侧别翻）
     guilty: {
       dur: 3, tag: 'emo:guilty', pushed: true,
-      sets: { key13: 1, ParamEyeBallX: .8, ParamEyeBallY: .3, MouthX: .6, ParamMouthForm: -.5, FaceAngleX: 14, FaceAngleY: -8 },
+      // 心慌 = 冷汗 + 脸红（channel 版是 key13+key7，S4 搬成 clip 时漏了 key7）
+      sets: { key13: 1, key7: 1, ParamEyeBallX: .8, ParamEyeBallY: .3, MouthX: .6, ParamMouthForm: -.5, FaceAngleX: 14, FaceAngleY: -8 },
       keys: {
         FaceAngleZ: [[0, 0], [.3, -4], [.6, 2], [.9, -3], [1.2, 2], [1.5, -2], [2, 0]],
         ViewSquash: [[0, 0], [.3, .03], [2, .02], [2.6, 0]],
@@ -2548,7 +2557,11 @@ export async function createLive2DBody(base, opts, entry, kit) {
 
   function stepClips(t) {
     if (!clipList.length) { releaseOrphanHand(); for (const [id, v] of debugOverrides) setParamByName(id, v); return; }
-    for (let n = clipList.length - 1; n >= 0; n--) {
+    // 正序遍历（旧 → 新）+ 权重仲裁：同一个参数两条 clip 都在写时，**w 大的赢**，一样大听新的。
+    // 2026-11-23 23:55 实测：原来倒序写，旧的（正在收尾、w 已衰到 0.03）会把新的盖回去
+    // —— 委屈(70s) → 心慌(120s) 到 175 帧 key7 从 1 掉到 0.036。
+    const win = new Map();   // 参数名 → { v, w }：这一帧该写谁的值
+    for (let n = 0; n < clipList.length; n++) {
       const c = clipList[n], d = c.def;
       const age = t - c.t0 - (d.delay ?? 0);
       if (age < 0) continue;   // 他们松手后先等弹簧回稳（1.5s / 融化 0.8s），这段什么都不写
@@ -2603,6 +2616,11 @@ export async function createLive2DBody(base, opts, entry, kit) {
 
       // 参数合成：他们的语义是「set 按住 + anim 叠加」，同一个参数两边都有时是**相加**，
       // 不是后写的盖掉前写的（FaceAngleZ 就是这种：set 4 + 关键帧 ±3）。
+      // 跨 clip 的同一个参数用**权重仲裁**：谁的 w 大听谁的（一样大听新的）。
+      // 直接按顺序写的话两种错法都试过了：
+      //   倒序（旧的后写）→ 旧 clip 收尾时 w 只剩 0.03，却把新的 1 盖成 0.03（心慌不红）
+      //   正序（新的后写）→ 新 clip 刚起、w=0.02，把旧的 1 压成 0.02（贴图闪一下）
+      // 取大的那个，交接点两条都在 0.5 附近，是平滑的交叉淡入淡出。
       if (playing || c.w > .004) {
         const acc = {};
         if (c.w > .004) for (const [k, v] of Object.entries(d.sets ?? {})) acc[k] = v * c.w;
@@ -2612,21 +2630,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
           }
         }
         for (const [k, v] of Object.entries(acc)) {
-          if (k === 'EyeOpen') {   // EyeOpen 是乘数：负数 = 额外闭合（melt 的快眨两下）
-            const closed = clamp(1 + v, 0, 1);
-            // 只在「要闭」时写。写 1（睁眼）会把 Lids 段算完的眨眼结果整个盖掉 ——
-            // 之前 happy 的 EyeOpen:0 被当成 1，于是整段表演里眼睛一直瞪着不眨。
-            if (closed < .999) for (const id of ['ParamEyeLOpen', 'ParamEyeROpen']) setParamByName(id, closed);
-            continue;
-          }
-          if (VIRTUAL_KEYS.has(k)) { virtualParams.set(k, { v, t }); continue; }
-          const id = resolveId(k);          // ParamMouthPressLipOpen → MouthPressLipOpen：映射表按**模型 id** 认
-          const mapped = vtsOut(id, v);
-          setParamByName(id, mapped);
-          // 他们的 PositionX/Y/Z 吃的是**输入值**（FaceAngleY 输入 ±20、角度输出 ±30），
-          // setParamByName 默认按角度 1:1 派生位置，这里按他们的规则再写一次。
-          const posId = ANGLE_TO_POS[id];
-          if (posId && mapped !== v) setParamByName(posId, v);
+          const prev = win.get(k);
+          if (!prev || c.w > prev.w + 1e-6) win.set(k, { v, w: c.w });
         }
       }
 
@@ -2651,8 +2656,26 @@ export async function createLive2DBody(base, opts, entry, kit) {
       }
       if (!playing && c.w <= .004) {
         if (d.mood) { ruaSecHold = 0; ruaMeltHold = 0; }
-        clipList.splice(n, 1);
+        clipList.splice(n--, 1);   // 正序遍历：删掉自己之后下标要退一格
       }
+    }
+    // 仲裁结果落地（这一步以前在循环里直接写，所以"谁后写谁赢"）
+    for (const [k, { v }] of win) {
+      if (k === 'EyeOpen') {   // EyeOpen 是乘数：负数 = 额外闭合（melt 的快眨两下）
+        const closed = clamp(1 + v, 0, 1);
+        // 只在「要闭」时写。写 1（睁眼）会把 Lids 段算完的眨眼结果整个盖掉 ——
+        // 之前 happy 的 EyeOpen:0 被当成 1，于是整段表演里眼睛一直瞪着不眨。
+        if (closed < .999) for (const id of ['ParamEyeLOpen', 'ParamEyeROpen']) setParamByName(id, closed);
+        continue;
+      }
+      if (VIRTUAL_KEYS.has(k)) { virtualParams.set(k, { v, t }); continue; }
+      const id = resolveId(k);          // ParamMouthPressLipOpen → MouthPressLipOpen：映射表按**模型 id** 认
+      const mapped = vtsOut(id, v);
+      setParamByName(id, mapped);
+      // 他们的 PositionX/Y/Z 吃的是**输入值**（FaceAngleY 输入 ±20、角度输出 ±30），
+      // setParamByName 默认按角度 1:1 派生位置，这里按他们的规则再写一次。
+      const posId = ANGLE_TO_POS[id];
+      if (posId && mapped !== v) setParamByName(posId, v);
     }
     // clip 被提前撤掉（摸后被情绪词顶掉 / rua 打断清空 clipList）时，它举着的手没人放 ——
     // 会一直举到寿命判死、然后「啪」地消失。这里补一次收手：没有 clip 再拥有这只手就放下来。
@@ -4021,6 +4044,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
     for (const c of [...layers]) {
       const owner = c.group ?? c.src;
       if (!owner || ADDON_WORDS.has(owner) || !faceBigWords.has(owner)) continue;
+      if (isTexKey(c.id)) continue;   // 贴图跨句不清：委屈/心慌/黑脸+圈圈眼要能叠
       dropParam(c.id);
     }
   };
