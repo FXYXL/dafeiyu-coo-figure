@@ -1356,36 +1356,36 @@ export async function createLive2DBody(base, opts, entry, kit) {
    *  2026-11-22：从 baseWord 的「恢复」分支抽出来 —— 剧本 step 里也能写「恢复」了。 */
   /** @param onlyHand 只收手（他们 Body.cs:420 的 PutHandDown）：不动表情和姿势。 */
   function relaxChannels(onlyHand) {
-    // 2026-11-21：有 exit 的手势（竖手指/狗尾草/抚胸）不秒切——把通道条目换成播 exit.keys（1.25 秒收手），
+    // 2026-11-21：有 exit 的手势（竖手指/狗尾草/抚胸）不秒切——把条目改成播 exit.keys（1.25 秒收手），
     // 播完自己走。没 exit 的照旧写 0 清掉。
-    const isHand = (c) => !!(c.src && paramActs[c.src]?.hand);
-    const toDelete = [];
-    for (const [id, c] of [...channel]) {
-      if (onlyHand && !isHand(c)) continue;
+    // 2026-11-23：合成一张表之后只剩**一个**循环（以前 channel 和 tracks 各扫一遍，
+    // 而且第二遍会把第一遍刚生成的收手轨道又重置一次 → 寻宝剧本「放完手又放一遍」）。
+    const exitFrames = (def, id) => {
+      const raw = (def?.exit?.keys ?? def?.exitKeys)?.filter((k) => k.id === id);
+      if (!raw?.length) return null;
+      // 起始值改成参数当前值：手抬到一半被打断时，直接从 exit 第 0 帧起播会「啪」地跳一下
+      const i = paramIndex.get(id);
+      const cur = i === undefined ? null : model._model.getParameterValueByIndex(i);
+      return raw.map((k, n) => [k.t ?? 0, n === 0 && cur !== null ? cur : (k.v ?? 0)]);
+    };
+    for (let n = layers.length - 1; n >= 0; n--) {
+      const c = layers[n];
+      if (onlyHand && !(c.hand || (c.src && paramActs[c.src]?.hand))) continue;
+      if (c.exiting) continue;   // 收手动画正在播：别重置它
       const def = c.src ? paramActs[c.src] : null;
-      const frames = (def?.exit?.keys ?? def?.exitKeys)?.filter((k) => k.id === id).map((k) => [k.t ?? 0, k.v ?? 0]);
-      if (frames?.length) {
-        // 转成一条轨道播收手动画（轨道是相加语义，留在 channel 里会被当成 hold 写，必须挪过去）
-        channel.delete(id);
-        tracks.push({ id, kind: 'keys', frames, t0: clockT, dur: def.exit?.dur ?? def.exitDur ?? 1.25, post: false, src: c.src, bornS: sentenceCount, bornT: clockT });
+      const frames = exitFrames(def, c.id);
+      if (frames) {
+        // 就地改成收手关键帧（相加语义），时间轴从头起
+        c.kind = 'keys'; c.frames = frames; c.t0 = clockT; c.dur = def.exit?.dur ?? def.exitDur ?? 1.25;
+        c.keep = false; c.hand = true; c.exiting = true; c.post = false;
+        delete c.from; delete c.to;
         continue;
       }
-      if (c.kind !== 'static' && c.to === undefined) { toDelete.push(id); continue; }
-      if (c.to !== 0) { const i = paramIndex.get(id); if (i !== undefined) model._model.setParameterValueByIndex(i, 0); }
-      toDelete.push(id);
-    }
-    for (const id of toDelete) dropParam(id);
-    // 动作轨道：有 exit 的就地换成收手关键帧，没 exit 的直接撤
-    for (let n = tracks.length - 1; n >= 0; n--) {
-      const c = tracks[n];
-      if (onlyHand && !isHand(c)) continue;
-      const def = c.src ? paramActs[c.src] : null;
-      const frames = (def?.exit?.keys ?? def?.exitKeys)?.filter((k) => k.id === c.id).map((k) => [k.t ?? 0, k.v ?? 0]);
-      if (frames?.length) {
-        c.kind = 'keys'; c.frames = frames; c.t0 = clockT; c.dur = def.exit?.dur ?? def.exitDur ?? 1.25; c.eyeLid = isLidParam(c.id);
-      } else {
-        tracks.splice(n, 1);
+      if (c.kind === 'set' && c.to !== 0 && c.to !== undefined) {
+        const i = paramIndex.get(c.id);
+        if (i !== undefined) model._model.setParameterValueByIndex(i, 0);
       }
+      layers.splice(n, 1);
     }
   }
 
@@ -1435,15 +1435,36 @@ export async function createLive2DBody(base, opts, entry, kit) {
    *  （有 exit 的轨道碰上「恢复」就炸），提到闭包顶层。 */
   const isLidParam = (id) => id === 'ParamEyeLOpen' || id === 'ParamEyeROpen';
   /** paramId -> { from, to, t0, dur, in, out }：每个通道自己管生命周期，到期自动退出 */
-  const channel = new Map();
-  /** 轨道（2026-11-21 照搬 main.cpp:563-593 的 tracks）：动作型条目（keys / 波形），
-   *  数组存、**多条并存、同参数相加** —— 点头叠在低头/歪头上会转得更远，而不是互相吃掉。
-   *  和 channel 的分工：channel 是"换表情"语义（同一参数后写覆盖），tracks 是"动作叠加"语义。
-   *  每条带 id（参数名）。 */
-  const tracks = [];
+  /** ---------- Layer（S2 统一写入表）----------
+   *  以前是两张表：`channel`（同参数后写覆盖）和 `tracks`（同参数相加），各有各的包络、
+   *  各自判过期、各自收尾 —— 同一个参数可能有两个来源、谁后写谁赢，才会出「脸一直红」
+   *  「手突然放下」「闭眼被顶开」。现在只有一张表，`kind` 决定语义：
+   *    set   常量（覆盖：同 id 只留最新一条）
+   *    keys  关键帧（相加）
+   *    wave  波形（相加，乘包络）
+   *  每条都带 id（参数名），所以「删某个参数」= 按 id 过滤一次（dropParam）。 */
+  const layers = [];
+  /** 常量层：同参数**替换**（原来是 Map 的语义）。不替换的话，旧词演完会把
+   *  已被新词顶掉的参数"复活"（旧条目的 t0 更早，寿命还没到）。 */
+  function setLayer(id, def) {
+    for (let n = layers.length - 1; n >= 0; n--) {
+      if (layers[n].kind === 'set' && layers[n].id === id) layers.splice(n, 1);
+    }
+    layers.push({ id, kind: 'set', t0: clockT, post: false, ...def });
+  }
+  const addLayer = (o) => { layers.push({ t0: clockT, post: false, ...o }); };
+  /** 最新的那条常量层（互斥组换脸时要认「这个参数现在归谁」）。 */
+  function layerSet(id) {
+    for (let n = layers.length - 1; n >= 0; n--) {
+      const L = layers[n];
+      if (L.kind === 'set' && L.id === id) return L;
+    }
+    return null;
+  }
+  const layerHas = (id) => !!layerSet(id);
   // 眼睛开度的"乘数"（2026-11-21 照搬 main.cpp 的 Lids）：通道里眼睑参数不直写，
   // 而是像他们 hold 那样存成"相对 1 的乘数"，由 Lids 段乘在 eyeBlink 之后。
-  // 每帧前批重建（writeChannel 开头清零），物理之前被用掉。
+  // 每帧前批重建（writeLayers 开头清零），物理之前被用掉。
   const lidMul = { L: 1, R: 1 };
   // 眼睛关键帧的**增量**（他们 track 走 `lid(id, 1 + value)`，所以值为 -1 就是闭上）。
   // 多条轨道同参数相加（sigh 的微闭 + 单眨眼），最后 1+Σ 变成乘数。
@@ -1472,24 +1493,17 @@ export async function createLive2DBody(base, opts, entry, kit) {
     auditQ.push(clockT.toFixed(1) + ' ' + line);
     if (auditQ.length >= 6) auditFlush();
   };
-  const _chDelete = channel.delete.bind(channel);
-  channel.delete = (id) => { if (channel.has(id)) audit('del ' + id + ' <' + ((new Error().stack ?? '').split('\n')[2] ?? '').trim().slice(0, 60) + '>'); return _chDelete(id); };   // 只记实际生效的删除——空删（枚举未命中的参数）不刷屏
-  const _chClear = channel.clear.bind(channel);
-  channel.clear = () => { audit('clear ALL'); return _chClear(); };
-  /** 删掉某个参数的所有来源：hold 槽 + 所有轨道。
-   *  轨道数组化之后，「删参数」必须两边一起清，否则 hold 删了、动作轨道还在写（表情清不干净的经典款）。 */
+  /** 删掉某个参数的所有来源（常量 + 关键帧 + 波形）。
+   *  同一张表之后，「删参数」只需一次过滤 —— 以前 hold 删了、动作轨道还在写（表情清不干净的经典款）。 */
   function dropParam(id) {
-    channel.delete(id);
     let hit = 0;
-    for (let n = tracks.length - 1; n >= 0; n--) if (tracks[n].id === id) { tracks.splice(n, 1); hit++; }
-    if (hit) audit('drop track ' + id + ' ×' + hit);
+    for (let n = layers.length - 1; n >= 0; n--) if (layers[n].id === id) { layers.splice(n, 1); hit++; }
+    if (hit) audit('del ' + id + ' <' + ((new Error().stack ?? '').split('\n')[2] ?? '').trim().slice(0, 60) + '>');
   }
-  function clearAllParams() { channel.clear(); tracks.length = 0; }
-  /** 按来源词撤掉它写的全部东西：hold 槽 + 动作轨道。
-   *  轨道数组化之后必须连轨道一起撤，否则词退了动作还在演（闲时词/手部词收尾的坑）。 */
+  function clearAllParams() { if (layers.length) audit('clear ALL'); layers.length = 0; }
+  /** 按来源词撤掉它写的全部东西。词退了动作还在演（闲时词/手部词收尾的坑）。 */
   function dropSrc(src) {
-    for (const [id, c] of [...channel]) if (c.src === src) dropParam(id);
-    for (let n = tracks.length - 1; n >= 0; n--) if (tracks[n].src === src) tracks.splice(n, 1);
+    for (let n = layers.length - 1; n >= 0; n--) if (layers[n].src === src) layers.splice(n, 1);
   }
   // 2.7 虚拟参数表：通道里 id 不在模型参数表的条目（如 ViewSquash 整图压扁）不写模型，
   // 存这里给 kit 消费（custom.squash() 读）——弹簧/锚点/阴影全白拿 kit 的 sq 系统。
@@ -1710,8 +1724,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
     lastWordAt = clockT;
     // face 联动词（blush/tears/sweat/heart-eyes）的退场：下一个任何词触发就让位。
     // 「【害羞】→ 下一句【嘟嘴】，脸红影子不该跨句挂着」——情绪影子跟着最近的表达走。
-    for (const [id, entry] of [...channel]) {
-      if (entry.faceLinked) dropParam(id);
+    for (const c of [...layers]) {
+      if (c.faceLinked) dropParam(c.id);
     }
     bornSentence = sentenceCount;   // 词出生时的句号（跟句寿命用）
     bornAt = clockT;                // 词出生的时刻（闲置语境的限时用）
@@ -1809,7 +1823,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
         const od = paramActs[other];
         if (!od) continue;
         for (const qid of [...(od.params ?? []).map((q) => q.id), ...(od.keys ?? []).map((k) => k.id)]) {
-          const cur = channel.get(qid);
+          const cur = layerSet(qid);
           const curOwner = cur?.group ?? cur?.src;
           if (curOwner === me) continue;                         // 同一次展开的零件，别自己清自己（感动=眉毛+眼泪+手+嘴）
           if (curOwner && !memberSet.has(curOwner)) continue;   // 别人的条目不连坐（组合词按 group 认）
@@ -1836,11 +1850,11 @@ export async function createLive2DBody(base, opts, entry, kit) {
         : f0 + ((p.to ?? 0) - f0) * effScale;
       // p.in：单个参数可以自己定淡入时长（「放下手」那种要慢慢收的手势用）——
       // 统一 min(0.45, dur*0.2) 对它是瞬间清零，手就「啪」一下掉了
-      channel.set(p.id, { kind: 'hold', lid, smile, from: lid || smile ? 0 : f0, to: mir(p.id, to), t0: now, dur: clipHandHold ? 1e9 : dur, in: p.in ?? inT, out: clipHandHold ? 0 : outT, keep: !!(def.state || def.keep), faceLinked: !!fromFace, clipHold: clipHandHold, emo, bornS: sentenceCount, bornT: clockT, src: w, group: ctx.group, skit: ctx.skit, life: life ?? undefined });
+      setLayer(p.id, { from: lid || smile ? 0 : f0, to: mir(p.id, to), dur: clipHandHold ? 1e9 : dur, in: p.in ?? inT, out: clipHandHold ? 0 : outT, keep: !!(def.state || def.keep), faceLinked: !!fromFace, clipHold: clipHandHold, emo, bornS: sentenceCount, bornT: clockT, src: w, group: ctx.group, skit: ctx.skit, life: life ?? undefined });
     }
-    // 波形动作（点头、摇头、甩草…）：正弦摆动叠在通道上。
+    // 波形动作（点头、摇头、甩草…）：正弦摆动叠在常量层上。
     // 不支持这一种的话，点头永远只能走旧路，也就永远不能和别的东西叠加。
-    const setWave = (wv, post) => tracks.push({
+    const setWave = (wv, post) => addLayer({
       id: wv.id,
       kind: 'wave',
       amp: (wv.amp ?? 0) * effScale,
@@ -1851,7 +1865,6 @@ export async function createLive2DBody(base, opts, entry, kit) {
       // state 词的波形和静态参数同寿命（持续抖到退场）——不补的话波形抖 dur 秒就静默消失
       keep: !!(def.state || def.keep),
       emo,
-      t0: now,
       dur,
       in: inT,
       out: outT,
@@ -1887,7 +1900,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
         for (let r = 0; r < mod.repeat; r++) {
           for (const [t, v] of frames) out.push([(r * span + t) * mod.pace, mir(id, v) * effScale]);
         }
-        tracks.push({ id, kind: 'keys', frames: out, t0: now, dur: clipHandHold ? 1e9 : dur, emo, post, eyeLid: isLidParam(id), bornS: sentenceCount, bornT: clockT, src: w, group: ctx.group, skit: ctx.skit });
+        addLayer({ id, kind: 'keys', frames: out, dur: clipHandHold ? 1e9 : dur, emo, post, hand: !!def.hand, bornS: sentenceCount, bornT: clockT, src: w, group: ctx.group, skit: ctx.skit });
       }
     }
     audit('write ' + w);
@@ -1977,110 +1990,97 @@ export async function createLive2DBody(base, opts, entry, kit) {
   }
 
   function applyChannel(t) {
-    writeChannel(t, false);
-    globalThis.__l2dChannel = [
-      ...[...channel.entries()].map(([k, v]) => k + ':' + v.kind + (v.keep ? '*' : '') + '→' + (typeof v.to === 'number' ? v.to.toFixed(1) : '?')),
-      ...tracks.map((v) => v.id + ':' + v.kind + '#' + (v.src ?? '?')),
-    ];
+    writeLayers(t, false);
+    globalThis.__l2dChannel = layers.map((v) => v.id + ':' + v.kind + (v.keep ? '*' : '') + '→'
+      + (typeof v.to === 'number' ? v.to.toFixed(1) : v.kind === 'keys' ? 'k' : 'w'));
   }
   /** 物理之后写的那一批（腰/胯这类物理输出参数）。写早了会被物理算回去。 */
-  function applyChannelPost(t) { writeChannel(t, true); }
-  function writeChannel(t, wantPost) {
+  function applyChannelPost(t) { writeLayers(t, true); }
+
+  /** 一条 Layer 的权重包络：0 = 还没开始/已收尾，1 = 完全展开。
+   *  以前这段公式抄了三份（常量、波形、轨道各一份），改一处忘两处就是「同一个动作两种手感」。 */
+  function envelope(c, age, gate) {
+    const inT = c.in ?? 0.2, outT = c.out ?? 0.2;
+    if (c.keep) return clamp(age / Math.max(1e-3, inT), 0, 1) * gate;
+    if (age < inT) return clamp(age / inT, 0, 1);
+    if (age > c.dur - outT) return clamp((c.dur - age) / outT, 0, 1);
+    return 1;
+  }
+
+  /** 整张 Layer 表 → 模型参数（物理前后各一次，post 层各写各的）。
+   *  合成规则只有三条：常量覆盖（后写赢）、关键帧/波形相加、手型参数取最新（绝对值）。 */
+  function writeLayers(t, wantPost) {
     if (!wantPost) { virtualParams.clear(); lidMul.L = 1; lidMul.R = 1; lidAdd.L = 0; lidAdd.R = 0; }   // 虚拟表/lid 乘数每帧前批重建
-    if (!useChannels || (channel.size === 0 && tracks.length === 0 && overlay.size === 0)) return;
-    for (const [id, c] of channel) {
+    if (!useChannels || (!layers.length && !overlay.size)) return;
+    const sums = new Map();    // 相加的那批（关键帧 + 波形）
+    const hands = new Map();   // 手型参数：绝对值覆盖，最新的那条赢
+    for (let n = 0; n < layers.length; n++) {
+      const c = layers[n];
       const age = t - c.t0;
-      // keep=true：表情通道。一直保持到被同参数的新词覆盖、或者「恢复」清空。
-      // 普通动作有 dur，播完自己退出。
-      if (!c.keep && age > c.dur) { channel.delete(id); continue; }
-      if (!!c.post !== wantPost) continue;                  // 前/后两批各写各的
-      const i = paramIndex.get(id);
+      // 过期：普通层播完 dur 就走；保持层等寿命闸门放行（淡出期间还要写）
+      if (!c.keep && age > c.dur) { layers.splice(n--, 1); continue; }
+      if (!!c.post !== wantPost) continue;
+      // 保持型的关键帧（手型入场动画）是"保持到被撤"的：寿命到了也要继续写末帧，
+      // 否则手会自己掉下来（它靠最后一帧停在抬起的位置）。
+      let gate = 1;
+      if (c.keep && c.kind !== 'keys') {
+        gate = lifeGate(c);
+        if (gate <= 0) { layers.splice(n--, 1); continue; }
+      }
+      const i = paramIndex.get(c.id);
       const virtual = i === undefined;   // 虚拟参数：不写模型，写虚拟表（kit 的 custom.squash() 读）
       if (virtual && wantPost) continue;   // 虚拟参数只在前批处理一次
-      // ---------- 眼睛开度：lid 乘数（照搬 main.cpp 的 hold + Lids）----------
-      // 不直写参数：存成"相对 1 的乘数"交给 Lids 段乘在 eyeBlink 之后。
+
+      // ---------- 关键帧 / 波形：相加 ----------
+      if (c.kind === 'keys') {
+        const v = sampleKeys(c.frames, age);   // 关键帧自带起止，不乘包络
+        // 眼睛关键帧是**增量**（他们 lid(1+value)）：同参数多条相加，最后统一变成乘数
+        if (isLidParam(c.id)) { if (c.id === 'ParamEyeLOpen') lidAdd.L += v; else lidAdd.R += v; continue; }
+        // 手部骨架（竖手指/抚胸/狗尾草）是**切手型**不是叠加：他们同一时刻只有一只手，
+        // 两条轨道的参数相加会把胳膊算歪。取最新那条（绝对值覆盖）。
+        if (c.hand) { hands.set(c.id, v); continue; }
+        sums.set(c.id, (sums.get(c.id) ?? 0) + v);
+        continue;
+      }
+      if (c.kind === 'wave') {
+        let k = envelope(c, age, gate);
+        if (k <= 0) continue;
+        k = k * k * (3 - 2 * k);                       // 和常量层同一条平滑包络（起手轻、收尾轻）
+        const rel = Math.max(0, age);
+        sums.set(c.id, (sums.get(c.id) ?? 0) + (c.base + c.amp * Math.sin((rel * c.freq + c.phase) * Math.PI * 2)) * k);
+        continue;
+      }
+
+      // ---------- 常量：覆盖 ----------
+      // 眼睛开度不直写：存成"相对 1 的乘数"交给 Lids 段乘在 eyeBlink 之后（他们的 hold + Lids）。
       // value 一阶指数逼近目标、weight 一阶指数 0→1（LID_TAU）——他们的 hold 同款两条滤波。
-      if (c.lid || c.smile) {
+      if (isLidParam(c.id) || c.id === 'EyeSmile') {
         const alive = c.keep ? lifeGate(c) : (age > c.dur ? 0 : 1);
         if (c.v === undefined) c.v = c.to;   // 首次写入 = 目标（他们 set: if (!shown) hold.value = target）
         const ease = 1 - Math.exp(-frameDt / LID_TAU);
         c.w = (c.w ?? 0) + (alive - (c.w ?? 0)) * ease;
         c.v += (c.to - c.v) * ease;
-        if (alive <= 0 && c.w < 0.01) { channel.delete(id); continue; }
-        if (c.smile) {
+        if (alive <= 0 && c.w < 0.01) { layers.splice(n--, 1); continue; }
+        if (c.id === 'EyeSmile') {
           // 笑眼/下眼睑：值直达，权重指数（他们 heldParameters → SetParameterValue(id, value, weight)）
-          if (virtual) virtualParams.set(id, { v: c.v * c.w, t: clockT });
-          else setParamByName(id, c.v * c.w);
+          if (virtual) virtualParams.set(c.id, { v: c.v * c.w, t: clockT });
+          else setParamByName(c.id, c.v * c.w);
           continue;
         }
         // 眼睑：他们的 lid(id, 1 + (value-1)*weight)，再 max(0, ...) 防负数（main.cpp:335 同款）
         const mul = Math.max(0, 1 + (c.v - 1) * c.w);
-        if (id === 'ParamEyeLOpen') lidMul.L *= mul; else lidMul.R *= mul;
+        if (c.id === 'ParamEyeLOpen') lidMul.L *= mul; else lidMul.R *= mul;
         continue;
       }
-      let k;
-      if (c.keep) {
-        // 表情层：只有淡入；淡出靠被同参数覆盖、「恢复」、或 2.6 自动放松
-        const gate = lifeGate(c);
-        if (gate <= 0) { channel.delete(id); continue; }
-        k = clamp(age / Math.max(1e-3, c.in), 0, 1) * gate;
-      } else if (age < c.in) k = age / c.in;
-      else if (age > c.dur - c.out) k = (c.dur - age) / c.out;
-      else k = 1;
+      let k = envelope(c, age, gate);
       k = clamp(k, 0, 1);
       k = k * k * (3 - 2 * k);                             // 平滑进/出，避免硬切
-      if (c.kind === 'wave') {
-        // 波形：相位从动作开始算，和环境包络相乘 → 起手轻、收尾轻，中间是完整摆幅
-        const rel = Math.max(0, age);
-        if (virtual) virtualParams.set(id, { v: (c.base + c.amp * Math.sin((rel * c.freq + c.phase) * Math.PI * 2)) * k, t: clockT });
-        else setParamByName(id, (c.base + c.amp * Math.sin((rel * c.freq + c.phase) * Math.PI * 2)) * k);
-      } else {
-        if (virtual) virtualParams.set(id, { v: c.from + (c.to - c.from) * k, t: clockT });
-        else setParamByName(id, c.from + (c.to - c.from) * k);
-      }
+      const v = c.from + (c.to - c.from) * k;
+      if (virtual) virtualParams.set(c.id, { v, t: clockT });
+      else setParamByName(c.id, v);
     }
-    // ---------- 轨道：同参数相加（他们 main.cpp:563-593 的 tracks）----------
-    // 多条动作可以同时演：点头叠在低头/歪头上会转得更远，而不是谁后写谁赢、另一个消失。
-    // 眼睛开度的 keys（wink-left / wink-hold）是**绝对值**，不参与相加（0.45 + 0 会变 1.45），
-    // 多条时后写覆盖 —— 和以前完全一致。
-    if (tracks.length) {
-      const sums = new Map();
-      const handDirect = new Map();   // 手型参数：覆盖（不相加）
-      // 倒序遍历 → 先遇到的是数组里**最新**那条，所以用 has 判断「第一次写入即最新」，旧的不覆盖
-      for (let n = tracks.length - 1; n >= 0; n--) {
-        const c = tracks[n];
-        const age = t - c.t0;
-        if (!c.keep && age > c.dur) { tracks.splice(n, 1); continue; }
-        if (!!c.post !== wantPost) continue;
-        let v;
-        if (c.kind === 'keys') {
-          v = sampleKeys(c.frames, age);   // 关键帧自带起止，不乘包络
-        } else {
-          const rel = Math.max(0, age);
-          let k;
-          if (c.keep) k = clamp(age / Math.max(1e-3, c.in ?? 0.2), 0, 1) * lifeGate(c);
-          else if (age < (c.in ?? 0.2)) k = age / (c.in ?? 0.2);
-          else if (age > c.dur - (c.out ?? 0.2)) k = (c.dur - age) / (c.out ?? 0.2);
-          else k = 1;
-          k = clamp(k, 0, 1);
-          k = k * k * (3 - 2 * k);
-          if (k <= 0) continue;
-          v = (c.base + c.amp * Math.sin((rel * c.freq + c.phase) * Math.PI * 2)) * k;
-        }
-        // 眼睛关键帧是**增量**（他们 lid(1+value)）：同参数多条相加，最后统一变成乘数
-        if (c.eyeLid || c.id === 'ParamEyeLOpen' || c.id === 'ParamEyeROpen') {
-          if (c.id === 'ParamEyeLOpen') lidAdd.L += v; else lidAdd.R += v;
-          continue;
-        }
-        // 手部骨架（竖手指/抚胸/狗尾草/放下手）是**切手型**，不是叠加：
-        // 他们 Hand 枚举同一时刻只有一只手（Body.cs:100-101），两条轨道的参数相加会把胳膊算歪
-        // （用户：「抚胸手突然很快放下」「带手部的动画都不完整」）。按轨道顺序取最新一条覆盖。
-        if (c.src && paramActs[c.src]?.hand) { if (!handDirect.has(c.id)) handDirect.set(c.id, v); continue; }   // 倒序遍历：先遇到的是最新那条
-        sums.set(c.id, (sums.get(c.id) ?? 0) + v);
-      }
-      for (const [id, v] of handDirect) setParamByName(id, v);   // 手型：绝对值覆盖
-      for (const [id, sum] of sums) addParam(id, sum);
-    }
+    for (const [id, v] of hands) setParamByName(id, v);   // 手型：绝对值覆盖
+    for (const [id, sum] of sums) addParam(id, sum);      // 相加（夹在参数范围内）
     // 叠加层（2.8）：主通道写完后，把外力增量**加**到当前值上（rua 头反向叠在歪头词上 = 更歪）
     if (overlay.size) {
       for (const [k, o] of [...overlay]) {
@@ -2547,7 +2547,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
   }
 
   function stepClips(t) {
-    if (!clipList.length) { for (const [id, v] of debugOverrides) setParamByName(id, v); return; }
+    if (!clipList.length) { releaseOrphanHand(); for (const [id, v] of debugOverrides) setParamByName(id, v); return; }
     for (let n = clipList.length - 1; n >= 0; n--) {
       const c = clipList[n], d = c.def;
       const age = t - c.t0 - (d.delay ?? 0);
@@ -2566,6 +2566,11 @@ export async function createLive2DBody(base, opts, entry, kit) {
       //   不往前挪就会「人已经站直了手还举着」）
       if (d.gesture && !c.hand) {
         c.hand = true;
+        // 手同一时刻只能有一只（他们 Hand 枚举）：上一条 clip 还举着就让它交棒 ——
+        // 不再重复播一遍「举手」，也不允许它到点再放一次手（会变成放两次）。
+        for (const x of clipList) {
+          if (x !== c && x.def.gesture && x.hand && !x.handOff) x.handOff = true;
+        }
         pendingMod = { scale: 1, pace: 1, repeat: 1, explicit: true };
         dirSide = 1;
         clipHandHold = true;
@@ -2580,17 +2585,20 @@ export async function createLive2DBody(base, opts, entry, kit) {
         clipHandHold = true;
         try { applyOneWord(d.gesture.off, null, {}, {}); } finally { clipHandHold = false; }
         // 收手这一刻，clip 自己抬起来的手必须立刻让位（否则它每帧还在写 Movement2=1，收手动画被盖回去）
-        for (const [id, ch] of [...channel]) if (ch.clipHold) channel.delete(id);
+        for (let k = layers.length - 1; k >= 0; k--) if (layers[k].clipHold) layers.splice(k, 1);
       }
 
-      // 贴图互斥（他们 exclusiveGroups['face-big'] 的同款）：clip 声明了面部贴图时，
-      // 把同组其他 key 清零 —— 否则「生气」的黑脸会和通道里挂着的脸红叠着，
-      // 或者「圈圈眼」和「爱心眼」同时开（key3~key6 是同一只眼睛的四种画法）。
+      // 贴图互斥：clip 声明了面部贴图时，开演那一刻把别的 key 清零 —— 否则「生气」的黑脸
+      // 会和上一条 clip 挂着的脸红叠着。
+      // 2026-11-23 改：只在**开演时清一次**，不再每帧清。每帧清会把它开演后才出现的贴图
+      // 一直按死（〔脸红〕在演的时候说〔圈圈眼〕，key3 永远是 0 —— S2 验收第 6 条要的是叠加）。
+      // key3~key6 是同组互斥，这个由词自己写兄弟参数 0 保证（circle-eyes/heart-eyes 都带）。
       // 只动这 8 个面部 key，兔牙/眼镜/钢盆（key9~12）不碰。
-      {
+      if (!c.faceInit) {
+        c.faceInit = true;
         const FACE_KEYS = ['key1', 'key2', 'key3', 'key4', 'key5', 'key6', 'key7', 'key13'];
         if (d.sets && FACE_KEYS.some((k) => k in d.sets)) {
-          for (const k of FACE_KEYS) if (!(k in d.sets)) setParamByName(k, 0);
+          for (const k of FACE_KEYS) if (!(k in d.sets)) dropParam(k);
         }
       }
 
@@ -2647,7 +2655,17 @@ export async function createLive2DBody(base, opts, entry, kit) {
         clipList.splice(n, 1);
       }
     }
+    // clip 被提前撤掉（摸后被情绪词顶掉 / rua 打断清空 clipList）时，它举着的手没人放 ——
+    // 会一直举到寿命判死、然后「啪」地消失。这里补一次收手：没有 clip 再拥有这只手就放下来。
+    releaseOrphanHand();
     for (const [id, v] of debugOverrides) setParamByName(id, v);
+  }
+  /** 没有 clip 再拥有这只手 → 把它放下（clip 被提前撤掉时用）。 */
+  function releaseOrphanHand() {
+    if (clipList.some((x) => x.def.gesture && x.hand && !x.handOff)) return;
+    for (const c of layers) {
+      if (c.clipHold && c.src && paramActs[c.src]?.hand) { relaxChannels(true); return; }
+    }
   }
 
   function applyParamActs(frame) {
@@ -2802,7 +2820,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
     //    量取景的那几帧强制中性姿势：待机动作会把包围盒撑大，脚就量不准。
     // 情绪弧度：通道条目的 emo 标记（情绪词通道化后 frame.face 恒为 neutral，
     // 弧度改由通道驱动——条目退场/被顶掉/恢复时标记消失，弧度自动回中性）
-    const emoFace = [...channel.values(), ...tracks].find((c) => c.emo)?.emo ?? null;
+    const emoFace = layers.find((c) => c.emo)?.emo ?? null;
     const engine = performance && !neutralPose ? performance.update(t, dt, emoFace ?? frame.face) : null;
     lastEngine = engine;   // 留给 moodScale：下一次动作的默认幅度跟着当前情绪走
     const recipe = neutralPose
@@ -2821,7 +2839,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
     }
     // 眨眼词演出期间抑制 kit 自动眨眼（idle 随机眨会叠在 wink/眨眼词上抢戏）——
     // 通道里有 Eye 参数条目 = 我们的眨眼词正在演
-    const wordBlinking = channel.has('ParamEyeLOpen') || channel.has('ParamEyeROpen');
+    const wordBlinking = layerHas('ParamEyeLOpen') || layerHas('ParamEyeROpen');
     const bkAge = frame.blinkAge ?? 0;
     const bkDur = frame.blinkDur ?? 0.3;
     let bkClose;
@@ -2845,6 +2863,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
       blink: +(frame.blink ?? 0).toFixed(2), ec: +(frame.eyeClose ?? 0).toFixed(2),
       perf: !!engine, mood: globalThis.__l2dPerf?.dominant ?? null,
     };
+    // 跟句寿命的内部状态（S2 验收用：第几句 / 说完多久 / 词出生在第几句）
+    globalThis.__l2dLife = { s: sentenceCount, end: lastSpeechEnd < 0 ? -1 : +(clockT - lastSpeechEnd).toFixed(2), bornS: bornSentence };
 
     // 4) 口型（main.cpp:622-630 原样）：张嘴快（rate 30）/ 闭嘴慢（rate 16），
     //    并且写完做 max(当前值, mouth) —— 只增不减，呼吸和表情不会把嘴关上。
@@ -3553,7 +3573,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 对齐 kit 脸配方 fc.shake 的组级语义（整组一起抖，身体+头），参数级 wave 只抖头不够。
     // 时间用 kit 传入的 T（秒）——iframe 沙箱里 performance.now 不可用（踩过）。
     faceShake(t) {
-      for (const c of [...channel.values(), ...tracks]) {
+      for (const c of layers) {
         if (c.emo === 'angry') return Math.sin(t * 60) * 1.4;
         if (c.emo === 'scared') return Math.sin(t * 66) * 1.1;
       }
@@ -3572,6 +3592,12 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // kit 的 doWord 会先问这里：返回 true 表示这个词形象自己处理（通道叠加），
     // 不走 kit 的单槽 pulse。白名单外的词返回 false，保持旧行为。
     actWord,
+    // ---- 生命周期事件（2026-11-23 补导出）----
+    // pet-app 的 say 会 body.set({speechStart})，运行时 kit 转发到 opts.figure.onSpeechStart()。
+    // 但 figure 一直**没导出这三个**（定义在下面、createBody 的 opts 里传了一份，patch 找的是
+    // opts.figure 上的），所以 sentenceCount / lastSpeechEnd / onBeat 在真机上从没被调用过——
+    // 「跟 2 句 / 说完 2 秒退场」实际上一直退化成「出生 3 秒退」。补上导出才真的活了。
+    onSpeechStart: () => onSpeechStart(), onSpeechEnd: () => onSpeechEnd(), onBeat: (b) => onBeat(b),
     // 3.9 统一闲时池：kit decide() 的 idle-word 选项从这里拿词表（{word,kind,w,life}），
     // 抽中后走 doWord(word, {idle, life}) 回到 actWord——音效/爱心/挤压在 kit 那头照发。
     idlePool() { return profile.idleRepertoire ?? []; },
@@ -3766,7 +3792,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       // 他们只有**单眼动画**（track/keys 里有 ParamEyeLOpen）才 blinkBlocked，这里同款。
       {
         const _el = paramIndex.get('ParamEyeLOpen'), _er = paramIndex.get('ParamEyeROpen');
-        const _soloEye = tracks.some((c) => c.kind === 'keys' && c.eyeLid);
+        const _soloEye = layers.some((c) => c.kind === 'keys' && isLidParam(c.id));
         const _blinkRan = !!_eyeBlink && !_soloEye;
         if (_blinkRan) _eyeBlink.updateParameters(model._model, dt);
         // 通道乘数（他们 Lids updater：在 eyeBlink 之后、物理之前）。
@@ -3987,15 +4013,10 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 气泡边界：face-big 成员让位（一个情绪一次一张脸）。
     // 组合词展开后参数挂在零件上（眉毛/嘴/眼泪各自一条），靠条目的 group 认祖——
     // 按 def.params 遍历的话组合词是空壳，一个参数都清不到。
-    for (const [id, c] of [...channel]) {
+    for (const c of [...layers]) {
       const owner = c.group ?? c.src;
       if (!owner || ADDON_WORDS.has(owner) || !faceBigWords.has(owner)) continue;
-      dropParam(id);
-    }
-    for (let n = tracks.length - 1; n >= 0; n--) {
-      const owner = tracks[n].group ?? tracks[n].src;
-      if (!owner || ADDON_WORDS.has(owner) || !faceBigWords.has(owner)) continue;
-      tracks.splice(n, 1);
+      dropParam(c.id);
     }
   };
   const body = kit.createBody(host, { figure, words, css: 'foreignObject{pointer-events:none}', onSpeechStart, onSpeechEnd, onBeat });
