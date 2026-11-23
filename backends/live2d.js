@@ -2019,7 +2019,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
     for (let i = clipList.length - 1; i >= 0; i--) if (clipList[i].def.mood) clipList.splice(i, 1);
   }
   function stepClips(t) {
-    if (!clipList.length) return;
+    if (!clipList.length) { for (const [id, v] of debugOverrides) setParamByName(id, v); return; }
     for (let n = clipList.length - 1; n >= 0; n--) {
       const c = clipList[n], d = c.def;
       const age = t - c.t0 - (d.delay ?? 0);
@@ -3188,6 +3188,12 @@ export async function createLive2DBody(base, opts, entry, kit) {
           audit('lid L=' + lidMul.L.toFixed(3) + ' R=' + lidMul.R.toFixed(3) + ' eL=' + gv('ParamEyeLOpen') + ' eR=' + gv('ParamEyeROpen') + ' open=' + (globalThis.__l2dLast?.open ?? '?') + ' ec=' + (globalThis.__l2dLast?.ec ?? '?'));
         }
       }
+      // Layer：一段表演（含 rua 摸后四档）。**必须在物理之前** ——
+      // AngleX/Y/Z、LeanInput、PositionX/Y/Z 都是 physics3.json 的输入
+      // （AngleX→ParamAngleX、LeanInput→ParamBodyAngleY、PositionX→ParamBodyAngleX …），
+      // 写在物理后面等于这帧的参数物理根本没看见，下一帧 loadParameters 又恢复基准，
+      // 头和身体一次都不会动（用户：「只有手在执行」）。2026-11-23 修正。
+      stepClips(clockT);
       try { model._physics?.evaluate(model._model, dt); } catch { /* 物理失败不致命 */ }
       // ---------- 摸后的四个 mood（Behavior.cs:59-67）----------
       // 全部写在这里（saveParameters 之后、物理之前）：直写参数不会进基准，
@@ -3216,7 +3222,6 @@ export async function createLive2DBody(base, opts, entry, kit) {
       applyActPostWaves(clockT);
       applyChannelPost(clockT);   // 通道里标了 post 的那批（腰/胯）：必须是物理之后当帧最终值
       try { model._pose?.updateParameters(model._model, dt); } catch { /* 姿势失败不致命 */ }
-      stepClips(clockT);   // Layer：一段表演（含 rua 摸后四档），写在 physics/pose 之后，谁也盖不掉
       model._model.update();
       render();
 
