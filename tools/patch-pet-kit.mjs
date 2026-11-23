@@ -328,9 +328,19 @@ const PATCHES = [
     const speed = Math.hypot(ruaVel.x, ruaVel.y);
     const zone = zoneAt(p);
     const onHead = zone === 'head' || zone === 'face';
-    const engaged = ruaTravel > 8;   // 真的移动了才算在摸（防按下误触）
+    // 2026-11-23 用户：手按在头上不动 10 秒，松手毫无反应。
+    // 他们那边要求 touched = (travel > 8 && strokeMoving >= .4)，按下去没动就什么都不演。
+    // 他要「按住也算」：按住 .8 秒后也进 rua，只是计时走下面的慢速通道（封顶 1.5 秒 = 失落档）。
+    const heldStill = ruaDownAt ? (t - ruaDownAt) / 1000 : 0;
+    const engaged = ruaTravel > 8 || heldStill > .8;
     const moving = engaged && onHead && speed > 40;
     if (moving) { ruaHeadTime += dt; ruaDeepTime += dt; }
+    else if (engaged && onHead) {
+      // 手还在头上、只是没动：给到 1.5 秒（失落档）就封顶；已经摸得更久就保持不跌
+      const cap = Math.max(1.5, ruaHeadTime);
+      ruaHeadTime = Math.min(cap, ruaHeadTime + dt * .5);
+      ruaDeepTime = Math.max(0, ruaDeepTime - dt * .1);
+    }
     else { ruaHeadTime = Math.max(0, ruaHeadTime - dt * .25); ruaDeepTime = Math.max(0, ruaDeepTime - (onHead ? dt * .1 : dt)); }
     ruaMax = Math.max(ruaMax, ruaHeadTime);
     if (!ruaMelted && ruaDeepTime >= 20) ruaMelted = true;
@@ -1321,6 +1331,23 @@ function toneOf(text: string): string {
       const a = "case 'poke': text = t.woke ? m.pokedAwake(u) : m.poked(u, t.count); break;";
       if (!s.includes(a)) throw new Error('pokeZonePass：锚点未命中');
       return s.replace(a, "case 'poke': text = t.woke ? m.pokedAwake(u) : m.poked(u, t.count, t.zone); break;");
+    },
+  },
+  {
+    file: 'body', id: 'ruaHold',
+    desc: '按住不动也算摸：声明 ruaDownAt、按下记时刻、帧循环里推进计时（鼠标停住时 pointermove 根本不触发，而他们是在 Tick 里每帧调 StepStroke）',
+    detect: (s) => s.includes('ruaDownAt = 0'),   // 只看声明处：模板里已经有 ruaDownAt 的用法了
+    apply: (s) => {
+      let out = s;
+      const a1 = "  let ruaDown = false, ruaLast = null,";
+      if (!out.includes(a1)) throw new Error('ruaHold：声明锚点未命中');
+      out = out.replace(a1, "  let ruaDown = false, ruaDownAt = 0, ruaLast = null,");
+      const a2 = "ruaDown = true; rua = null; ruaLast = { x: p.x, y: p.y, t: now(p) };";
+      if (!out.includes(a2)) throw new Error('ruaHold：按下锚点未命中');
+      out = out.replace(a2, "ruaDown = true; ruaDownAt = now(p); rua = null; ruaLast = { x: p.x, y: p.y, t: now(p) };");
+      const a3 = "    if (!(dt > 0 && dt < Infinity)) return;\n    T += dt; pet.modeT += dt;";
+      if (!out.includes(a3)) throw new Error('ruaHold：step 锚点未命中');
+      return out.replace(a3, a3 + "\n    // 按住不动没有 pointermove：rua 计时自己走一帧（dx=dy=0，travel 不会虚增）\n    if (ruaDown && pointer.inside) stepRua({ x: pointer.x, y: pointer.y });");
     },
   },
 ];
