@@ -346,6 +346,10 @@ export async function createLive2DBody(base, opts, entry, kit) {
   let headParts = null;   // { drawables: number[], names: string[] }
   let faceParts = null;
   let hairParts = null;   // 后发/下侧发：只取头部高度以内那圈
+  // 身体各部位（胸/裙/腿/尾/左右手）：和头一样按**部件**算实时盒。
+  // 2026-11-23 实测：legacy 手写 touchZones 整体偏下约 50 logo 单位
+  //（胸写 145、真实 72~97；短裙写 192、真实 104~175），所以点胸命中头、点手命中胸、点腿命中裙。
+  let bodySets = null;
 
   async function buildPartBoxes() {
     try {
@@ -379,6 +383,37 @@ export async function createLive2DBody(base, opts, entry, kit) {
         if (!drawables.length) return null;
         const names2 = [...set].map((i) => nameById.get(ids[i]) ?? ids[i]);
         return { drawables, partCount: set.size, names: names2, set };
+      };
+      // 精确名字 → 部件下标（pick 用的是 includes，会把手/手臂/举手混在一起，身体分区不能那么宽）
+      const exact = (nm) => {
+        const out = [];
+        for (let i = 0; i < n; i++) if ((nameById.get(ids[i]) ?? '') === nm) out.push(i);
+        return out;
+      };
+      // 只收 roots + 它们的子树（pick 里的扩散逻辑，抽出来给身体各部位复用）
+      const collect = (roots) => {
+        if (!roots.length) return null;
+        const set = new Set(roots);
+        for (let grew = true; grew;) {
+          grew = false;
+          for (let i = 0; i < n; i++) {
+            if (!set.has(i) && set.has(parents[i])) { set.add(i); grew = true; }
+          }
+        }
+        const drawables = [];
+        const dc = M.getDrawableCount();
+        for (let d = 0; d < dc; d++) {
+          if (set.has(M.getDrawableParentPartIndex(d))) drawables.push(d);
+        }
+        if (!drawables.length) return null;
+        return { drawables, partCount: set.size, set };
+      };
+      bodySets = {
+        chest: collect([...exact('胸'), ...exact('胸衣')]),
+        skirt: collect([...exact('短裙'), ...exact('短裙后')]),   // 长裙盖到腿，不用它
+        legs: collect([...exact('左腿'), ...exact('右腿'), ...exact('腿')]),
+        tail: collect(exact('尾巴')),
+        hands: exact('手').map((r) => collect([r])).filter(Boolean),   // 左右各一只
       };
       // 「头」优先；有的模型没有头部件，就退而用 脸+五官+头发（HD 包/换皮时走这条）
       const head = pick(['头', 'Head', '頭'])
@@ -414,46 +449,78 @@ export async function createLive2DBody(base, opts, entry, kit) {
     return p.getArray();
   }
   // 模型坐标的包围盒 → logo 单位（用同一矩阵映射四个角，取 min/max）
-  // clipY：只统计模型 y ≥ clipY 的顶点（后发要按头的下巴裁一刀，否则会垂到腰）
-  function partBox(parts, clipY = -Infinity) {
+  // clipLogoY：只统计 logo y <= 这个值 的顶点（logo 的 y 是**从顶部往下**，256 = 脚底）。
+  //   后发按下巴裁、腿按裙下沿裁，都靠它。
+  function partBox(parts, clipLogoY = Infinity, clipLogoYMin = -Infinity) {
     if (!parts) return null;
+    const a = modelToLogoMatrix();
+    const toLogo = (mx, my) => {
+      const nx = a[0] * mx + a[4] * my + a[12];
+      const ny = a[1] * mx + a[5] * my + a[13];
+      return [(nx + 1) / 2 * BOX, (1 - (ny + 1) / 2) * BOX];
+    };
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    let mx0 = Infinity, my0 = Infinity, mx1 = -Infinity, my1 = -Infinity;
+    if (clipLogoY === Infinity && clipLogoYMin === -Infinity) {
+      // 快速路径：不裁剪，先算模型包围盒，只转 4 个角
+      for (const d of parts.drawables) {
+        let v;
+        try { v = model._model.getDrawableVertices(d); } catch { continue; }
+        if (!v || !v.length) continue;
+        for (let i = 0; i < v.length; i += 2) {
+          const x = v[i], y = v[i + 1];
+          if (x < x0) x0 = x;
+          if (x > x1) x1 = x;
+          if (y < y0) y0 = y;
+          if (y > y1) y1 = y;
+        }
+      }
+      if (!(x1 > x0 && y1 > y0)) return null;
+      for (const [mx, my] of [[x0, y0], [x0, y1], [x1, y0], [x1, y1]]) {
+        const [lx, ly] = toLogo(mx, my);
+        if (lx < mx0) mx0 = lx;
+        if (lx > mx1) mx1 = lx;
+        if (ly < my0) my0 = ly;
+        if (ly > my1) my1 = ly;
+      }
+      return {
+        x: (mx0 + mx1) / 2, y: (my0 + my1) / 2, rx: (mx1 - mx0) / 2, ry: (my1 - my0) / 2,
+        x0: mx0, y0: my0, x1: mx1, y1: my1,
+        model: { x0, y0, x1, y1 },
+      };
+    }
+    // 裁剪路径：逐顶点转 logo 再聚合
     for (const d of parts.drawables) {
       let v;
       try { v = model._model.getDrawableVertices(d); } catch { continue; }
       if (!v || !v.length) continue;
       for (let i = 0; i < v.length; i += 2) {
-        const x = v[i], y = v[i + 1];
-        if (y < clipY) continue;
-        if (x < x0) x0 = x; else if (x > x1) x1 = x;
-        if (y < y0) y0 = y; else if (y > y1) y1 = y;
+        const mx = v[i], my = v[i + 1];
+        const [lx, ly] = toLogo(mx, my);
+        if (ly > clipLogoY || ly < clipLogoYMin) continue;
+        if (lx < x0) x0 = lx;
+        if (lx > x1) x1 = lx;
+        if (ly < y0) y0 = ly;
+        if (ly > y1) y1 = ly;
+        if (mx < mx0) mx0 = mx;
+        if (mx > mx1) mx1 = mx;
+        if (my < my0) my0 = my;
+        if (my > my1) my1 = my;
       }
     }
     if (!(x1 > x0 && y1 > y0)) return null;
-    const a = modelToLogoMatrix();
-    let lx0 = Infinity, ly0 = Infinity, lx1 = -Infinity, ly1 = -Infinity;
-    for (const [mx, my] of [[x0, y0], [x0, y1], [x1, y0], [x1, y1]]) {
-      const nx = a[0] * mx + a[4] * my + a[12];
-      const ny = a[1] * mx + a[5] * my + a[13];
-      const lx = (nx + 1) / 2 * BOX;
-      // logo 的 y 是**从顶部往下**（kit 的 ay=256 是脚底，extent 也是这个方向），NDC 是往上，所以这里要翻
-      const ly = (1 - ny) / 2 * BOX;
-      if (lx < lx0) lx0 = lx; if (lx > lx1) lx1 = lx;
-      if (ly < ly0) ly0 = ly; if (ly > ly1) ly1 = ly;
-    }
     return {
-      x: (lx0 + lx1) / 2, y: (ly0 + ly1) / 2, rx: (lx1 - lx0) / 2, ry: (ly1 - ly0) / 2,
-      x0: lx0, y0: ly0, x1: lx1, y1: ly1,
-      model: { x0, y0, x1, y1 },
+      x: (x0 + x1) / 2, y: (y0 + y1) / 2, rx: (x1 - x0) / 2, ry: (y1 - y0) / 2,
+      x0, y0, x1, y1,
+      model: { x0: mx0, y0: my0, x1: mx1, y1: my1 },
     };
   }
-  // 头盒 = 头部件子树 ∪（后发/下侧发里、头部高度以内的那段）
   function headBoxModel() {
     const bone = partBox(headParts);
     if (!bone) return null;
     if (!hairParts) return bone;
-    const mh = bone.model.y1 - bone.model.y0;
-    const hair = partBox(hairParts, bone.model.y0 - mh * 0.12);
+    const mh = bone.y1 - bone.y0;
+    const hair = partBox(hairParts, bone.y1 + mh * 0.12);
     if (!hair) return bone;
     const x0 = Math.min(bone.x0, hair.x0), x1 = Math.max(bone.x1, hair.x1);
     const y0 = Math.min(bone.y0, hair.y0), y1 = Math.max(bone.y1, hair.y1);
@@ -2923,37 +2990,58 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 拿不到部件才退回旧的「整幅包围盒 × 比例」——那份比例是照他们 Behavior.HeadBox 抄的，
     // 但乘的是被尾巴撑宽的 canvas 包围盒，头心本来就偏，所以只当兜底。
     touchZones() {
-      const [x0, y0, x1, y1] = currentExtent();
-      const w = x1 - x0, h = y1 - y0;
       const { head: hb, face: fb } = headFaceBoxes();
-      let heads;
-      if (hb) {
-        heads = [{ id: 'head', x: hb.x, y: hb.y, rx: hb.rx, ry: hb.ry }];
-        // 脸盒：有「五官/脸」部件就用它的包围盒；没有再按头的下半部推
-        const f = fb ?? { x: hb.x, y: hb.y + hb.ry * .18, rx: hb.rx * .62, ry: hb.ry * .42 };
-        heads.push({ id: 'face', x: f.x, y: f.y, rx: f.rx, ry: f.ry });
-      } else {
-        const _legacyHead = (profile.touchZones ?? []).find((z) => z.id === 'head');
-        const cx = _legacyHead?.x ?? (x0 + x1) / 2;
-        const cy = _legacyHead?.y ?? (y0 + h * .31);
-        heads = [
-          { id: 'head', x: cx, y: cy, rx: w * .26, ry: h * .22 },
-          { id: 'face', x: cx, y: cy, rx: w * .17, ry: h * .10 },
-        ];
+      const zones = [];
+      // 脸放在头前面：脸盒整个落在头盒里，反过来的话 find() 永远先命中头，脸区一次都点不到。
+      if (fb) zones.push({ id: 'face', x: fb.x, y: fb.y, rx: fb.rx, ry: fb.ry });
+      if (hb) zones.push({ id: 'head', x: hb.x, y: hb.y, rx: hb.rx, ry: hb.ry });
+
+      const B = (set, clipY, clipYMin) => (set ? partBox(set, clipY ?? Infinity, clipYMin ?? -Infinity) : null);
+      const chest = B(bodySets?.chest);
+      const skirt = B(bodySets?.skirt);
+      if (chest) {
+        // 胸部件是 70~99，但 70~88 那段在她的头后面（Q 版下巴就在 88），视觉上看不见——
+        // 那一段交给 head（head 排在前面，天然赢），胸区只留下巴以下。
+        const top = hb ? Math.max(chest.y0, hb.y1 - 4) : chest.y0;
+        zones.push({
+          id: 'chest', x: chest.x, y: (top + chest.y1 + 5) / 2,
+          rx: chest.rx * 1.05, ry: Math.max(9, (chest.y1 + 5 - top) / 2),
+        });
+        // 肚子：胸下沿到裙上沿之间那一条（模型没有「肚子」部件，按几何切）
+        zones.push({ id: 'belly', x: chest.x, y: chest.y1 + 11, rx: chest.rx * .85, ry: 9 });
       }
-      // 手 / 肚子：他们 ClickMood 里 hand→开心、body→心虚，我们原来没有这两块。
-      // 手按「胸口高度、身体两侧」给两个小椭圆（模型坐标，随包围盒缩放）。
-      const cx = heads[0].x;
-      const tz = (profile.touchZones ?? []).find((z) => z.id === 'chest');
-      const cyChest = tz?.y ?? (y0 + h * .55);
-      const hands = [
-        { id: 'hand', x: cx - w * .34, y: cyChest + 6, rx: w * .12, ry: h * .075 },
-        { id: 'hand', x: cx + w * .34, y: cyChest + 6, rx: w * .12, ry: h * .075 },
-        { id: 'belly', x: cx, y: cyChest + 34, rx: w * .26, ry: h * .075 },
-      ];
-      // 其余（胸部/裙子/腿/尾巴）沿用手写数据，只为「右键点在别处不触发」。
-      const rest = (profile.touchZones ?? []).filter((z) => z.id !== 'head' && z.id !== 'face');
-      return [...heads, ...hands, ...rest];
+      // 手：左右各一只，盒太小点不中 → 放大到 10 以上
+      for (const h of bodySets?.hands ?? []) {
+        const b = B(h);
+        if (!b) continue;
+        zones.push({ id: 'hand', x: b.x, y: b.y, rx: Math.max(b.rx * 1.8, 10), ry: Math.max(b.ry * 1.3, 10) });
+      }
+      if (skirt) zones.push({ id: 'skirt', x: skirt.x, y: skirt.y - 2, rx: skirt.rx * .92, ry: skirt.ry * .82 });
+      if (bodySets?.legs) {
+        // 腿部件从大腿一直连到脚，只取裙下沿以下那截
+        const b = B(bodySets.legs, Infinity, (skirt ? skirt.y1 : 170) - 12);
+        if (b) zones.push({ id: 'legs', x: b.x, y: b.y, rx: b.rx * 1.15, ry: Math.min(b.ry, 48) });
+      }
+      const tail = B(bodySets?.tail);
+      if (tail) {
+        // 尾巴整条从背后绕过来（x 跨 69~198），可见的只有右侧翘起那段，只取右端
+        // 右移到裙子外面，只在裙右沿之外才归尾巴（否则裙子右侧会被尾巴抢走）
+        const tx = Math.max(tail.x1 - 14, (skirt ? skirt.x1 : 168) + 14);
+        zones.push({
+          id: 'tail',
+          x: tx,
+          y: tail.y,
+          rx: Math.max(18, tail.rx * .3),
+          ry: Math.max(26, tail.ry * .7),
+        });
+      }
+      if (!hb) {
+        // 连部件都读不到（换皮/HD 异常）才退回比例盒，只为「右键点在别处不触发」
+        const [x0, y0, x1, y1] = currentExtent();
+        const w = x1 - x0, h = y1 - y0;
+        zones.push({ id: 'head', x: (x0 + x1) / 2, y: y0 + h * .31, rx: w * .26, ry: h * .22 });
+      }
+      return zones;
     },
     // 头/脸的实时盒（模型坐标）+ 部件树诊断，给调试和 kit 读
     get headBox() { return headFaceBoxes().head; },
@@ -2968,6 +3056,28 @@ export async function createLive2DBody(base, opts, entry, kit) {
     debugRuaAfter(sec) { ruaPeak = sec; ruaPrevOn = true; stepRuaState({}); return clipList.at(-1)?.def.mood ?? null; },
     get clipDebug() { return clipList.map((c) => ({ mood: c.def.mood, age: +(clockT - c.t0 - (c.def.delay ?? 0)).toFixed(2), dur: c.def.dur })); },
     get partBoxDebug() { return { ...headBoxDbg, head: headBoxModel(), face: faceBoxModel(), extent: currentExtent() }; },
+    /** 调试：每个部件自己的包围盒（logo 坐标，不含子树）——用来给分区定位置 */
+    partMap() {
+      const M = model._model;
+      const n = M?.getPartCount?.() ?? 0;
+      const dc = M.getDrawableCount();
+      const byPart = new Map();
+      for (let d = 0; d < dc; d++) {
+        let pi; try { pi = M.getDrawableParentPartIndex(d); } catch { continue; }
+        if (!byPart.has(pi)) byPart.set(pi, []);
+        byPart.get(pi).push(d);
+      }
+      const out = {};
+      for (let i = 0; i < n; i++) {
+        const pid = M.getPartId(i);
+        const name = pid?.getString ? pid.getString() : String(pid ?? '');
+        const ds = byPart.get(i);
+        if (!ds?.length) continue;
+        const b = partBox({ drawables: ds });
+        if (b) out[name] = { x: +b.x.toFixed(1), y: +b.y.toFixed(1), rx: +b.rx.toFixed(1), ry: +b.ry.toFixed(1) };
+      }
+      return out;
+    },
     // 彩蛋台词：交给页面临时显示一句话（页面侧不排队、不发给 World）。
     // 她正在说话/有问答挂着时页面自己忽略，所以不会和对话抢气泡。
     emitBubble(text, seconds) {
