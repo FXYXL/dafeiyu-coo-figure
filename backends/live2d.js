@@ -1659,6 +1659,14 @@ export async function createLive2DBody(base, opts, entry, kit) {
   };
   function actWord(w, fromFace, o) {
     if (w === 'skit') return startSkit();
+    // S4：情绪词走整段 clip（贴图 + 常量 + 关键帧 + 时长一起演），不再只是换一张贴图。
+    // 工具动作（走/跳/坐/点头…）没有 EMO_CLIPS 条目，照旧走通道。
+    const emo = EMO_CLIPS[w];
+    if (emo) {
+      stopMoodClips();   // 新情绪顶掉还在演的摸后/上一个情绪
+      startLayerClip(emo.pushed && (o?.side ?? 1) < 0 ? mirrorPoke(emo) : emo);
+      return true;
+    }
     // 摸后 mood 在演的时候，歪头/笑眼/前倾这类词一律让路：
     // 她收到「摸头」事件后会自己说一句话，那句话带的〔歪头〕会把头抢过去，
     // 看起来就是「摸后动作完全没生效，只歪了一下头」（用户 2026-11-23 实测）。
@@ -2164,6 +2172,70 @@ export async function createLive2DBody(base, opts, entry, kit) {
     ...MOOD_CLIPS.melt,
     tag: 'melt30',
     sets: { ...MOOD_CLIPS.melt.sets, key3: 0, key4: 1, key5: 0, key6: 0 },
+  };
+  // ---------- 情绪（S4）：他们 Behavior.cs:30-37 的 Moods，逐字搬 ----------
+  // 只搬「情绪」这一类（12 条里的 6 条核心），工具动作（走/跳/坐/点头）保持我们自己的。
+  // 数值是**他们的 VTS 输入**，写进模型前会和摸后四档一样过 VTS_IN（FaceAngleY ×1.5、
+  // BrowInnerUp ×2、MouthPressLipOpen 取反）。所以这里保持原样，别手改。
+  const EMO_CLIPS = {
+    // 害羞：脸红 + 低头 12° + 歪头 9° + 眼珠躲开 + 抿嘴；歪头在 3 秒内摆两下
+    // （id 用 blush：词表里「害羞/shy」都解析到它；「脸红」也走这条，整段害羞不会太重）
+    blush: {
+      dur: 3, exps: ['脸红'], tag: 'emo:shy',
+      sets: { FaceAngleY: -12, FaceAngleX: 10, FaceAngleZ: 9, ParamEyeBallX: -.6, ParamEyeBallY: -.5, MouthPressLipOpen: .6 },
+      keys: {
+        FaceAngleZ: [[0, 0], [.5, 2], [1, -1], [1.6, 2], [2.2, -1], [3, 0]],
+        ViewSquash: [[0, 0], [.4, .02], [2.4, .02], [3, 0]],
+      },
+    },
+    // 生气：黑脸 + 鼓腮 + 双眉压低压斜 + 甩头（0→−8→6→−5→3→0）+ 前倾 8°
+    angry: {
+      dur: 3, exps: ['黑脸'], tag: 'emo:angry',
+      sets: { CheeckPuff: 1, ParamBrowLY: -.8, ParamBrowRY: -.8, ParamBrowLAngle: -1, ParamBrowRAngle: -1, FaceAngleX: -14, FaceAngleY: -6 },
+      keys: {
+        FaceAngleX: [[0, 0], [.15, -8], [.3, 6], [.45, -5], [.6, 3], [.8, 0]],
+        ViewSquash: [[0, 0], [.08, .04], [.25, 0], [1, 0]],
+        LeanInput: [[0, 0], [.2, 8], [1.6, 6], [2.2, 0]],
+      },
+    },
+    // 得意：眯眼 + 嘴角笑开 + 抬下巴 + 歪头 12° + 前倾 6°
+    'smug-face': {
+      dur: 3, tag: 'emo:smug',
+      sets: { REyeSquint: .8, LEyeSquint: .8, ParamMouthForm: 1, MouthX: .5, FaceAngleY: 10, FaceAngleZ: 12 },
+      keys: {
+        FaceAngleX: [[0, 0], [.5, 3], [1.2, -2], [1.9, 3], [3, 0]],
+        LeanInput: [[0, 0], [.35, 6], [2.4, 5], [3, 0]],
+      },
+    },
+    // 委屈：流泪 + 眉心抬满 + 嘟嘴 + 低头 10° + 歪头 −6° + 委屈地左右小幅晃
+    aggrieved: {
+      dur: 3, exps: ['流泪'], tag: 'emo:aggrieved',
+      sets: { BrowInnerUp: 1, Mouthpucker: 1, FaceAngleY: -10, FaceAngleZ: -6 },
+      keys: {
+        ViewSquash: [[0, 0], [.4, .03], [2.4, .025], [3, 0]],
+        FaceAngleX: [[0, 0], [.4, -3], [.9, 2], [1.4, -3], [1.9, 2], [3, 0]],
+      },
+    },
+    // 开心：笑眼 + 张嘴 + 左右晃头 + 抬手
+    happy: {
+      dur: 3, tag: 'emo:happy',
+      sets: { EyeSmile: 1, EyeOpen: 0, ParamMouthForm: 1, ParamMouthOpenY: .5, FaceAngleY: 6 },
+      keys: {
+        FaceAngleZ: [[0, 0], [.3, -10], [.7, 10], [1.1, -8], [1.5, 6], [2, 0]],
+        FaceAngleY: [[0, 0], [.3, 6], [.7, 2], [1.1, 6], [1.5, 2], [2, 0]],
+      },
+      gesture: { on: 'chest-hand', off: 'put-hand-down' },
+    },
+    // 心虚：流冷汗 + 眼珠躲开 + 嘴角撇 + 转头 14° + 前倾 6°；Pushed（戳的时候跟着侧别翻）
+    guilty: {
+      dur: 3, exps: ['流冷汗'], tag: 'emo:guilty', pushed: true,
+      sets: { ParamEyeBallX: .8, ParamEyeBallY: .3, MouthX: .6, ParamMouthForm: -.5, FaceAngleX: 14, FaceAngleY: -8 },
+      keys: {
+        FaceAngleZ: [[0, 0], [.3, -4], [.6, 2], [.9, -3], [1.2, 2], [1.5, -2], [2, 0]],
+        ViewSquash: [[0, 0], [.3, .03], [2, .02], [2.6, 0]],
+        LeanInput: [[0, 0], [.3, 6], [2, 5], [2.6, 0]],
+      },
+    },
   };
   function startLayerClip(def) {
     if (!def) return null;
