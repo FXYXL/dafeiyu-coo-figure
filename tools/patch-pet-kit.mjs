@@ -875,21 +875,6 @@ const PATCHES = [
     },
   },
   {
-    file: 'script', id: 'vocabPass',
-    desc: 'vocab 查不到的词也放行：交给 figure 的 baseWord/actWord 判断（否则 profile 里加了新词、figure.json 忘了登记，台词里的【娇羞】会被静默丢掉）',
-    detect: (s) => s.includes('vocabPass：查不到也放行'),
-    apply: (s) => {
-      const a = `    if (bare && bare !== w && vocabId(bare, vocab)) { out.push(w); continue; }
-    dropped.push(w);`;
-      if (!s.includes(a)) throw new Error('vocabPass：锚点未命中');
-      return s.replace(a, `    if (bare && bare !== w && vocabId(bare, vocab)) { out.push(w); continue; }
-    // vocabPass：查不到也放行 —— 形象包的 wordAlias / EMO_CLIPS 认识的词比 figure.json 的 vocab 多，
-    // 不认识的词到了 figure 那边 actWord 会返回 false，和丢掉等价，但不会再把新词静默吞掉。
-    dropped.push(w);
-    out.push(w);`);
-    },
-  },
-  {
     file: 'script', id: 'beatWaitTone',
     desc: '2.1 动作阻塞文字 + 2.3 tone：Beat/Anchor 加 wait（motion && !lasting 才算秒）、Beat 加 tone（含！→感叹/末尾…→省略）；wait/anchor.wait 乘 tone pace 与动作实际时长精确同步',
     detect: (s) => /sumWait/.test(s) && /toneOf/.test(s),
