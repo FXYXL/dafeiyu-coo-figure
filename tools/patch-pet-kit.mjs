@@ -328,19 +328,9 @@ const PATCHES = [
     const speed = Math.hypot(ruaVel.x, ruaVel.y);
     const zone = zoneAt(p);
     const onHead = zone === 'head' || zone === 'face';
-    // 2026-11-23 用户：手按在头上不动 10 秒，松手毫无反应。
-    // 他们那边要求 touched = (travel > 8 && strokeMoving >= .4)，按下去没动就什么都不演。
-    // 他要「按住也算」：按住 .8 秒后也进 rua，只是计时走下面的慢速通道（封顶 1.5 秒 = 失落档）。
-    const heldStill = ruaDownAt ? (t - ruaDownAt) / 1000 : 0;
-    const engaged = ruaTravel > 8 || heldStill > .8;
+    const engaged = ruaTravel > 8;   // 真的移动了才算在摸（防按下误触）
     const moving = engaged && onHead && speed > 40;
     if (moving) { ruaHeadTime += dt; ruaDeepTime += dt; }
-    else if (engaged && onHead) {
-      // 手还在头上、只是没动：给到 1.5 秒（失落档）就封顶；已经摸得更久就保持不跌
-      const cap = Math.max(1.5, ruaHeadTime);
-      ruaHeadTime = Math.min(cap, ruaHeadTime + dt * .5);
-      ruaDeepTime = Math.max(0, ruaDeepTime - dt * .1);
-    }
     else { ruaHeadTime = Math.max(0, ruaHeadTime - dt * .25); ruaDeepTime = Math.max(0, ruaDeepTime - (onHead ? dt * .1 : dt)); }
     ruaMax = Math.max(ruaMax, ruaHeadTime);
     if (!ruaMelted && ruaDeepTime >= 20) ruaMelted = true;
@@ -1089,7 +1079,7 @@ function toneOf(text: string): string {
     apply: (s) => {
       const a = "    } else if (now(p) - press.t < 400) {";
       if (!s.includes(a)) throw new Error('pokeZone：锚点未命中');
-      s = s.replace(a, a + "\n      // 戳哪儿、戳在左边还是右边：形象按 Behavior.ClickMood 演对应的那一条\n      const _pz = zoneAt(p) ?? 'body';\n      // 侧别用他们 Behavior.Click 的约定：**左 = +1，右 = -1**（PetWindow.cs:1133 `at.X / Width < .5 ? 1 : -1`）。\n      // 形象侧 `Pushed && side < 0` 才对镜像——之前这里传反了，于是戳左边往左躲（同向）。\n      const _ps = p.x < toStage(128, 0).x ? 1 : -1;");
+      s = s.replace(a, a + "\n      // 戳哪儿、戳在左边还是右边：形象按 Behavior.ClickMood 演对应的那一条\n      const _pz = zoneAt(p) ?? 'body';\n      // 标定：把屏幕点反解回 logo 坐标，和 touchZones 的数值对照（用户 17:50 要求「在已知高度打日志」）\n      try { const _xf = pet.xf || {}; const _lx = (p.x - (_xf.AX ?? 0)) / (_xf.kx || 1) + (_xf.ax ?? 128); const _ly = (p.y - (_xf.AY ?? 0)) / (_xf.ky || 1) + (_xf.ay ?? 256); new Image().src = '/api/figure-log?m=' + encodeURIComponent('zone p=' + Math.round(p.x) + ',' + Math.round(p.y) + ' logo=' + _lx.toFixed(0) + ',' + _ly.toFixed(0) + ' pz=' + _pz + ' ay=' + (_xf.ay ?? 256) + ' ky=' + (_xf.ky || 1).toFixed(2)); } catch {}\n      // 侧别用他们 Behavior.Click 的约定：**左 = +1，右 = -1**（PetWindow.cs:1133 `at.X / Width < .5 ? 1 : -1`）。\n      // 形象侧 `Pushed && side < 0` 才对镜像——之前这里传反了，于是戳左边往左躲（同向）。\n      const _ps = p.x < toStage(128, 0).x ? 1 : -1;");
       const b = "        onEvent('touch', { kind: 'poke', woke: wasAsleep });";
       if (!s.includes(b)) throw new Error('pokeZone：woke 锚点未命中');
       s = s.replace(b, "        onEvent('touch', { kind: 'poke', woke: wasAsleep, zone: _pz, side: _ps });\n        custom?.poke?.(_pz, _ps);");
@@ -1310,14 +1300,14 @@ function toneOf(text: string): string {
       const a = "  poked: (user: string, n: number) => (n > 1 ? `${user}戳了你 ${n} 下` : `${user}戳了你一下`),";
       if (!s.includes(a)) throw new Error('pokeZoneText：中文锚点未命中');
       s = s.replace(a, "  poked: (user: string, n: number, zone?: string) => {\n"
-        + "    const z = ({ head: '头', face: '脸', hand: '手', chest: '胸口', belly: '肚子', skirt: '裙摆', legs: '腿', tail: '尾巴' } as Record<string, string>)[zone ?? ''];\n"
+        + "    const z = ({ head: '头', face: '脸', hand: '手', chest: '胸口', belly: '肚子', skirt: '裙摆', legs: '腿', tail: '尾巴', body: '身上' } as Record<string, string>)[zone ?? ''];\n"
         + "    if (n > 1) return z ? `${user}连着戳了你的${z} ${n} 下` : `${user}戳了你 ${n} 下`;\n"
         + "    return z ? `${user}戳了戳你的${z}` : `${user}戳了你一下`;\n"
         + "  },");
       const b = "  poked: (user, n) => (n > 1 ? `${user} poked you ${n} times` : `${user} poked you`),";
       if (!s.includes(b)) throw new Error('pokeZoneText：英文锚点未命中');
       return s.replace(b, "  poked: (user, n, zone?: string) => {\n"
-        + "    const z = ({ head: 'head', face: 'cheek', hand: 'hand', chest: 'chest', belly: 'belly', skirt: 'skirt', legs: 'leg', tail: 'tail' } as Record<string, string>)[zone ?? ''];\n"
+        + "    const z = ({ head: 'head', face: 'cheek', hand: 'hand', chest: 'chest', belly: 'belly', skirt: 'skirt', legs: 'leg', tail: 'tail', body: 'body' } as Record<string, string>)[zone ?? ''];\n"
         + "    if (n > 1) return z ? `${user} poked your ${z} ${n} times` : `${user} poked you ${n} times`;\n"
         + "    return z ? `${user} poked your ${z}` : `${user} poked you`;\n"
         + "  },");
@@ -1331,23 +1321,6 @@ function toneOf(text: string): string {
       const a = "case 'poke': text = t.woke ? m.pokedAwake(u) : m.poked(u, t.count); break;";
       if (!s.includes(a)) throw new Error('pokeZonePass：锚点未命中');
       return s.replace(a, "case 'poke': text = t.woke ? m.pokedAwake(u) : m.poked(u, t.count, t.zone); break;");
-    },
-  },
-  {
-    file: 'body', id: 'ruaHold',
-    desc: '按住不动也算摸：声明 ruaDownAt、按下记时刻、帧循环里推进计时（鼠标停住时 pointermove 根本不触发，而他们是在 Tick 里每帧调 StepStroke）',
-    detect: (s) => s.includes('ruaDownAt = 0'),   // 只看声明处：模板里已经有 ruaDownAt 的用法了
-    apply: (s) => {
-      let out = s;
-      const a1 = "  let ruaDown = false, ruaLast = null,";
-      if (!out.includes(a1)) throw new Error('ruaHold：声明锚点未命中');
-      out = out.replace(a1, "  let ruaDown = false, ruaDownAt = 0, ruaLast = null,");
-      const a2 = "ruaDown = true; rua = null; ruaLast = { x: p.x, y: p.y, t: now(p) };";
-      if (!out.includes(a2)) throw new Error('ruaHold：按下锚点未命中');
-      out = out.replace(a2, "ruaDown = true; ruaDownAt = now(p); rua = null; ruaLast = { x: p.x, y: p.y, t: now(p) };");
-      const a3 = "    if (!(dt > 0 && dt < Infinity)) return;\n    T += dt; pet.modeT += dt;";
-      if (!out.includes(a3)) throw new Error('ruaHold：step 锚点未命中');
-      return out.replace(a3, a3 + "\n    // 按住不动没有 pointermove：rua 计时自己走一帧（dx=dy=0，travel 不会虚增）\n    if (ruaDown && pointer.inside) stepRua({ x: pointer.x, y: pointer.y });");
     },
   },
 ];
