@@ -2119,7 +2119,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       keys: {
         FaceAngleZ: [[0, 0], [.2, -12], [.5, -7], [1.6, -8], [2.8, 0]],
         ViewSquash: [[0, 0], [.12, .05], [.35, .01], [2.8, 0]],
-        LeanInput: [[0, 0], [.3, 5], [2.2, 4], [2.8, 0]],
+        LeanInput: [[0, 0], [.3, -5], [2.2, -4], [2.8, 0]],   // 负 = 前倾
       },
       gesture: { on: 'chest-hand', off: 'put-hand-down' },
     },
@@ -2197,9 +2197,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
       keys: {
         FaceAngleX: [[0, 0], [.15, -8], [.3, 6], [.45, -5], [.6, 3], [.8, 0]],
         ViewSquash: [[0, 0], [.08, .04], [.25, 0], [1, 0]],
-        // 他们自己的数据说明：负 = 前倾（「娇羞前倾」-14、「摸后融化」-17 都是往前靠），
-        // 生气这里的 +8 是生气时往后仰。和我们模型一致，照抄不取反。
-        LeanInput: [[0, 0], [.2, 8], [1.6, 6], [2.2, 0]],
+        // 用户实测为准：我们的 LeanInput 负 = 前倾，正 = 后仰。
+        // 他们这条 +8 是「生气时往后仰」，但用户要的是往前凑，所以取负。
+        LeanInput: [[0, 0], [.2, -8], [1.6, -6], [2.2, 0]],
       },
     },
     // 得意：眯眼 + 嘴角笑开 + 抬下巴 + 歪头 12° + 前倾 6°
@@ -2208,7 +2208,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       sets: { REyeSquint: .8, LEyeSquint: .8, ParamMouthForm: 1, MouthX: .5, FaceAngleY: 10, FaceAngleZ: 12 },
       keys: {
         FaceAngleX: [[0, 0], [.5, 3], [1.2, -2], [1.9, 3], [3, 0]],
-        LeanInput: [[0, 0], [.35, 6], [2.4, 5], [3, 0]],
+        LeanInput: [[0, 0], [.35, -6], [2.4, -5], [3, 0]],   // 负 = 前倾（用户实测）
       },
     },
     // 委屈：流泪 + 眉心抬满 + 嘟嘴 + 低头 10° + 歪头 −6° + 委屈地左右小幅晃
@@ -2237,7 +2237,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       keys: {
         FaceAngleZ: [[0, 0], [.3, -4], [.6, 2], [.9, -3], [1.2, 2], [1.5, -2], [2, 0]],
         ViewSquash: [[0, 0], [.3, .03], [2, .02], [2.6, 0]],
-        LeanInput: [[0, 0], [.3, 6], [2, 5], [2.6, 0]],
+        LeanInput: [[0, 0], [.3, -6], [2, -5], [2.6, 0]],   // 负 = 前倾
       },
     },
   
