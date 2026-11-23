@@ -2197,9 +2197,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
       keys: {
         FaceAngleX: [[0, 0], [.15, -8], [.3, 6], [.45, -5], [.6, 3], [.8, 0]],
         ViewSquash: [[0, 0], [.08, .04], [.25, 0], [1, 0]],
-        // 他们 LeanInput 正数 = 前倾；我们模型正数 = 后仰（实测生气时头盒 y 49.7→48.0，头往上抬）。
-        // 取反 —— 和 rua 融化用 -17 是前倾一致。
-        LeanInput: [[0, 0], [.2, -8], [1.6, -6], [2.2, 0]],
+        // 他们自己的数据说明：负 = 前倾（「娇羞前倾」-14、「摸后融化」-17 都是往前靠），
+        // 生气这里的 +8 是生气时往后仰。和我们模型一致，照抄不取反。
+        LeanInput: [[0, 0], [.2, 8], [1.6, 6], [2.2, 0]],
       },
     },
     // 得意：眯眼 + 嘴角笑开 + 抬下巴 + 歪头 12° + 前倾 6°
@@ -2208,7 +2208,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       sets: { REyeSquint: .8, LEyeSquint: .8, ParamMouthForm: 1, MouthX: .5, FaceAngleY: 10, FaceAngleZ: 12 },
       keys: {
         FaceAngleX: [[0, 0], [.5, 3], [1.2, -2], [1.9, 3], [3, 0]],
-        LeanInput: [[0, 0], [.35, -6], [2.4, -5], [3, 0]],   // 同 angry：取反才是前倾
+        LeanInput: [[0, 0], [.35, 6], [2.4, 5], [3, 0]],
       },
     },
     // 委屈：流泪 + 眉心抬满 + 嘟嘴 + 低头 10° + 歪头 −6° + 委屈地左右小幅晃
@@ -2237,10 +2237,101 @@ export async function createLive2DBody(base, opts, entry, kit) {
       keys: {
         FaceAngleZ: [[0, 0], [.3, -4], [.6, 2], [.9, -3], [1.2, 2], [1.5, -2], [2, 0]],
         ViewSquash: [[0, 0], [.3, .03], [2, .02], [2.6, 0]],
-        LeanInput: [[0, 0], [.3, -6], [2, -5], [2.6, 0]],
+        LeanInput: [[0, 0], [.3, 6], [2, 5], [2.6, 0]],
       },
     },
-  };
+  
+    // ===== 第二批（2026-11-23）：思考 / 娇羞三条 / 挨打 / 悬停六条 =====
+    // 思考：眼珠往上看 + 歪头 12° + 抬下巴 + 眉心，配竖手指（他们 Behavior.cs:37）
+    thinking: {
+      dur: 3.4, tag: 'emo:think',
+      sets: { ParamEyeBallY: .7, ParamEyeBallX: .4, FaceAngleZ: 12, FaceAngleY: 6, BrowInnerUp: .6 },
+      keys: { FaceAngleX: [[0, 0], [.6, 4], [1.4, 2], [2.2, 5], [3, 0]] },
+      gesture: { on: 'finger-point', off: 'put-hand-down' },
+    },
+    // 娇羞：脸红 + 爱心眼 + 笑眼 + 抿嘴 + 低头 10°；头、身、前倾一起小幅摆动（4.2s）
+    coy: {
+      dur: 4.2, tag: 'emo:coy',
+      sets: { key7: 1, key4: 1, EyeSmile: .7, MouthPressLipOpen: .5, ParamMouthForm: .6, FaceAngleY: -10, ParamEyeBallX: -.5, ParamEyeBallY: -.4, BrowInnerUp: .7 },
+      keys: {
+        FaceAngleZ: [[0, 0], [.4, -9], [.9, 6], [1.4, -8], [1.9, 5], [2.4, -7], [2.9, 4], [3.5, -3], [4.2, 0]],
+        FaceAngleX: [[0, 0], [.4, -6], [.9, 4], [1.4, -6], [1.9, 4], [2.4, -5], [2.9, 3], [4.2, 0]],
+        LeanInput: [[0, 0], [.3, -4], [.9, 3], [1.4, -4], [1.9, 3], [2.4, -3], [3, 2], [4.2, 0]],
+        ViewSquash: [[0, 0], [.3, .03], [3.6, .025], [4.2, 0]],
+      },
+    },
+    // 娇羞前倾：红着脸一直往前凑（-14 保持到 3.4s）
+    'coy-lean': {
+      dur: 4, tag: 'emo:coy-lean',
+      sets: { key7: 1, EyeSmile: .6, MouthPressLipOpen: .4, ParamMouthForm: .6, BrowInnerUp: .5, FaceAngleZ: 7 },
+      keys: {
+        LeanInput: [[0, 0], [.45, -14], [3.4, -13], [4, 0]],
+        FaceAngleY: [[0, 0], [.45, -7], [3.4, -6], [4, 0]],
+        FaceAngleZ: [[0, 0], [.8, 3], [1.6, -2], [2.4, 3], [3.2, -1], [4, 0]],
+        ViewSquash: [[0, 0], [.45, .02], [3.4, .02], [4, 0]],
+      },
+    },
+    // 娇羞抚胸：大大地往前倾（-21）+ 手按胸口 + 笑眼半闭（EyeOpen .45 = 我们 -.55）
+    'coy-chest': {
+      dur: 4.2, tag: 'emo:coy-chest',
+      sets: { key7: 1, EyeOpen: -.55, EyeSmile: 1, ParamMouthForm: .8, BrowInnerUp: .6, FaceAngleZ: -6 },
+      keys: {
+        LeanInput: [[0, 0], [.5, -21], [3.5, -20], [4.2, 0]],
+        FaceAngleY: [[0, 0], [.5, -10], [3.5, -9], [4.2, 0]],
+        ViewSquash: [[0, 0], [.5, .03], [3.5, .03], [4.2, 0]],
+        FaceAngleZ: [[0, 0], [1, -2], [2, 2], [3, -2], [4.2, 0]],
+      },
+      gesture: { on: 'chest-hand', off: 'put-hand-down' },
+    },
+    // 挨打：钢盆 + 流冷汗 + 撇嘴 + 被砸得乱晃 + 整图狠压一下（4s）
+    hit: {
+      dur: 4, tag: 'emo:hit',
+      sets: { key10: 1, key13: 1, ParamMouthForm: -.6, FaceAngleY: -12 },
+      keys: {
+        ViewSquash: [[0, 0], [.09, .11], [.3, .02], [.5, .05], [.75, .01], [1.4, 0]],
+        FaceAngleZ: [[0, 0], [.15, 10], [.4, -8], [.65, 6], [.9, -4], [1.2, 2], [1.6, 0]],
+        FaceAngleY: [[0, 0], [.1, -12], [.5, -4], [1.6, 0]],
+      },
+    },
+    // ---- 悬停六条（他们 Behavior.cs:70-75；鼠标停在部位上不点，等 kit 的 hover 接上）----
+    'hover-head': {
+      dur: 2.8, tag: 'hover:head',
+      sets: { FaceAngleZ: 11, FaceAngleX: -3, ParamEyeBallY: .3, BrowInnerUp: .4, EyeSmile: .35 },
+      keys: { FaceAngleZ: [[0, 0], [.3, 3], [.8, -2], [1.4, 2], [2.8, 0]] },
+    },
+    'hover-face': {
+      dur: 2.6, tag: 'hover:face',
+      sets: { key7: 1, ParamMouthForm: .5, ParamEyeBallX: .4, ParamEyeBallY: -.2, FaceAngleY: -4 },
+      keys: {
+        EyeOpen: [[0, 0], [.15, -1], [.3, 0], [1.1, 0], [1.25, -1], [1.4, 0], [2.6, 0]],
+        ViewSquash: [[0, 0], [.3, .012], [2.2, .01], [2.6, 0]],
+      },
+    },
+    'hover-hand': {
+      dur: 2.8, tag: 'hover:hand',
+      sets: { EyeSmile: .8, ParamMouthForm: 1, FaceAngleY: 4, FaceAngleZ: -4 },
+      keys: { FaceAngleZ: [[0, 0], [.4, -5], [1, -2], [1.6, -5], [2.8, 0]] },
+      gesture: { on: 'chest-hand', off: 'put-hand-down' },
+    },
+    'hover-skirt': {
+      dur: 2.6, tag: 'hover:skirt',
+      sets: { ParamEyeBallX: .7, ParamEyeBallY: -.3, ParamMouthForm: -.3, ParamBrowLY: -.3, ParamBrowRY: -.3, FaceAngleX: -8 },
+      keys: { ViewSquash: [[0, 0], [.12, .025], [.5, .012], [2.2, .01], [2.6, 0]] },
+    },
+    'hover-tail': {
+      dur: 2.6, tag: 'hover:tail',
+      sets: { key13: 1, ParamEyeBallX: .7, ParamEyeBallY: -.3, ParamMouthForm: -.4, FaceAngleX: -10, BrowInnerUp: .4 },
+      keys: {
+        ViewSquash: [[0, 0], [.08, .03], [.4, .01], [2.2, .01], [2.6, 0]],
+        FaceAngleY: [[0, 0], [.1, -5], [.5, 0], [2.6, 0]],
+      },
+    },
+    'hover-body': {
+      dur: 2.6, tag: 'hover:body',
+      sets: { FaceAngleZ: 9, ParamEyeBallY: .3, BrowInnerUp: .3 },
+      keys: { FaceAngleX: [[0, 0], [.5, 3], [1.1, -2], [1.8, 2], [2.6, 0]] },
+    },
+};
   function startLayerClip(def) {
     if (!def) return null;
     const c = { def, t0: clockT, hand: false, handOff: false, w: 0, lastT: clockT };

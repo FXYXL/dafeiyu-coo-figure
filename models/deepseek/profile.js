@@ -237,7 +237,15 @@ export default {
     '惊讶': 'surprised', 'scared': 'scared',
     '害怕': 'scared',
     '困倦': 'eye-half', 'sleepy': 'eye-half',
-    '思考': 'thinking', 'thinking': 'thinking',
+    '思考': 'thinking', '琢磨': 'thinking',
+    // 第二批情绪（2026-11-23）：他们 Behavior.cs:43-48/40 的娇羞三条与挨打
+    '娇羞': 'coy', '害羞地低头': 'coy',
+    '娇羞前倾': 'coy-lean', '凑近': 'coy-lean',
+    '娇羞抚胸': 'coy-chest', '捂胸口': 'coy-chest',
+    '挨打': 'hit', '被打': 'hit', '被砸': 'hit',
+    // 悬停六条（等 kit 的 hover 接上；现在也能被台词直接点名）
+    '悬停头': 'hover-head', '悬停脸': 'hover-face', '悬停手': 'hover-hand',
+    '悬停裙': 'hover-skirt', '悬停尾': 'hover-tail', '悬停身': 'hover-body', 'thinking': 'thinking',
     '神气': 'smug-face', 'smug': 'smug-face',
     '嘟嘴': 'mouth-pout', 'pout': 'mouth-pout',
     '坚定': 'determined', 'determined': 'determined',
