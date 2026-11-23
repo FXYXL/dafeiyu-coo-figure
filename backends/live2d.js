@@ -2003,6 +2003,90 @@ export async function createLive2DBody(base, opts, entry, kit) {
       gesture: d.hand ? { on: 'chest-hand', off: 'put-hand-down' } : null,
     };
   }
+  // ---------- 戳一戳（他们 Behavior.Moods 里 ClickMood 用到的六条，逐字搬）----------
+  // head→摸头 · face→戳脸 · hand→开心 · skirt→护裙 · tail→震惊 · 其它→心虚
+  // 表情层（他们发 exp）在这里直接并进 sets：＞＜=key5、黑脸=key1、圈圈眼=key3、流冷汗=key13、脸红=key7
+  const POKE_MOODS = {
+    head: {
+      dur: 3, exps: ['脸红'],
+      sets: { EyeSmile: .9, ParamMouthForm: 1, key7: 1 },
+      keys: {
+        FaceAngleY: [[0, 0], [.25, -18], [.7, -12], [1.1, -19], [1.5, -12], [1.9, -16], [2.4, 0]],
+        FaceAngleZ: [[0, 0], [.5, 14], [1.1, -14], [1.7, 14], [2.4, 0]],
+        ViewRoll: [[0, 0], [.5, 2], [1.1, -2], [1.7, 2], [2.4, 0]],
+        ViewSquash: [[0, 0], [.25, .05], [1.9, .04], [2.4, 0]],
+      },
+    },
+    face: {
+      dur: 3, pushed: true,
+      sets: { CheeckPuff: .8, FaceAngleX: 14, FaceAngleZ: 8, key3: 0, key4: 0, key5: 1, key6: 0 },
+      keys: {
+        FaceAngleX: [[0, 0], [.08, 12], [.3, 6], [1.2, 0]],
+        FaceAngleY: [[0, 0], [.08, -6], [.4, -2], [1.2, 0]],
+        ViewSquash: [[0, 0], [.06, .04], [.25, 0], [1.2, 0]],
+      },
+    },
+    hand: {
+      dur: 3,
+      sets: { EyeSmile: 1, EyeOpen: 0, ParamMouthForm: 1, ParamMouthOpenY: .5, FaceAngleY: 6 },
+      keys: {
+        FaceAngleZ: [[0, 0], [.3, -10], [.7, 10], [1.1, -8], [1.5, 6], [2, 0]],
+        FaceAngleY: [[0, 0], [.3, 6], [.7, 2], [1.1, 6], [1.5, 2], [2, 0]],
+      },
+      gesture: { on: 'chest-hand', off: 'put-hand-down' },
+    },
+    skirt: {
+      dur: 3, exps: ['脸红'],
+      sets: { CheeckPuff: .8, ParamBrowLY: -.6, ParamBrowRY: -.6, FaceAngleX: -16, FaceAngleY: -8, ParamEyeBallX: .5, key1: 1, key7: 1 },
+      keys: {
+        FaceAngleZ: [[0, 0], [.2, -12], [.5, -7], [1.6, -8], [2.8, 0]],
+        ViewSquash: [[0, 0], [.12, .05], [.35, .01], [2.8, 0]],
+        LeanInput: [[0, 0], [.3, 5], [2.2, 4], [2.8, 0]],
+      },
+      gesture: { on: 'chest-hand', off: 'put-hand-down' },
+    },
+    tail: {
+      dur: 3, pushed: true,
+      sets: { ParamMouthOpenY: .8, JawOpen: .5, FaceAngleX: -16, FaceAngleY: -8, ParamEyeBallX: -.6, ParamEyeBallY: -.5, key3: 1, key4: 0, key5: 0, key6: 0 },
+      keys: {
+        ViewSquash: [[0, 0], [.06, .06], [.18, -.05], [.4, .05], [.6, 0]],
+        ViewY: [[0, 0], [.06, 0], [.2, .06], [.4, 0]],
+        FaceAngleY: [[0, 0], [.2, 16], [.5, 4], [1.4, 0]],
+      },
+    },
+    body: {
+      dur: 3, pushed: true,
+      sets: { ParamEyeBallX: .8, ParamEyeBallY: .3, MouthX: .6, ParamMouthForm: -.5, FaceAngleX: 14, FaceAngleY: -8, key13: 1 },
+      keys: {
+        FaceAngleZ: [[0, 0], [.3, -4], [.6, 2], [.9, -3], [1.2, 2], [1.5, -2], [2, 0]],
+        ViewSquash: [[0, 0], [.3, .03], [2, .02], [2.6, 0]],
+        LeanInput: [[0, 0], [.3, 6], [2, 5], [2.6, 0]],
+      },
+    },
+  };
+  // Pushed：他们 Show() 里 `Pushed && side < 0` 时，把「跟着左右翻」的那几个参数取反
+  // （Behavior.cs 的 Sided = FaceAngleX / FaceAngleZ / ParamEyeBallX / MouthX）。
+  const PUSHED_IDS = new Set(['FaceAngleX', 'FaceAngleZ', 'ParamEyeBallX', 'MouthX']);
+  function mirrorPoke(def) {
+    const flip = (id, v) => (PUSHED_IDS.has(id) ? -v : v);
+    const sets = {};
+    for (const [k, v] of Object.entries(def.sets ?? {})) sets[k] = flip(k, v);
+    const keys = {};
+    for (const [k, frames] of Object.entries(def.keys ?? {})) keys[k] = frames.map(([t, v]) => [t, flip(k, v)]);
+    return { ...def, sets, keys };
+  }
+  /** kit 点一下（左键，不是拖拽）调这个：zone 是 touchZones 的 id，side 是点在中心哪边（-1 左 / 1 右）。 */
+  function poke(zone, side) {
+    const id = ({ chest: 'body', belly: 'body', legs: 'body', leg: 'body' })[zone] ?? zone;
+    const def = POKE_MOODS[id];
+    if (!def) { audit('poke 未知分区 ' + zone); return false; }
+    def.tag = 'poke:' + id;
+    stopMoodClips();   // 新的戳戳顶掉还在演的摸后/上一戳
+    startLayerClip(def.pushed && side < 0 ? mirrorPoke(def) : def);
+    audit('poke ' + id + ' side=' + side);
+    return true;
+  }
+
   // 30 秒彩蛋（他们 melted30）：mood 完全是「摸后融化」，只多一个爱心眼。
   // 他们的注释写在 PetWindow.Touch.cs:209「多一个爱心眼」，但 Moods 表里没有——
   // 那个爱心眼来自台词〔爱心眼〕的动作。我们直接把它并进 mood 的 sets（key4=1），
@@ -2857,15 +2941,27 @@ export async function createLive2DBody(base, opts, entry, kit) {
           { id: 'face', x: cx, y: cy, rx: w * .17, ry: h * .10 },
         ];
       }
-      // 下面几个沿用手写数据（胸部/裙子/腿/尾巴），只为「右键点在别处不触发」。
+      // 手 / 肚子：他们 ClickMood 里 hand→开心、body→心虚，我们原来没有这两块。
+      // 手按「胸口高度、身体两侧」给两个小椭圆（模型坐标，随包围盒缩放）。
+      const cx = heads[0].x;
+      const tz = (profile.touchZones ?? []).find((z) => z.id === 'chest');
+      const cyChest = tz?.y ?? (y0 + h * .55);
+      const hands = [
+        { id: 'hand', x: cx - w * .34, y: cyChest + 6, rx: w * .12, ry: h * .075 },
+        { id: 'hand', x: cx + w * .34, y: cyChest + 6, rx: w * .12, ry: h * .075 },
+        { id: 'belly', x: cx, y: cyChest + 34, rx: w * .26, ry: h * .075 },
+      ];
+      // 其余（胸部/裙子/腿/尾巴）沿用手写数据，只为「右键点在别处不触发」。
       const rest = (profile.touchZones ?? []).filter((z) => z.id !== 'head' && z.id !== 'face');
-      return [...heads, ...rest];
+      return [...heads, ...hands, ...rest];
     },
     // 头/脸的实时盒（模型坐标）+ 部件树诊断，给调试和 kit 读
     get headBox() { return headFaceBoxes().head; },
     get faceBox() { return headFaceBoxes().face; },
     // 调试/测试：直接演一条摸后反应（不经过命中判定）
     playMood(id) { return !!startLayerClip(MOOD_CLIPS[id]); },
+    /** kit 左键戳一下（不是拖拽）时调：zone = touchZones 的 id，side = 点在中心左边 -1 / 右边 1 */
+    poke(zone, side) { return poke(zone, side); },
     // 测试用：每帧最后强写一个参数（量「这个参数到底动不动模型」）
     debugSetParam(id, v) { if (v === null) debugOverrides.delete(id); else debugOverrides.set(id, v); },
     // 调试/测试：走真实的「松手 → 按峰值档位选 mood」分支（不经过 kit 的命中）
@@ -3186,7 +3282,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
         {
           // 他们：摸到 3 秒 PlayAfterStroke 前是 Face(NoSets, ["脸红"])，mood 里 Expressions 又带 ["脸红"]
           // → 脸红从 3 秒起一直挂到**摸后动作演完**才退，不是松手就退。
-          const _wantBlush = (_ruaOn && _secR >= 3) || clipAlive() ? 1 : 0;
+          const _wantBlush = (_ruaOn && _secR >= 3) || clipList.some((c) => (c.def.exps ?? []).includes('脸红')) ? 1 : 0;
           blushK += (_wantBlush - blushK) * (1 - Math.exp(-dt / (_wantBlush ? 0.5 : 1.2)));
           if (Date.now() - (globalThis.__blushDbg ?? 0) > 400) {
             globalThis.__blushDbg = Date.now();
