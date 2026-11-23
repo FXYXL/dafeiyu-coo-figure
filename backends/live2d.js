@@ -1582,6 +1582,19 @@ export async function createLive2DBody(base, opts, entry, kit) {
       } else {
         skitSayUntil = skit.t;   // 这句没台词（「……」「（嚼嚼嚼）」之外的纯动作行）→ 闭嘴
       }
+      // 2026-11-23：step 可以挂一条 clip（`clip: 'smug-face'` 或内联数据）——
+      // 整段表演（常量 + 关键帧 + 手型 + 统一收尾）比一串通道词更有曲线，
+      // 而且和这句台词同一个时间轴。挂了 clip 就不再跑下面那串 w 词（避免两套抢参数）。
+      if (s.clip) {
+        const def = typeof s.clip === 'string' ? EMO_CLIPS[s.clip] : s.clip;
+        if (def) {
+          // 这一步如果本来要「恢复」，先清场再演 clip —— 否则上一句的皱眉/歪头会叠在 clip 上
+          const raw = Array.isArray(s.w) ? s.w : (s.w ? [s.w] : []);
+          if (raw.some((x) => (typeof x === 'string' ? x : x?.w) === 'restore')) relaxChannels();
+          startLayerClip(def);
+          continue;
+        }
+      }
       // 动作组：一行可以好几个词（皱眉 看左边 抿嘴），各走各的通道
       const list = Array.isArray(s.w) ? s.w : (s.w ? [s.w] : []);
       for (const item of list) {

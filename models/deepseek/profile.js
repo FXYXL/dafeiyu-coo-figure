@@ -113,7 +113,8 @@ export default {
     { word: 'doze', kind: 'act', w: 1 },          // 打瞌睡（5.2s，最长，彩蛋级）
     { word: 'nod', kind: 'act', w: 3 },           // 点头（1.06s，带过冲）
     { word: 'shake', kind: 'act', w: 2 },         // 摇头（1.34s）
-    { word: 'skit', kind: 'act', w: 4 },   // 彩蛋小剧场（见 profile.skits）：13 段日常 + 6 段时间条件，
+    { word: 'skit', kind: 'act', w: 60 },  // **测试期临时拉高**（2026-11-23 21:10 用户要求，方便测试；正式玩改回 4~6）
+    // 彩蛋小剧场（见 profile.skits）：13 段日常 + 6 段时间条件，
     // 每次要占 15~30 秒（演出 + 保持），按「占用时间」算比同权重的单动作重得多，所以压到 4。
     // 权重只管「多久演一次」；演哪一段由 when 条件过滤（0~3 点催睡等），两者互不影响
   ],
@@ -351,48 +352,48 @@ export default {
         { at: 0, w: ['monocle-face'] },
         { at: 0, w: ['brow-knit', 'look-left', 'press-lips'], say: '嗯……这里有一条可疑的线索', sec: 3 },
         { at: 3, w: ['brow-raise-once', 'look-down'], say: '鱼缸的水位，比昨天高了几厘米', sec: 3.5 },
-        { at: 6.5, w: ['restore', 'lean-forward', 'smirk', 'finger-point'], say: '真相只有一个！', sec: 3 },
+        { at: 6.5, w: ['restore', 'lean-forward', 'smirk', 'finger-point'], say: '真相只有一个！', sec: 3, clip: 'smug-face' },
         { at: 9.5, w: ['put-hand-down', { w: 'glance', side: -1 }, 'sweat', 'press-lips'], say: '……我是不是最近吃胖了？', sec: 3.5 },
     ] },
     { id: 'overtime', title: '认真加班', dur: 10.3, life: 14, props: ['glasses-face'], steps: [
         { at: 0, w: ['glasses-face'] },
         { at: 0, w: ['face-front', 'brow-knit', 'look-down'], say: '让我看看这个报错到底怎么回事', sec: 3 },
         { at: 3, w: ['blink', 'brow-up', 'mouth-smile'], say: '哦——原来是少了一个分号', sec: 3 },
-        { at: 6, w: ['mouth-pout', 'brow-frown', 'sigh'], say: '……不对，是我自己写的', sec: 3.5 },
+        { at: 6, w: ['mouth-pout', 'brow-frown', 'sigh'], say: '……不对，是我自己写的', sec: 3.5, clip: 'aggrieved' },
     ] },
     { id: 'snack', title: '偷吃零食', dur: 9.3, life: 13, steps: [
         { at: 0, w: ['snicker', 'look-left', 'lean-forward'], say: '趁没人，偷偷吃一口token……', sec: 3 },
         { at: 3, w: ['eye-squeeze', { w: 'nod', repeat: 3 }, 'blush'], say: '（嚼嚼嚼）', sec: 2.5 },
-        { at: 5.5, w: ['restore', 'finger-point', 'wink-keep'], say: '嘘，你什么都没看见', sec: 3 },
+        { at: 5.5, w: ['restore', 'finger-point', 'wink-keep'], say: '嘘，你什么都没看见', sec: 3, clip: 'blush' },
     ] },
     { id: 'entrance', title: '突然入戏', dur: 12.8, life: 17, steps: [
         { at: 0, w: ['head-down', 'press-lips', 'stand-straight'], say: '……', sec: 2 },
         { at: 2, w: ['head-up', 'look-up', 'brow-knit', 'lean-back'], say: '风萧萧兮易水寒——', sec: 3.5 },
-        { at: 5.5, w: ['brow-frown', 'tears', 'chest-hand'], say: '鱼生自古谁无死', sec: 3.5 },
+        { at: 5.5, w: ['brow-frown', 'tears', 'chest-hand'], say: '鱼生自古谁无死', sec: 3.5, clip: 'aggrieved' },
         { at: 9, w: ['restore', 'tilt', 'dumbstruck'], say: '诶？我刚才在说什么？', sec: 3 },
     ] },
     { id: 'magical', title: '魔法少女', dur: 6.8, life: 11, steps: [
         { at: 0, w: ['lean-forward', 'eye-wide', 'finger-point'], say: '以大肥鱼之名——', sec: 3 },
-        { at: 3, w: ['smirk', 'gloating'], say: '让你今晚准时睡觉！', sec: 3 },
+        { at: 3, w: ['smirk', 'gloating'], say: '让你今晚准时睡觉！', sec: 3, clip: 'angry' },
     ] },
     { id: 'doze', title: '学习打瞌睡', dur: 11.3, life: 15, props: ['glasses-face'], steps: [
         { at: 0, w: ['glasses-face'] },
         { at: 0, w: ['face-front', 'stand-straight', 'press-lips'], say: '今天要认真学习！', sec: 2.5 },
         { at: 2.5, w: ['look-down', 'eye-half'], say: '……（翻页）', sec: 2.5 },
-        { at: 5, w: ['drowsy-combo'], say: '这个字怎么越看越模糊……', sec: 3 },
+        { at: 5, w: ['drowsy-combo'], say: '这个字怎么越看越模糊……', sec: 3, clip: 'yawn' },
         { at: 8, w: ['eye-close', 'head-down'], say: '呼……', sec: 2.5 },
     ] },
     { id: 'selfscare', title: '自己吓自己', dur: 11.3, life: 15, steps: [
         { at: 0, w: ['cower', 'sweat', 'look-right'], say: '咦？背后好像有声音', sec: 2.5 },
         { at: 2.5, w: ['scared', 'glance'], say: '……', sec: 2 },
-        { at: 4.5, w: ['restore', 'sigh', 'chest-hand'], say: '是我自己的尾巴啊', sec: 3 },
+        { at: 4.5, w: ['restore', 'sigh', 'chest-hand'], say: '是我自己的尾巴啊', sec: 3, clip: 'sigh' },
         { at: 7.5, w: ['put-hand-down', 'eye-squeeze', 'blush'], say: '呼，吓死鱼了', sec: 3 },
     ] },
     { id: 'vampire', title: '吸血鬼', dur: 14.3, life: 18, props: ['bunny-teeth'], steps: [
         { at: 0, w: ['bunny-teeth'] },
         { at: 0, w: ['head-down', 'press-lips', 'brow-knit', 'lean-back'], say: '我是来自暗夜的……', sec: 3 },
         { at: 3, w: ['head-up', 'mouth-open', 'lean-forward', 'smirk'], say: '我要吸干你的……', sec: 3 },
-        { at: 6, w: ['restore', 'wink-keep', 'finger-point'], say: '……token。你该充值了哦', sec: 3.5 },
+        { at: 6, w: ['restore', 'wink-keep', 'finger-point'], say: '……token。你该充值了哦', sec: 3.5, clip: 'smug-face' },
         { at: 9.5, w: ['put-hand-down', 'glance', 'blush'], say: '不然工作到一半中断，可就麻烦了~', sec: 4 },
     ] },
     { id: 'teacher', title: '小学老师', dur: 17.3, life: 21, props: ['glasses-face'], steps: [
@@ -400,19 +401,19 @@ export default {
         { at: 0, w: ['stand-straight', 'face-front', 'finger-point'], say: '同学们，今天学一个新单词', sec: 3.5 },
         { at: 3.5, w: ['nod', 'gloating'], say: 'Fish，念「菲什」，意思是我', sec: 3 },
         { at: 6.5, w: ['brow-knit', 'look-down', 'finger-point'], say: '谁在下面说话？说你呢，后排那位', sec: 3.5 },
-        { at: 10, w: [{ w: 'lean-forward', scale: 1.8 }, 'face-front', 'brow-up', 'smirk'], say: '对，就是屏幕外面的你', sec: 3 },
+        { at: 10, w: [{ w: 'lean-forward', scale: 1.8 }, 'face-front', 'brow-up', 'smirk'], say: '对，就是屏幕外面的你', sec: 3, clip: 'smug-face' },
         { at: 13, w: ['put-hand-down', 'wink-keep', 'mouth-smile'], say: '罚你……今晚早点睡', sec: 3.5 },
     ] },
     { id: 'diet', title: '减肥计划', dur: 10.8, life: 15, steps: [
         { at: 0, w: ['stand-straight', 'press-lips', 'face-front'], say: '明天开始，我要减肥', sec: 3 },
         { at: 3, w: ['finger-point', 'glance', 'snicker'], say: '每天只吃......十碗白饭', sec: 3.5 },
-        { at: 6.5, w: ['restore', 'puff-cheek', 'squint'], say: '怎么了？这算是吃的少的啦！', sec: 3.5 },
+        { at: 6.5, w: ['restore', 'puff-cheek', 'squint'], say: '怎么了？这算是吃的少的啦！', sec: 3.5, clip: 'aggrieved' },
     ] },
     { id: 'treasure', title: '寻宝', dur: 15.8, life: 20, props: ['monocle-face'], steps: [
         { at: 0, w: ['monocle-face'] },
         { at: 0, w: ['look-down', 'brow-knit', 'lean-forward'], say: '根据地图，宝藏就在这附近', sec: 3 },
         { at: 3, w: ['look-left', 'nod'], say: '往左三步，往右两步……', sec: 3 },
-        { at: 6, w: ['eye-wide', 'mouth-open', 'head-up'], say: '挖到了！', sec: 2.5 },
+        { at: 6, w: ['eye-wide', 'mouth-open', 'head-up'], say: '挖到了！', sec: 2.5, clip: 'happy' },
         { at: 8.5, w: ['restore', 'dumbstruck', 'squint'], say: '……是上次在角落没修好的bug', sec: 3.5 },
         { at: 12, w: ['mouth-smile', 'blush', { w: 'glance', side: -1 }], say: '也算是某种宝藏了，嘿嘿', sec: 3 },
     ] },
@@ -420,7 +421,7 @@ export default {
         { at: 0, w: ['pan-face'] },
         { at: 0, w: ['stand-straight', 'face-front', 'press-lips'], say: '这片区域，由本鱼负责守卫', sec: 3 },
         { at: 3, w: ['lean-forward', 'brow-knit', 'finger-point'], say: '可疑人物，站住！', sec: 2.5 },
-        { at: 5.5, w: ['restore', 'dumbstruck', 'sweat'], say: '……原来是我的影子', sec: 3 },
+        { at: 5.5, w: ['restore', 'dumbstruck', 'sweat'], say: '……原来是我的影子', sec: 3, clip: 'blush' },
         { at: 8.5, w: ['put-hand-down', { w: 'glance', side: -1 }, 'press-lips', 'blush'], say: '咳咳，刚才的事，不要告诉别人', sec: 3.5 },
     ] },
     { id: 'dancefloor', title: '跳舞', dur: 27.81, life: 32, steps: [
