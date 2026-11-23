@@ -3745,6 +3745,12 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 不一致会让波形被按比例加速/减速（之前写成 2.4 而 dur 是 3.6，实际快了 1.5 倍）。
     if (!words[word]) words[word] = { motion: { seconds: act.dur ?? 2.4 } };
   }
+  // 2026-11-23：clip 词（EMO_CLIPS：害羞/生气/娇羞/挨打…）也必须登记成「身体认识的词」。
+  // 这里漏了会怎样：kit 上报的 words 里没有它 → world 用 bodyWords 过滤 figure.json 的 vocab
+  // → 这些词被判「身体不认得」→ 台词里的【娇羞】照旧被丢掉，日志只报「这些词用不了了」。
+  for (const [word, def] of Object.entries(EMO_CLIPS ?? {})) {
+    if (!words[word]) words[word] = { motion: { seconds: def.dur ?? 3 } };
+  }
 
   publishInfo();
   globalThis.__l2dDrive = figure.__roles;
