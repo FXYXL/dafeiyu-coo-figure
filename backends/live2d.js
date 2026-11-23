@@ -2138,7 +2138,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       keys: {
         FaceAngleZ: [[0, 0], [.3, -4], [.6, 2], [.9, -3], [1.2, 2], [1.5, -2], [2, 0]],
         ViewSquash: [[0, 0], [.3, .03], [2, .02], [2.6, 0]],
-        LeanInput: [[0, 0], [.3, 6], [2, 5], [2.6, 0]],
+        LeanInput: [[0, 0], [.3, -6], [2, -5], [2.6, 0]],   // 同 angry：取反才是前倾
       },
     },
   };
@@ -2197,7 +2197,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
       keys: {
         FaceAngleX: [[0, 0], [.15, -8], [.3, 6], [.45, -5], [.6, 3], [.8, 0]],
         ViewSquash: [[0, 0], [.08, .04], [.25, 0], [1, 0]],
-        LeanInput: [[0, 0], [.2, 8], [1.6, 6], [2.2, 0]],
+        // 他们 LeanInput 正数 = 前倾；我们模型正数 = 后仰（实测生气时头盒 y 49.7→48.0，头往上抬）。
+        // 取反 —— 和 rua 融化用 -17 是前倾一致。
+        LeanInput: [[0, 0], [.2, -8], [1.6, -6], [2.2, 0]],
       },
     },
     // 得意：眯眼 + 嘴角笑开 + 抬下巴 + 歪头 12° + 前倾 6°
@@ -2206,7 +2208,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       sets: { REyeSquint: .8, LEyeSquint: .8, ParamMouthForm: 1, MouthX: .5, FaceAngleY: 10, FaceAngleZ: 12 },
       keys: {
         FaceAngleX: [[0, 0], [.5, 3], [1.2, -2], [1.9, 3], [3, 0]],
-        LeanInput: [[0, 0], [.35, 6], [2.4, 5], [3, 0]],
+        LeanInput: [[0, 0], [.35, -6], [2.4, -5], [3, 0]],   // 同 angry：取反才是前倾
       },
     },
     // 委屈：流泪 + 眉心抬满 + 嘟嘴 + 低头 10° + 歪头 −6° + 委屈地左右小幅晃
@@ -2235,7 +2237,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       keys: {
         FaceAngleZ: [[0, 0], [.3, -4], [.6, 2], [.9, -3], [1.2, 2], [1.5, -2], [2, 0]],
         ViewSquash: [[0, 0], [.3, .03], [2, .02], [2.6, 0]],
-        LeanInput: [[0, 0], [.3, 6], [2, 5], [2.6, 0]],
+        LeanInput: [[0, 0], [.3, -6], [2, -5], [2.6, 0]],
       },
     },
   };
