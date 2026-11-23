@@ -995,7 +995,8 @@ function toneOf(text: string): string {
   {
     file: 'body', id: 'noBrSquash',
     desc: '去掉 canvas 呼吸正弦 br（整图一上一下的真凶）：呼吸交给 figure 的 ParamBreath 走物理，kit 不再叠一层',
-    detect: (s) => /const sy = \(1 - pet\.sq\)/.test(s) && !/1 \+ \.016 \* br/.test(s),
+    // squashDirect 之后这行会变成 `(1 - sqAll)`，检测要同时认这两种形态，否则 --check 会误报失败
+    detect: (s) => /const sy = \(1 - (pet\.sq|sqAll)\)/.test(s) && !/1 \+ \.016 \* br/.test(s),
     apply: (s) => {
       let out = s;
       out = out.replace(/(const sx = \(1 \+ pet\.sq \* \.7\) \* \(1 - \.05 \* pet\.stretch\)) \* \(1 - \.009 \* br\);/, '$1;');
