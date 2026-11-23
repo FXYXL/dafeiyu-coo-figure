@@ -3311,6 +3311,22 @@ export async function createLive2DBody(base, opts, entry, kit) {
         globalThis.__l2dLastDrawW = __w;
       }
 
+      // ===== 一帧的写入顺序（S1.7 2026-11-23 核对，和他们的 UpdateScheduler 对齐）=====
+      //  1. loadParameters          恢复基准（上一帧 saveParameters 存下的 role/状态）
+      //  2. 基准层：applyFrame / cleanParams / idlePhysics / bodyFollow / idleWords / paramActs
+      //     —— 这些必须落在 saveParameters **之前**，才会进基准
+      //  3. saveParameters          ← 必须在 physics 之前：physics 是「读参数→算输出」，
+      //                               输出写进模型后不该被当成下一帧的基准
+      //  4. 每帧重算层：stepMotion / stepExpression（exp3）/ exp3 放松
+      //     —— 不进基准，否则「表情停了参数回不去」（圈圈眼/黑脸永久残留）
+      //  5. 眨眼 _eyeBlink.updateParameters
+      //  6. Lids（他们 main.cpp:327 的 CubismUpdateOrder_EyeBlink + 50）：把「情绪/动作想要的
+      //     睁眼度」按眨眼剩余量**乘**进去 —— 必须排在眨眼之后，否则眨眼会被表情覆盖成睁眼；
+      //     也必须排在物理之前，睫毛才会跟着物理动。
+      //  7. stepClips（Layer：摸后四档/戳一戳）
+      //  8. physics.evaluate        ← 所有 AngleX/Y/Z、LeanInput、PositionX/Y/Z 都在这一步之前写
+      //  9. pose.updateParameters
+      // 10. update → draw
       model._model.loadParameters();
       stepRuaState(frame);   // 松手反应（按峰值时长）
       applyFrame(face, frame, dt, !extent);
