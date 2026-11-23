@@ -328,7 +328,10 @@ export default {
     'happy-burst': ['mouth-open', 'eye-squeeze', 'head-swing'],                                    // 高兴 = 张嘴 眯眼笑 晃头
     'snicker': ['smirk', { w: 'glance', side: 1 }, 'eye-squeeze'],                                 // 偷笑 = 坏笑 瞟一眼:左 眯眼笑
     'dumbstruck': ['eye-wide', 'mouth-open', 'sweat', { w: 'blink', pace: 0.65, repeat: 2 }],       // 傻眼 = 睁大 张嘴 冷汗 快眨眼×2
-    'speechless': ['squint', 'press-lips', { w: 'shake', scale: 0.5 }],                             // 无语 = 斜眼 抿嘴 微摇头
+    // 无语 = 黑脸 + 圈圈眼 + 抿嘴 + 微摇头
+    // 2026-11-23 23:52 用户：只说「斜眼 抿嘴 微摇头」（Body.cs:226）看着什么都没发生，
+    // 她要的是**黑脸+圈圈眼**那张经典无语脸。眼睛留给圈圈眼，所以去掉斜眼，保留抿嘴/摇头。
+    'speechless': ['dark-face', 'circle-eyes', 'press-lips', { w: 'shake', scale: 0.5 }],
     'gloating': ['xx-eyes', 'head-swing', 'lean-back'],                                            // 得瑟 = 屑屑眼 晃头 后仰
     'frantic': ['brow-knit', 'xx-eyes', 'mouth-open', { w: 'shake', pace: 0.65, repeat: 3 }],       // 抓狂 = 皱眉 ＞＜ 张嘴 快摇头×3
     'drowsy-combo': ['eye-half', 'head-down', 'mouth-open', { w: 'blink', pace: 1.7, repeat: 2 }],  // 犯困 = 半睁 低头 张嘴 慢眨眼×2
