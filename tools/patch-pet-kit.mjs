@@ -1325,19 +1325,25 @@ function toneOf(text: string): string {
   },
   {
     file: 'body', id: 'hoverAct',
-    desc: '鼠标停在某个部位上 0.45 秒（不点不拖）→ custom.hover(zone)，形象演他们那 6 条悬停反应',
-    detect: (s) => s.includes('pet.hoverFired'),
+    desc: '鼠标停在某个部位上 10 秒（不点不拖）+ 30 秒冷却 → custom.hover(zone)，形象演他们那 6 条悬停反应',
+    detect: (s) => s.includes('pet.hoverT >= 10'),
     apply: (s) => {
       const a = `    T += dt; pet.modeT += dt;
     A = anchors();`;
       if (!s.includes(a)) throw new Error('hoverAct：step 锚点未命中');
-      s = s.replace(a, a + "\n    // 悬停：鼠标停在某个部位上、不按不拖，0.45 秒后演一条轻微反应（他们 Behavior.cs:70-75）。\n"
-        + "    // 只在没有按键、没在摸头时算，离开/换部位就重置，同一部位只触发一次。\n"
+      // 幂等升级：先把旧的那段（0.45 秒版）整块删掉，再插新的，不然改了常量重跑无效
+      s = s.replace(/\n {4}\/\/ 悬停：[\s\S]*?pet\.hoverFired = 0; \}\n {4}\}\n/, '\n');
+      return s.replace(a, a + "\n    // 悬停：鼠标停在某个部位上、不按不拖，**10 秒**后演一条轻微反应（他们 Behavior.cs:70-75）。\n"
+        + "    // 10 秒 / 30 秒冷却照 PetWindow.Touch.cs:478（HoverAfter=10s, HoverCooldown=30s）。\n"
+        + "    // 2026-11-23 23:35 用户实测：原来写 0.45 秒太容易触发 —— 想戳一下，戳之前就先被 hover 演了一遍。\n"
+        + "    // 只在没有按键、没在摸头时算；一按下就归零重计，所以「戳」永远不会先触发悬停。\n"
         + "    {\n"
         + "      const hz = pointer.inside && !press && !ruaDown ? (zoneAt(pointer) ?? null) : null;\n"
         + "      if (hz && hz === pet.hoverZone) {\n"
         + "        pet.hoverT = (pet.hoverT ?? 0) + dt;\n"
-        + "        if (pet.hoverT >= .45 && !pet.hoverFired) { pet.hoverFired = 1; custom?.hover?.(hz); }\n"
+        + "        if (pet.hoverT >= 10 && !pet.hoverFired && T > (pet.hoverCool ?? 0)) {\n"
+        + "          pet.hoverFired = 1; pet.hoverCool = T + 30; custom?.hover?.(hz);\n"
+        + "        }\n"
         + "      } else { pet.hoverZone = hz; pet.hoverT = 0; pet.hoverFired = 0; }\n"
         + "    }");
 
