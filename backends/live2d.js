@@ -2588,18 +2588,17 @@ export async function createLive2DBody(base, opts, entry, kit) {
         for (let k = layers.length - 1; k >= 0; k--) if (layers[k].clipHold) layers.splice(k, 1);
       }
 
-      // 贴图互斥：clip 声明了面部贴图时，开演那一刻把别的 key 清零 —— 否则「生气」的黑脸
-      // 会和上一条 clip 挂着的脸红叠着。
-      // 2026-11-23 改：只在**开演时清一次**，不再每帧清。每帧清会把它开演后才出现的贴图
-      // 一直按死（〔脸红〕在演的时候说〔圈圈眼〕，key3 永远是 0 —— S2 验收第 6 条要的是叠加）。
-      // key3~key6 是同组互斥，这个由词自己写兄弟参数 0 保证（circle-eyes/heart-eyes 都带）。
-      // 只动这 8 个面部 key，兔牙/眼镜/钢盆（key9~12）不碰。
+      // 贴图槽：clip 写哪个 key，就把**同一个 key** 的旧层撤掉（避免两条表演抢同一张贴图，
+      // 新那条 w 从 0 起跳把旧的值压成 0，闪一下）。
+      // 2026-11-23 23:40 用户实测：**不要再清别的 key**。这张模型的贴图是叠层，
+      // 他们自己的组合就证明了：无语=黑脸+圈圈眼、委屈=流泪+脸红、心慌=冷汗+脸红。
+      // 以前"每帧清其他 key"是旧表情通道的「换一张脸」语义，换成 clip 之后这是错的
+      // （〔脸红〕演着的时候说〔圈圈眼〕，key3 永远不亮）。
+      // key3~6（四种眼睛画法）的互斥由词自己写兄弟参数 0 保证，不靠这里。
       if (!c.faceInit) {
         c.faceInit = true;
         const FACE_KEYS = ['key1', 'key2', 'key3', 'key4', 'key5', 'key6', 'key7', 'key13'];
-        if (d.sets && FACE_KEYS.some((k) => k in d.sets)) {
-          for (const k of FACE_KEYS) if (!(k in d.sets)) dropParam(k);
-        }
+        for (const k of FACE_KEYS) if (k in (d.sets ?? {})) dropParam(k);
       }
 
       // 参数合成：他们的语义是「set 按住 + anim 叠加」，同一个参数两边都有时是**相加**，
@@ -3485,7 +3484,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 头/脸的实时盒（模型坐标）+ 部件树诊断，给调试和 kit 读
     get headBox() { return headFaceBoxes().head; },
     get faceBox() { return headFaceBoxes().face; },
-    /** kit 的悬停钩子：鼠标在某个部位上停 0.45 秒 → 演他们那条轻微反应。
+    /** kit 的悬停钩子：鼠标在某个部位上停 **10 秒**（不点不拖）→ 演他们那条轻微反应。
+     *  10 秒 + 30 秒冷却照 PetWindow.Touch.cs:478（HoverAfter / HoverCooldown）。
+     *  2026-11-23 用户实测：原来 0.45 秒太容易 —— 想戳一下，戳之前就先被 hover 演了一遍。
      *  正在演别的（clip）就先让位，不打断；胸/肚/腿归到 body 那一条。 */
     hover(zone) {
       const id = ({ chest: 'body', belly: 'body', legs: 'body' })[zone] ?? zone;
@@ -3493,7 +3494,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       if (!def) return false;
       if (clipActive()) return false;   // 摸后/情绪/落地正在演，别插
       startLayerClip(def);
-      audit('hover ' + id + '（停 0.45s）');
+      audit('hover ' + id + '（停 10s）');
       return true;
     },
     // 调试/测试：直接演一条摸后反应（不经过命中判定）
@@ -3864,7 +3865,11 @@ export async function createLive2DBody(base, opts, entry, kit) {
         {
           // 他们：摸到 3 秒 PlayAfterStroke 前是 Face(NoSets, ["脸红"])，mood 里 Expressions 又带 ["脸红"]
           // → 脸红从 3 秒起一直挂到**摸后动作演完**才退，不是松手就退。
-          const _wantBlush = (_ruaOn && _secR >= 3) || clipList.some((c) => (c.def.exps ?? []).includes('脸红')) ? 1 : 0;
+          // MOOD_CLIPS 把数据里的 exps 拷成了 `exprs`（见 MOOD_CLIPS 构建），
+          // 这里以前只读 `c.def.exps` —— 永远是 undefined，所以**摸后四档的「脸红」一次都没亮过**：
+          // 第一档（摸<3 秒）整段没有脸红，3 秒档以上也只能靠 `_ruaOn` 撑着，一松手就白回去
+          // （用户 2026-11-23 23:35 实测：「松手第一档脸红触发不了，一松手就退」）。
+          const _wantBlush = (_ruaOn && _secR >= 3) || clipList.some((c) => (c.def.exprs ?? c.def.exps ?? []).includes('脸红')) ? 1 : 0;
           blushK += (_wantBlush - blushK) * (1 - Math.exp(-dt / (_wantBlush ? 0.5 : 1.2)));
           if (Date.now() - (globalThis.__blushDbg ?? 0) > 400) {
             globalThis.__blushDbg = Date.now();
