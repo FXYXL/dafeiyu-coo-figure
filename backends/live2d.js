@@ -875,6 +875,21 @@ export async function createLive2DBody(base, opts, entry, kit) {
     EyeSmile: 'EyeSmile', ParamMouthForm: 'ParamMouthForm',
   };
   const resolveId = (k) => PARAM_ALIAS[k] ?? k;
+  /** 他们 Mood 里的 set/anim 值是 VTube Studio 的**输入**（大肥鱼.vtube.json），
+   *  renderer/main.cpp:596 再按 ParameterSettings 映射成模型参数。我们直接写模型参数，
+   *  所以这几条必须手动过一遍同样的映射，否则幅度/正负都不对：
+   *    FaceAngleY         −20..20 → −30..30  （×1.5：他们的「低头 −5」实际是 −7.5）
+   *    BrowInnerUp        0..0.5  → 0..1      （×2：.7 已经是满的，写成 1.4 由模型钳到 1）
+   *    MouthPressLipOpen  1..−1   → −1..1     （**取反**：他们的 .3 是模型 −0.3）
+   *    MouthX             −0.8..0.8 → −1..1   （×1.25） */
+  // 键用**模型参数名**（resolveId 之后）：FaceAngleY→AngleY、ParamMouthPressLipOpen→MouthPressLipOpen
+  const VTS_IN = {
+    AngleY: (v) => v * 1.5,
+    BrowInnerUp: (v) => v * 2,
+    MouthPressLipOpen: (v) => -v,
+    MouthX: (v) => v / 0.8,
+  };
+  const vtsOut = (k, v) => (VTS_IN[k] ? VTS_IN[k](v) : v);
   const MOOD_ARGS = { FaceAngleX: 'AngleX', FaceAngleY: 'AngleY', FaceAngleZ: 'AngleZ', LeanInput: 'LeanInput' };
   /** 模型没有、但 figure 会转给 kit 的整图参数（ViewSquash 压扁 / ViewRoll 滚转 / ViewX、Y 位移） */
   const VIRTUAL_KEYS = new Set(['ViewSquash', 'ViewRoll', 'ViewX', 'ViewY']);
@@ -1971,10 +1986,6 @@ export async function createLive2DBody(base, opts, entry, kit) {
   }
   function startLayerClip(def) {
     if (!def) return null;
-    // 摸后反应开始后，前倾完全交给 clip（sets/keys 里有 -17 那条）：
-    // 旧的 ruaMeltHold 锁存如果继续留着，clip 结束删条目以后它会接着写 -17*ruaLeanK，
-    // 把人又拽回前倾再慢慢松——「回正以后又倒回去」就是这么来的。
-    if (def.mood) ruaMeltHold = 0;
     const c = { def, t0: clockT, hand: false, handOff: false, w: 0, lastT: clockT };
     clipList.push(c);
     return c;
@@ -2042,12 +2053,18 @@ export async function createLive2DBody(base, opts, entry, kit) {
             continue;
           }
           if (VIRTUAL_KEYS.has(k)) { virtualParams.set(k, { v, t }); continue; }
-          setParamByName(resolveId(k), v);
+          const id = resolveId(k);          // ParamMouthPressLipOpen → MouthPressLipOpen：映射表按**模型 id** 认
+          const mapped = vtsOut(id, v);
+          setParamByName(id, mapped);
+          // 他们的 PositionX/Y/Z 吃的是**输入值**（FaceAngleY 输入 ±20、角度输出 ±30），
+          // setParamByName 默认按角度 1:1 派生位置，这里按他们的规则再写一次。
+          const posId = ANGLE_TO_POS[id];
+          if (posId && mapped !== v) setParamByName(posId, v);
         }
       }
 
       if (!playing && c.w <= .004) {
-        if (d.mood) ruaSecHold = 0;
+        if (d.mood) { ruaSecHold = 0; ruaMeltHold = 0; }
         clipList.splice(n, 1);
       }
     }
@@ -2189,7 +2206,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       ruaW += (0 - ruaW) * (1 - Math.exp(-dt / 0.35));
     } else ruaW = 0;
     // 前倾单独一条：摸的时候和 mood 期间都保持，mood 演完才 0.6 秒褪掉
-    if (frame.rua?.on || clipActive()) ruaLeanK = 1;
+    if (frame.rua?.on || clipAlive()) ruaLeanK = 1;   // 含松手后的 1.5s 空档：他们 KeepLean 就是不让前倾在这段掉
     // 前倾的退出时长**跟收手动作为准**，不拍数字：他们 mood 结束时 clear LeanInput 和
     // PutHandDown 是同时发生的，所以我们用 put-hand-down 自己的 dur（1.6 秒）当时间常数。
     else if (ruaLeanK > 0.002) {
@@ -2355,7 +2372,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
       // 关键帧从 -17 接到 -16，mood 演完才随 clear 淡出（Behavior.cs:66 注释原话）。
       // 所以这条**不乘 ruaW** —— 乘了就是「一松手 0.35 秒就直回去」（用户实测）。
       // mood 播放器是后写的，会盖住这里的值，不需要额外判断。
-      if (ruaMeltHold > 0.001 && ruaLeanK > 0.002) writeRole('lean', -17 * ruaMeltHold * ruaLeanK);
+      // clip 演的时候前倾归 clip（sets/keys 里有那条 -17）；只有空档期和没 clip 时才由锁存写
+      if (!clipActive() && ruaMeltHold > 0.001 && ruaLeanK > 0.002) writeRole('lean', -17 * ruaMeltHold * ruaLeanK);
       if (sec >= 8) { writeRole('browY', 0.5 * ruaW); writeRole('browAngle', 0.3 * ruaW); }
       else if (sec >= 3) { writeRole('browY', 0.2 * ruaW); }
     }
