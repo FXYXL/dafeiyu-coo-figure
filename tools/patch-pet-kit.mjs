@@ -1078,7 +1078,7 @@ function toneOf(text: string): string {
     apply: (s) => {
       const a = "    } else if (now(p) - press.t < 400) {";
       if (!s.includes(a)) throw new Error('pokeZone：锚点未命中');
-      s = s.replace(a, a + "\n      // 戳哪儿、戳在左边还是右边：形象按 Behavior.ClickMood 演对应的那一条\n      const _pz = zoneAt(p) ?? 'body';\n      const _ps = p.x < toStage(128, 0).x ? -1 : 1;");
+      s = s.replace(a, a + "\n      // 戳哪儿、戳在左边还是右边：形象按 Behavior.ClickMood 演对应的那一条\n      const _pz = zoneAt(p) ?? 'body';\n      // 侧别用他们 Behavior.Click 的约定：**左 = +1，右 = -1**（PetWindow.cs:1133 `at.X / Width < .5 ? 1 : -1`）。\n      // 形象侧 `Pushed && side < 0` 才对镜像——之前这里传反了，于是戳左边往左躲（同向）。\n      const _ps = p.x < toStage(128, 0).x ? 1 : -1;");
       const b = "        onEvent('touch', { kind: 'poke', woke: wasAsleep });";
       if (!s.includes(b)) throw new Error('pokeZone：woke 锚点未命中');
       s = s.replace(b, "        onEvent('touch', { kind: 'poke', woke: wasAsleep, zone: _pz, side: _ps });\n        custom?.poke?.(_pz, _ps);");
