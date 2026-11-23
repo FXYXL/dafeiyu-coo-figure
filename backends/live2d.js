@@ -2955,7 +2955,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
 
   let extentFrames = 0;
   const currentExtent = () => extent ?? DEFAULT_EXTENT;
-  const currentHits = () => profile.hits ?? hitBands ?? (() => {
+  const currentHits = () => {
+    const base = profile.hits ?? hitBands ?? (() => {
     const [x0, y0, x1, y1] = currentExtent();
     const w = x1 - x0;
     const h = y1 - y0;
@@ -2967,7 +2968,14 @@ export async function createLive2DBody(base, opts, entry, kit) {
       [cx, y0 + h * .47, r(Math.min(w * .52, h * .26))],
       [cx, y0 + h * .80, r(Math.min(w * .48, h * .22))],
     ];
-  })();
+    })();
+    // 尾巴在右外侧，那三段圈够不到它 → 点尾巴会 hitPet 失败、pointer 直接 return
+    //（用户：戳尾巴总是掉进兜底）。补一圈跟着尾巴走。
+    const [x0, y0, x1, y1] = currentExtent();
+    const w = x1 - x0, h = y1 - y0;
+    const tailHit = [x0 + w * .93, y0 + h * .70, Math.max(18, w * .11)];
+    return [...base, tailHit];
+  };
   const currentAnchors = () => profile.anchors ?? deriveAnchors(currentExtent());
 
   const publishInfo = () => {
@@ -2990,57 +2998,77 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 拿不到部件才退回旧的「整幅包围盒 × 比例」——那份比例是照他们 Behavior.HeadBox 抄的，
     // 但乘的是被尾巴撑宽的 canvas 包围盒，头心本来就偏，所以只当兜底。
     touchZones() {
+      const [ex0, ey0, ex1, ey1] = currentExtent();
+      const ew = ex1 - ex0, eh = ey1 - ey0;
       const { head: hb, face: fb } = headFaceBoxes();
       const zones = [];
-      // 脸放在头前面：脸盒整个落在头盒里，反过来的话 find() 永远先命中头，脸区一次都点不到。
-      if (fb) zones.push({ id: 'face', x: fb.x, y: fb.y, rx: fb.rx, ry: fb.ry });
-      if (hb) zones.push({ id: 'head', x: hb.x, y: hb.y, rx: hb.rx, ry: hb.ry });
 
-      const B = (set, clipY, clipYMin) => (set ? partBox(set, clipY ?? Infinity, clipYMin ?? -Infinity) : null);
-      const chest = B(bodySets?.chest);
-      const skirt = B(bodySets?.skirt);
-      if (chest) {
-        // 胸部件是 70~99，但 70~88 那段在她的头后面（Q 版下巴就在 88），视觉上看不见——
-        // 那一段交给 head（head 排在前面，天然赢），胸区只留下巴以下。
-        const top = hb ? Math.max(chest.y0, hb.y1 - 4) : chest.y0;
-        zones.push({
-          id: 'chest', x: chest.x, y: (top + chest.y1 + 5) / 2,
-          rx: chest.rx * 1.05, ry: Math.max(9, (chest.y1 + 5 - top) / 2),
-        });
-        // 肚子：胸下沿到裙上沿之间那一条（模型没有「肚子」部件，按几何切）
-        zones.push({ id: 'belly', x: chest.x, y: chest.y1 + 11, rx: chest.rx * .85, ry: 9 });
+      if (!hb) {
+        // 连部件都读不到（换皮/HD 异常）才退回比例盒
+        zones.push({ id: 'head', x: (ex0 + ex1) / 2, y: ey0 + eh * .31, rx: ew * .26, ry: eh * .22 });
+        return zones;
       }
-      // 手：左右各一只，盒太小点不中 → 放大到 10 以上
+
+      // 脸：头盒纵向的 .22 ~ .70。
+      // 实测模型「脸」部件 Part15 = 32~67，头盒 16~89 —— 正好落在这两个比例上。
+      // 以前用脸的**子树**包围盒（含脸底/眼眶/嘴，一直垂到 80），于是整个头都是脸、
+      // 只有呆毛点得到「头」（用户 17:33 实测）。fb 现在只用来校 x 中心。
+      const fy0 = hb.y0 + (hb.y1 - hb.y0) * .22;
+      const fy1 = hb.y0 + (hb.y1 - hb.y0) * .70;
+      zones.push({
+        id: 'face', x: fb?.x ?? hb.x, y: (fy0 + fy1) / 2,
+        rx: Math.max(12, hb.rx * .45), ry: (fy1 - fy0) / 2,
+      });
+      zones.push({ id: 'head', x: hb.x, y: hb.y, rx: hb.rx, ry: hb.ry });
+
+      // 以下全部按「纵向带」切，彼此**不重叠**——重叠就会被 find 里排前面的那块吃掉，
+      // 用户实测：点胸口算头、点肚子算胸、点裙摆上半算肚子，全是同一个病。
+      const hy1 = hb.y1;                                    // 下巴（含发尾）≈ 88
+      const chestB = bodySets?.chest ? partBox(bodySets.chest) : null;
+      const cy1 = chestB?.y1 ?? 99;                         // 胸下沿
+      const cRx = (chestB?.rx ?? 22) * 1.05;
+
+      // 胸：下巴 → 胸下沿（不再往上扩到 84，否则胸口那一段被头吃掉）
+      // 胸和肚子的分界取 100（实测胸下沿 99）：再往上一点胸口就会被头吃掉。
+      const cBot = Math.min(cy1 + 1, hy1 + 13);
+      zones.push({ id: 'chest', x: hb.x, y: (hy1 + cBot) / 2, rx: cRx, ry: Math.max(6.5, (cBot - hy1) / 2) });
+      // 肚子：胸下沿 → 裙上沿（只有 ~13 logo 高，Q 版就这点空间）
+      zones.push({ id: 'belly', x: hb.x, y: cBot + 6.5, rx: cRx * .78, ry: 6.5 });
+
+      // 手：左右各一只（保留原来的椭圆，只是位置改吃部件盒）
       for (const h of bodySets?.hands ?? []) {
-        const b = B(h);
+        const b = partBox(h);
         if (!b) continue;
         zones.push({ id: 'hand', x: b.x, y: b.y, rx: Math.max(b.rx * 1.8, 10), ry: Math.max(b.ry * 1.3, 10) });
       }
-      if (skirt) zones.push({ id: 'skirt', x: skirt.x, y: skirt.y - 2, rx: skirt.rx * .92, ry: skirt.ry * .82 });
+
+      // 裙：从肚子下沿 → 短裙下沿（不并长裙的下摆，否则会把用户点的「腿」吃掉）
+      const skirtB = bodySets?.skirt ? partBox(bodySets.skirt) : null;
+      const sy0 = cBot + 13, sy1 = skirtB?.y1 ?? 175;
+      zones.push({
+        id: 'skirt', x: hb.x, y: (sy0 + sy1) / 2,
+        rx: Math.max(30, (skirtB?.rx ?? 36) * .95), ry: Math.max(12, (sy1 - sy0) / 2),
+      });
+
+      // 腿：裙下沿以下
       if (bodySets?.legs) {
-        // 腿部件从大腿一直连到脚，只取裙下沿以下那截
-        const b = B(bodySets.legs, Infinity, (skirt ? skirt.y1 : 170) - 12);
+        const b = partBox(bodySets.legs, Infinity, sy1 - 6);
         if (b) zones.push({ id: 'legs', x: b.x, y: b.y, rx: b.rx * 1.15, ry: Math.min(b.ry, 48) });
       }
-      const tail = B(bodySets?.tail);
-      if (tail) {
-        // 尾巴整条从背后绕过来（x 跨 69~198），可见的只有右侧翘起那段，只取右端
-        // 右移到裙子外面，只在裙右沿之外才归尾巴（否则裙子右侧会被尾巴抢走）
-        const tx = Math.max(tail.x1 - 14, (skirt ? skirt.x1 : 168) + 14);
-        zones.push({
-          id: 'tail',
-          x: tx,
-          y: tail.y,
-          rx: Math.max(18, tail.rx * .3),
-          ry: Math.max(26, tail.ry * .7),
-        });
-      }
-      if (!hb) {
-        // 连部件都读不到（换皮/HD 异常）才退回比例盒，只为「右键点在别处不触发」
-        const [x0, y0, x1, y1] = currentExtent();
-        const w = x1 - x0, h = y1 - y0;
-        zones.push({ id: 'head', x: (x0 + x1) / 2, y: y0 + h * .31, rx: w * .26, ry: h * .22 });
-      }
+
+      // 尾巴：**不跟尾巴尖走**（尾巴一直在摆，盒跟着实时顶点会甩出去、用户就点空）。
+      // 用「短裙右沿 → 模型右缘」这一条当尾巴区：短裙是实心的、位置最稳，
+      // 尾巴从她身后绕到右侧，露出来的那截正好在短裙右沿之外（实测短裙 x1=164、尾巴 x1=198）。
+      const tx0 = skirtB ? Math.max(skirtB.x1 - 4, hb.x + 24) : ex0 + ew * .72;
+      const tx1 = ex1 + ew * .02;                       // 尾巴尖常常比 alpha 包围盒再出去一点
+      const tb = bodySets?.tail ? partBox(bodySets.tail) : null;
+      const tyc = tb ? (tb.y0 + tb.y1) / 2 : ey0 + eh * .70;
+      zones.push({
+        id: 'tail',
+        x: (tx0 + tx1) / 2, y: tyc,
+        rx: Math.max(15, (tx1 - tx0) / 2), ry: Math.max(26, tb ? (tb.y1 - tb.y0) * .42 : eh * .115),
+      });
+
       return zones;
     },
     // 头/脸的实时盒（模型坐标）+ 部件树诊断，给调试和 kit 读
