@@ -2425,6 +2425,45 @@ export async function createLive2DBody(base, opts, entry, kit) {
       },
       gesture: { on: 'grass-hand', off: 'put-hand-down' },
     },
+
+    // ===== 第四批（2026-11-23）：问候 / 告别 / 落地，Behavior.cs:27-29 逐字 =====
+    // 问候：笑眼 + 嘴角笑 + 歪头 7° + 低头 19° + 闭眼 1.1 秒（4.4s，出场用）
+    // 他们注释：抚胸交给 Body（出场时 Apply("抚胸")），这里只演上半身，避免手挡脸
+    greeting: {
+      dur: 4.4, tag: 'auto:greet',
+      sets: { EyeSmile: 1, ParamMouthForm: 1 },
+      keys: {
+        FaceAngleZ: [[0, 0], [.5, 7], [1, 5], [1.5, 0], [3.4, 0], [3.8, 7], [4.4, 0]],
+        LeanInput: [[0, 0], [1.1, 0], [1.7, -11], [2.6, -11], [3.3, 0]],
+        FaceAngleY: [[0, 0], [1.1, 0], [1.7, -19], [2.2, -17], [2.6, -19], [3.3, 0]],
+        ViewSquash: [[0, 0], [1.1, 0], [1.7, .04], [2.6, .04], [3.3, 0]],
+        EyeOpen: [[0, 0], [1.2, 0], [1.6, -1], [2.7, -1], [3.1, 0], [4.4, 0]],
+      },
+    },
+    // 告别：同样低头 19° + 歪头 6°，短一些，带抬手（3s）
+    farewell: {
+      dur: 3, tag: 'auto:bye',
+      sets: { EyeSmile: 1, ParamMouthForm: 1 },
+      keys: {
+        FaceAngleZ: [[0, 0], [.4, 6], [.8, 0]],
+        LeanInput: [[0, 0], [.7, 0], [1.3, -12], [2.6, -12], [3, 0]],
+        FaceAngleY: [[0, 0], [.7, 0], [1.3, -19], [2.6, -19], [3, 0]],
+        ViewSquash: [[0, 0], [.7, 0], [1.3, .04], [2.6, .04], [3, 0]],
+        EyeOpen: [[0, 0], [.8, 0], [1.2, -1], [2.6, -1], [3, 0]],
+      },
+      gesture: { on: 'chest-hand', off: 'put-hand-down' },
+    },
+    // 落地：圈圈眼 + 眉心 .6 + 张嘴 + 被砸得头抖 + 整图压扁弹两下（1.25s）
+    'land-hit': {
+      dur: 1.25, tag: 'auto:land',
+      sets: { key3: 1, key4: 0, key5: 0, key6: 0, BrowInnerUp: .6, ParamMouthOpenY: .2 },
+      keys: {
+        ViewSquash: [[0, 0], [.1, .06], [.3, -.02], [.5, .015], [.75, 0]],
+        FaceAngleY: [[0, 0], [.1, -10], [.75, 0]],
+        FaceAngleX: [[0, 0], [.5, 0], [.65, -8], [.8, 8], [.95, -6], [1.1, 4], [1.3, 0]],
+        EyeOpen: [[0, 0], [1.15, 0], [1.25, -1], [1.4, 0]],
+      },
+    },
 };
   function startLayerClip(def) {
     if (!def) return null;
@@ -2442,6 +2481,25 @@ export async function createLive2DBody(base, opts, entry, kit) {
   function stopMoodClips() {
     for (let i = clipList.length - 1; i >= 0; i--) if (clipList[i].def.mood) clipList.splice(i, 1);
   }
+  // ---------- 自动表演：落地、出场问候 ----------
+  // 他们没有单独的触发器，是 PetWindow 在落地/出场时直接 Apply("落地") / ("问候")。
+  // 我们这两件都在 kit 里（mode='land'、启动后进 idle），所以在帧里看 mode 变化补上。
+  let prevMode = 'idle';
+  let greeted = false;
+  function stepAutoClips(frame) {
+    const mode = frame.mode ?? 'idle';
+    // 落地：air/fall → land 的那一帧演「圈圈眼 + 张嘴 + 压扁」
+    if (mode === 'land' && prevMode !== 'land' && EMO_CLIPS['land-hit'] && !clipAlive('auto:land')) {
+      startLayerClip(EMO_CLIPS['land-hit']);
+    }
+    // 出场问候：页面起来 2.5 秒后、站在 idle 时问候一次（换形象/重载就是一次出场）
+    if (!greeted && clockT > 2.5 && (mode === 'idle' || mode === 'sit') && EMO_CLIPS.greeting) {
+      greeted = true;
+      startLayerClip(EMO_CLIPS.greeting);
+    }
+    prevMode = mode;
+  }
+
   function stepClips(t) {
     if (!clipList.length) { for (const [id, v] of debugOverrides) setParamByName(id, v); return; }
     for (let n = clipList.length - 1; n >= 0; n--) {
@@ -3747,6 +3805,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       // （AngleX→ParamAngleX、LeanInput→ParamBodyAngleY、PositionX→ParamBodyAngleX …），
       // 写在物理后面等于这帧的参数物理根本没看见，下一帧 loadParameters 又恢复基准，
       // 头和身体一次都不会动（用户：「只有手在执行」）。2026-11-23 修正。
+      stepAutoClips(frame);
       stepClips(clockT);
       try { model._physics?.evaluate(model._model, dt); } catch { /* 物理失败不致命 */ }
       // ---------- 摸后的四个 mood（Behavior.cs:59-67）----------
