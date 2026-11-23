@@ -2182,8 +2182,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 害羞：脸红 + 低头 12° + 歪头 9° + 眼珠躲开 + 抿嘴；歪头在 3 秒内摆两下
     // （id 用 blush：词表里「害羞/shy」都解析到它；「脸红」也走这条，整段害羞不会太重）
     blush: {
-      dur: 3, exps: ['脸红'], tag: 'emo:shy',
-      sets: { FaceAngleY: -12, FaceAngleX: 10, FaceAngleZ: 9, ParamEyeBallX: -.6, ParamEyeBallY: -.5, MouthPressLipOpen: .6 },
+      dur: 3, tag: 'emo:shy',
+      // 贴图直接写 key：exps 只实现了「脸红」，其它名字没人处理（黑脸/流泪/流冷汗一直没出来）
+      sets: { key7: 1, FaceAngleY: -12, FaceAngleX: 10, FaceAngleZ: 9, ParamEyeBallX: -.6, ParamEyeBallY: -.5, MouthPressLipOpen: .6 },
       keys: {
         FaceAngleZ: [[0, 0], [.5, 2], [1, -1], [1.6, 2], [2.2, -1], [3, 0]],
         ViewSquash: [[0, 0], [.4, .02], [2.4, .02], [3, 0]],
@@ -2191,8 +2192,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
     },
     // 生气：黑脸 + 鼓腮 + 双眉压低压斜 + 甩头（0→−8→6→−5→3→0）+ 前倾 8°
     angry: {
-      dur: 3, exps: ['黑脸'], tag: 'emo:angry',
-      sets: { CheeckPuff: 1, ParamBrowLY: -.8, ParamBrowRY: -.8, ParamBrowLAngle: -1, ParamBrowRAngle: -1, FaceAngleX: -14, FaceAngleY: -6 },
+      dur: 3, tag: 'emo:angry',
+      sets: { key1: 1, CheeckPuff: 1, ParamBrowLY: -.8, ParamBrowRY: -.8, ParamBrowLAngle: -1, ParamBrowRAngle: -1, FaceAngleX: -14, FaceAngleY: -6 },
       keys: {
         FaceAngleX: [[0, 0], [.15, -8], [.3, 6], [.45, -5], [.6, 3], [.8, 0]],
         ViewSquash: [[0, 0], [.08, .04], [.25, 0], [1, 0]],
@@ -2210,8 +2211,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
     },
     // 委屈：流泪 + 眉心抬满 + 嘟嘴 + 低头 10° + 歪头 −6° + 委屈地左右小幅晃
     aggrieved: {
-      dur: 3, exps: ['流泪'], tag: 'emo:aggrieved',
-      sets: { BrowInnerUp: 1, Mouthpucker: 1, FaceAngleY: -10, FaceAngleZ: -6 },
+      dur: 3, tag: 'emo:aggrieved',
+      sets: { key2: 1, BrowInnerUp: 1, Mouthpucker: 1, FaceAngleY: -10, FaceAngleZ: -6 },
       keys: {
         ViewSquash: [[0, 0], [.4, .03], [2.4, .025], [3, 0]],
         FaceAngleX: [[0, 0], [.4, -3], [.9, 2], [1.4, -3], [1.9, 2], [3, 0]],
@@ -2229,8 +2230,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
     },
     // 心虚：流冷汗 + 眼珠躲开 + 嘴角撇 + 转头 14° + 前倾 6°；Pushed（戳的时候跟着侧别翻）
     guilty: {
-      dur: 3, exps: ['流冷汗'], tag: 'emo:guilty', pushed: true,
-      sets: { ParamEyeBallX: .8, ParamEyeBallY: .3, MouthX: .6, ParamMouthForm: -.5, FaceAngleX: 14, FaceAngleY: -8 },
+      dur: 3, tag: 'emo:guilty', pushed: true,
+      sets: { key13: 1, ParamEyeBallX: .8, ParamEyeBallY: .3, MouthX: .6, ParamMouthForm: -.5, FaceAngleX: 14, FaceAngleY: -8 },
       keys: {
         FaceAngleZ: [[0, 0], [.3, -4], [.6, 2], [.9, -3], [1.2, 2], [1.5, -2], [2, 0]],
         ViewSquash: [[0, 0], [.3, .03], [2, .02], [2.6, 0]],
@@ -2291,6 +2292,17 @@ export async function createLive2DBody(base, opts, entry, kit) {
         for (const [id, ch] of [...channel]) if (ch.clipHold) channel.delete(id);
       }
 
+      // 贴图互斥（他们 exclusiveGroups['face-big'] 的同款）：clip 声明了面部贴图时，
+      // 把同组其他 key 清零 —— 否则「生气」的黑脸会和通道里挂着的脸红叠着，
+      // 或者「圈圈眼」和「爱心眼」同时开（key3~key6 是同一只眼睛的四种画法）。
+      // 只动这 8 个面部 key，兔牙/眼镜/钢盆（key9~12）不碰。
+      {
+        const FACE_KEYS = ['key1', 'key2', 'key3', 'key4', 'key5', 'key6', 'key7', 'key13'];
+        if (d.sets && FACE_KEYS.some((k) => k in d.sets)) {
+          for (const k of FACE_KEYS) if (!(k in d.sets)) setParamByName(k, 0);
+        }
+      }
+
       // 参数合成：他们的语义是「set 按住 + anim 叠加」，同一个参数两边都有时是**相加**，
       // 不是后写的盖掉前写的（FaceAngleZ 就是这种：set 4 + 关键帧 ±3）。
       if (playing || c.w > .004) {
@@ -2326,7 +2338,10 @@ export async function createLive2DBody(base, opts, entry, kit) {
         const gv2 = (id) => { const i2 = paramIndex.get(id); return i2 !== undefined ? +model._model.getParameterValueByIndex(i2).toFixed(2) : null; };
         audit('clip ' + (d.tag ?? d.mood ?? '?') + ' age=' + age.toFixed(2) + '/' + d.dur + ' w=' + c.w.toFixed(2)
           + ' lean=' + gv2('LeanInput') + ' az=' + gv2('AngleZ') + ' ay=' + gv2('AngleY') + ' ax=' + gv2('AngleX')
-          + ' smile=' + gv2('EyeSmile') + ' brow=' + gv2('BrowInnerUp') + ' hand=' + gv2('Movement2'));
+          + ' smile=' + gv2('EyeSmile') + ' brow=' + gv2('BrowInnerUp') + ' hand=' + gv2('Movement2')
+          // 眼睛和贴图：实机上「看着没变」时靠这三个字段分辨是没写、写错、还是被盖
+          + ' eby=' + gv2('ParamEyeBallY') + ' sq=' + gv2('REyeSquint')
+          + ' k1=' + gv2('key1') + ' k2=' + gv2('key2') + ' k7=' + gv2('key7'));
       }
 
       if (!playing && !c.done) {
