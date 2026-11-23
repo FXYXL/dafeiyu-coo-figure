@@ -1564,7 +1564,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 他们松手后**不是马上**动情：EndStroke 里 afterStrokeAt = UtcNow + 1.5s，
     // 这 1.5 秒只有「头回正 + 脸红还在」，之后 PlayAfterStroke 才播 mood。
     // 之前我们 t 从 0 开始，松手瞬间就演，观感和他们对不上（用户：一松手就清零/立刻变）。
-    startLayerClip(MOOD_CLIPS[mood]);
+    // 摸满 30 秒的融化：同一段表演 + 爱心眼
+    startLayerClip(mood === 'melt' && peak >= 30 ? MOOD_CLIPS.melt30 : MOOD_CLIPS[mood]);
     audit('rua-after peak=' + peak.toFixed(1) + ' → ' + mood);
   }
 
@@ -2002,6 +2003,15 @@ export async function createLive2DBody(base, opts, entry, kit) {
       gesture: d.hand ? { on: 'chest-hand', off: 'put-hand-down' } : null,
     };
   }
+  // 30 秒彩蛋（他们 melted30）：mood 完全是「摸后融化」，只多一个爱心眼。
+  // 他们的注释写在 PetWindow.Touch.cs:209「多一个爱心眼」，但 Moods 表里没有——
+  // 那个爱心眼来自台词〔爱心眼〕的动作。我们直接把它并进 mood 的 sets（key4=1），
+  // 这样出现和消失都跟着 clip 的权重走，不会留在脸上。
+  MOOD_CLIPS.melt30 = {
+    ...MOOD_CLIPS.melt,
+    tag: 'melt30',
+    sets: { ...MOOD_CLIPS.melt.sets, key3: 0, key4: 1, key5: 0, key6: 0 },
+  };
   function startLayerClip(def) {
     if (!def) return null;
     const c = { def, t0: clockT, hand: false, handOff: false, w: 0, lastT: clockT };
@@ -2085,11 +2095,18 @@ export async function createLive2DBody(base, opts, entry, kit) {
       if (Date.now() - (globalThis.__clipDbg ?? 0) > 500) {
         globalThis.__clipDbg = Date.now();
         const gv2 = (id) => { const i2 = paramIndex.get(id); return i2 !== undefined ? +model._model.getParameterValueByIndex(i2).toFixed(2) : null; };
-        audit('clip ' + (d.mood ?? '?') + ' age=' + age.toFixed(2) + '/' + d.dur + ' w=' + c.w.toFixed(2)
+        audit('clip ' + (d.tag ?? d.mood ?? '?') + ' age=' + age.toFixed(2) + '/' + d.dur + ' w=' + c.w.toFixed(2)
           + ' lean=' + gv2('LeanInput') + ' az=' + gv2('AngleZ') + ' ay=' + gv2('AngleY')
           + ' smile=' + gv2('EyeSmile') + ' brow=' + gv2('BrowInnerUp') + ' hand=' + gv2('Movement2'));
       }
 
+      if (!playing && !c.done) {
+        // 演的最后一帧就把锁存清掉：以前等权重衰到 0.004 才清，中间那 0.7 秒
+        // clipActive 已经 false、锁存还是 1 → 又按了一次 -17，看起来就是
+        // 「演完之后又冒出来一点前倾再回去」（用户 2026-11-23 实测）。
+        c.done = true;
+        if (d.mood) { ruaSecHold = 0; ruaMeltHold = 0; }
+      }
       if (!playing && c.w <= .004) {
         if (d.mood) { ruaSecHold = 0; ruaMeltHold = 0; }
         clipList.splice(n, 1);
