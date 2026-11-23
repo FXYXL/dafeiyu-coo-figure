@@ -1072,6 +1072,22 @@ function toneOf(text: string): string {
     },
   },
   {
+    file: 'body', id: 'pokeZone',
+    desc: '左键戳：带上分区和左右侧，交给形象演（他们 ClickMood 的六条）；去掉 kit 自己的随机表情',
+    detect: (s) => s.includes("kind: 'poke', zone: _pz"),
+    apply: (s) => {
+      const a = "    } else if (now(p) - press.t < 400) {";
+      if (!s.includes(a)) throw new Error('pokeZone：锚点未命中');
+      s = s.replace(a, a + "\n      // 戳哪儿、戳在左边还是右边：形象按 Behavior.ClickMood 演对应的那一条\n      const _pz = zoneAt(p) ?? 'body';\n      const _ps = p.x < toStage(128, 0).x ? -1 : 1;");
+      const b = "        onEvent('touch', { kind: 'poke', woke: wasAsleep });";
+      if (!s.includes(b)) throw new Error('pokeZone：woke 锚点未命中');
+      s = s.replace(b, "        onEvent('touch', { kind: 'poke', woke: wasAsleep, zone: _pz, side: _ps });\n        custom?.poke?.(_pz, _ps);");
+      const c = "        play('poke', 'touch');\n        const r = ['happy', 'wink', 'surprised', 'love', 'angry'][Math.floor(Math.random() * 5)];\n        setExpr(r);\n        if (Math.random() < .5 && pet.mode === 'idle') setMode('crouch', { jumpV: 480, jumpVx: 0 });\n        onEvent('touch', { kind: 'poke' });";
+      if (!s.includes(c)) throw new Error('pokeZone：随机表情锚点未命中');
+      return s.replace(c, "        play('poke', 'touch');\n        // 2026-11-23：随机表情和随机蹦一下都删掉——它们会和形象按分区演的那条抢脸/抢动作\n        // （用户：戳完先歪一下头，然后就没了）。改成把分区和侧别交给形象。\n        custom?.poke?.(_pz, _ps);\n        onEvent('touch', { kind: 'poke', zone: _pz, side: _ps });");
+    },
+  },
+  {
     file: 'body', id: 'squashDirect',
     desc: '形象给的 ViewSquash 直通（他们的 renderer 直接乘矩阵）；以前并进 kit 的弹簧（k280/c14，ζ≈0.42）会过冲抖动，看着像「啪一下压扁又弹回来」',
     detect: (s) => s.includes('const figSq = custom?.squash?.() ?? 0;'),
@@ -1272,6 +1288,38 @@ function toneOf(text: string): string {
       const a = "      if (t && typeof t.kind === 'string') {";
       if (!s.includes(a)) throw new Error('ruaChat：锚点未命中');
       return s.replace(a, a + "\n        // 2026-11-23（真因）：控制台 build/console/index.js 里 touch 渲染器的 default 分支是\n        //   default: return `${t} 重重落地，摔晕了一会儿`\n        // 只要 kind 不是 poke/pet/throw/drop 就全落进去。rua-* 正好都不认识 → 摸头每 2.5 秒一条。\n        // 事件照常给模型（她该知道的秒数一个字不少），只是不给对话页生成条目。\n        if (t.kind.startsWith('rua-')) return null;");
+    },
+  },
+  // ===== model-text.ts / world.ts：戳一戳按分区说话（2026-11-23）=====
+  {
+    file: 'mtext', id: 'pokeZoneText',
+    desc: '戳一戳的文本带上分区（之前是死的「戳了你一下」，她不知道被戳的是哪儿）',
+    detect: (s) => s.includes('戳了戳你的${z}'),
+    apply: (s) => {
+      const a = "  poked: (user: string, n: number) => (n > 1 ? `${user}戳了你 ${n} 下` : `${user}戳了你一下`),";
+      if (!s.includes(a)) throw new Error('pokeZoneText：中文锚点未命中');
+      s = s.replace(a, "  poked: (user: string, n: number, zone?: string) => {\n"
+        + "    const z = ({ head: '头', face: '脸', hand: '手', chest: '胸口', belly: '肚子', skirt: '裙摆', legs: '腿', tail: '尾巴' } as Record<string, string>)[zone ?? ''];\n"
+        + "    if (n > 1) return z ? `${user}连着戳了你的${z} ${n} 下` : `${user}戳了你 ${n} 下`;\n"
+        + "    return z ? `${user}戳了戳你的${z}` : `${user}戳了你一下`;\n"
+        + "  },");
+      const b = "  poked: (user, n) => (n > 1 ? `${user} poked you ${n} times` : `${user} poked you`),";
+      if (!s.includes(b)) throw new Error('pokeZoneText：英文锚点未命中');
+      return s.replace(b, "  poked: (user, n, zone?: string) => {\n"
+        + "    const z = ({ head: 'head', face: 'cheek', hand: 'hand', chest: 'chest', belly: 'belly', skirt: 'skirt', legs: 'leg', tail: 'tail' } as Record<string, string>)[zone ?? ''];\n"
+        + "    if (n > 1) return z ? `${user} poked your ${z} ${n} times` : `${user} poked you ${n} times`;\n"
+        + "    return z ? `${user} poked your ${z}` : `${user} poked you`;\n"
+        + "  },");
+    },
+  },
+  {
+    file: 'world', id: 'pokeZonePass',
+    desc: '把戳的分区传给文本',
+    detect: (s) => s.includes('m.poked(u, t.count, t.zone)'),
+    apply: (s) => {
+      const a = "case 'poke': text = t.woke ? m.pokedAwake(u) : m.poked(u, t.count); break;";
+      if (!s.includes(a)) throw new Error('pokeZonePass：锚点未命中');
+      return s.replace(a, "case 'poke': text = t.woke ? m.pokedAwake(u) : m.poked(u, t.count, t.zone); break;");
     },
   },
 ];
