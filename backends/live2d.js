@@ -1578,7 +1578,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
         // 气泡停留按字数算（彩蛋气泡是一次性全显示的，不是打字机）：
         // 4 个字给 2 秒、28 个字给 5 秒，短句不闪、长句读得完。
         figure.emitBubble(s.say, clamp(1.4 + s.say.length * 0.13, 2, 5));
-        skitSayUntil = skit.t + (s.sec ?? 3.4) * 0.78;
+        skitSayUntil = skit.t + skitTalkSpan(s.say, s.sec ?? 3.4);
       } else {
         skitSayUntil = skit.t;   // 这句没台词（「……」「（嚼嚼嚼）」之外的纯动作行）→ 闭嘴
       }
@@ -1649,6 +1649,24 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 摸满 30 秒的融化：同一段表演 + 爱心眼
     startLayerClip(mood === 'melt' && peak >= 30 ? MOOD_CLIPS.melt30 : MOOD_CLIPS[mood]);
     audit('rua-after peak=' + peak.toFixed(1) + ' → ' + mood);
+  }
+
+  /** 这句台词真正要说多久：按**字数**算（中文约 5.5 字/秒），标点只占一点停顿。
+   *  以前直接用 `sec * 0.78`，所以「……」这种没字的一行也会读 2 秒、
+   *  字念完了嘴还在动（用户 2026-11-23 反馈）。 */
+  function skitTalkSpan(text, sec) {
+    let chars = 0, pauses = 0;
+    for (const ch of text) {
+      if (/[\u4e00-\u9fa5A-Za-z0-9]/.test(ch)) chars++;
+      else if (/[，、；：]/.test(ch)) pauses += .22;
+      else if (/[。！？]/.test(ch)) pauses += .3;
+      else if (ch === '…') pauses += .45;
+    }
+    // 哼唱行（♪♬，没有字）按整句时长张嘴 —— 她在哼，不是不说话
+    if (/[♪♬]/.test(text)) return Math.min(sec ?? 3, (sec ?? 3) * .8);
+    // 整句一个字都没有（「……」这种）→ 只动 0.2 秒就闭嘴，不能按标点的停顿算
+    if (!chars) return .2;
+    return Math.max(.45, Math.min(sec ?? 99, chars / 5.5 + pauses));
   }
 
   /** 假口型：只在这句台词的时间里动嘴（两句之间的停顿闭嘴）。两条正弦交叉，像在念但没声音。 */
