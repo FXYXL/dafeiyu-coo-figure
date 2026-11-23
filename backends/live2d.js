@@ -1578,8 +1578,25 @@ export async function createLive2DBody(base, opts, entry, kit) {
   /** kit 的 doWord 入口。组合词在这里展开成一串基础词，同一帧各走各的通道；
    *  寿命（bornS/bornT）与气泡顶替按**组合词本身**（group）记，不按展开出来的基础词 ——
    *  否则「感动」的四个零件会被当成四个独立词，各活各的、各被顶替各的。 */
+  /** 摸后 mood 正在演（含松手后的空档）时，这些参数归 clip 独占 —— 见下面 actWord 的守卫 */
+  const CLIP_OWNED = new Set(['AngleX', 'AngleY', 'AngleZ', 'LeanInput', 'EyeSmile', 'ParamMouthForm',
+    'BrowInnerUp', 'MouthPressLipOpen', 'ParamEyeBallX', 'ParamEyeBallY', 'PositionX', 'PositionY', 'PositionZ']);
+  const wordTouchesClip = (w) => {
+    const def = paramActs[w];
+    if (!def) return false;
+    const ids = [...(def.params ?? []).map((q) => resolveId(q.id)), ...(def.keys ?? []).map((q) => resolveId(q.id))];
+    return ids.some((id) => CLIP_OWNED.has(id));
+  };
   function actWord(w, fromFace, o) {
     if (w === 'skit') return startSkit();
+    // 摸后 mood 在演的时候，歪头/笑眼/前倾这类词一律让路：
+    // 她收到「摸头」事件后会自己说一句话，那句话带的〔歪头〕会把头抢过去，
+    // 看起来就是「摸后动作完全没生效，只歪了一下头」（用户 2026-11-23 实测）。
+    // 他们的等价物是 Tick() 里的 `if (... || Touching || mood != null) return;`。
+    if (clipAlive() && !o?.force && wordTouchesClip(w)) {
+      audit('word-drop ' + w + '（摸后 mood 在演，参数归它）');
+      return false;
+    }
     stopSkit('word');   // 任何新词都打断彩蛋
     lastWordAt = clockT;
     // face 联动词（blush/tears/sweat/heart-eyes）的退场：下一个任何词触发就让位。
@@ -1974,6 +1991,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
   // 所以「手放下 / 前倾回正 / 表情归零」在同一个小数点发生，不再靠三处代码各自收尾。
   // delay：他们松手后有 1.5 秒空档（手走了、头回正、脸红还在），这段只等，不写任何参数。
   const clipList = [];
+  const debugOverrides = new Map();   // 测试用：每帧最后强写（harness ?sp=）
   let clipHandHold = false;   // stepClips 正在调 gesture.on/off：这段里生出来的通道条目要活到 clip 结束
   const MOOD_CLIPS = {};
   for (const [id, d] of Object.entries(RUA_MOODS)) {
@@ -2077,6 +2095,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
         clipList.splice(n, 1);
       }
     }
+    for (const [id, v] of debugOverrides) setParamByName(id, v);
   }
 
   function applyParamActs(frame) {
@@ -2382,10 +2401,13 @@ export async function createLive2DBody(base, opts, entry, kit) {
       // 所以这条**不乘 ruaW** —— 乘了就是「一松手 0.35 秒就直回去」（用户实测）。
       // mood 播放器是后写的，会盖住这里的值，不需要额外判断。
       // clip 演的时候前倾归 clip（sets/keys 里有那条 -17）；只有空档期和没 clip 时才由锁存写
-      if (!clipActive() && ruaMeltHold > 0.001 && ruaLeanK > 0.002) writeRole('lean', -17 * ruaMeltHold * ruaLeanK);
       if (sec >= 8) { writeRole('browY', 0.5 * ruaW); writeRole('browAngle', 0.3 * ruaW); }
       else if (sec >= 3) { writeRole('browY', 0.2 * ruaW); }
     }
+    // 前倾锁存**不能**放在 ruaW 里：ruaW 松手 0.35 秒就归零，之后这行再也不执行，
+    // 基准姿势把 lean 写回 0 —— 这就是「融化一停手就直回去」。
+    // 他们的 KeepLean 是让 hold 一直挂着，直到摸后 mood 的 set 接上（Behavior.cs:66）。
+    if (!clipActive() && ruaMeltHold > 0.001 && ruaLeanK > 0.002) writeRole('lean', -17 * ruaMeltHold * ruaLeanK);
     // ---------- 摸后情绪（他们 PlayAfterStroke 的四个 mood，参数原样）----------
     // 我们之前走 applyOneWord('eye-squeeze') —— 那些词在形象包里根本不存在，等于什么都没发生
     // （用户：松手还是不会触发对应档位的动作，全没有）。
@@ -2827,6 +2849,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
     get faceBox() { return headFaceBoxes().face; },
     // 调试/测试：直接演一条摸后反应（不经过命中判定）
     playMood(id) { return !!startLayerClip(MOOD_CLIPS[id]); },
+    // 测试用：每帧最后强写一个参数（量「这个参数到底动不动模型」）
+    debugSetParam(id, v) { if (v === null) debugOverrides.delete(id); else debugOverrides.set(id, v); },
     // 调试/测试：走真实的「松手 → 按峰值档位选 mood」分支（不经过 kit 的命中）
     debugRuaAfter(sec) { ruaPeak = sec; ruaPrevOn = true; stepRuaState({}); return clipList.at(-1)?.def.mood ?? null; },
     get clipDebug() { return clipList.map((c) => ({ mood: c.def.mood, age: +(clockT - c.t0 - (c.def.delay ?? 0)).toFixed(2), dur: c.def.dur })); },
