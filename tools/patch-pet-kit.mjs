@@ -1063,14 +1063,11 @@ function toneOf(text: string): string {
       // 4)（已删）原来这里把落地 crash 事件整个掐掉，理由是「rua 后 3 秒不算摔晕」。
       // 2026-11-23 查明刷屏真因是控制台 touch 渲染器的 default 分支（见 chat 的 ruaChat 补丁），
       // 跟 crash 事件无关；这条抑制只会让「真被甩出去」也不再告诉她。恢复上游原样，不再改。
-      // 5) 松手后 6 秒不做闲时动作（摸后 mood 要演 3.4~6 秒）
+      // 5) 松手后按档位压住闲时动作：摸后 mood 最长 6 秒（融化）+ 0.8 秒空档。
+      //    之前固定 +6 秒，融化档最后那一秒会被闲时动作插进来抢表情（用户实测「一松手就做别的」）。
       const a5 = "    ruaDown = false;\n    const held = Math.round(ruaMax * 10) / 10;";
       if (!out.includes(a5)) throw new Error('ruaTune：endRua 锚点未命中');
-      out = out.replace(a5, "    ruaDown = false;\n    // 松手后 6 秒不做闲时动作：摸后 mood 还在演，插动作会抢表情\n    pet.idleHoldUntil = T + 6;\n    const held = Math.round(ruaMax * 10) / 10;");
-      // 6) decide 尊重冷却
-      const a6 = "  function decide() {";
-      if (!out.includes(a6)) throw new Error('ruaTune：decide 锚点未命中');
-      out = out.replace(a6, a6 + "\n    if (T < (pet.idleHoldUntil ?? 0)) return;   // rua 收尾期：摸后 mood 还在演");
+      out = out.replace(a5, "    ruaDown = false;\n    const held = Math.round(ruaMax * 10) / 10;\n    // 摸后 mood 还在演：按档位压住闲时动作（融化 6s+0.8s 空档，留一点余量）\n    pet.idleHoldUntil = T + (ruaMelted ? 9 : held >= 8 ? 7.6 : held >= 3 ? 6.8 : 5.5);");
       return out;
     },
   },
