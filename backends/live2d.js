@@ -755,6 +755,11 @@ export async function createLive2DBody(base, opts, entry, kit) {
     if (!a?.exit?.keys?.length || !a.keys?.length) continue;
     const offset = (a.dur ?? 4) * 0.72;
     const edur = a.exit.dur ?? 1.25;
+    // 2026-11-23：合并前留一份原样。clip 自带的手型要「抬起来一直举着，等 clip 说放」，
+    // 不能用合并后的时间轴（那套 4 秒就自己放下了）；relaxChannels 也要能拿到收手段。
+    a.raiseKeys = a.keys.slice();
+    a.exitKeys = a.exit.keys.map((f) => ({ ...f }));
+    a.exitDur = edur;
     a.keys = a.keys.concat(a.exit.keys.map((f) => ({ ...f, t: (f.t ?? 0) + offset })));
     a.dur = offset + edur;
     delete a.exit;
@@ -770,7 +775,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
   // rua 档位状态（2026-11-22 重做）：峰值时长、猛摸计时/瞪眼冷却、松手检测
   let ruaPeak = 0, ruaFastT = 0, ruaStartleAt = -9, ruaStartle = -9, ruaPrevOn = false;
   // 2026-11-22：猛摸瞪眼的包络、松手后的"摸后"情绪（他们 PlayAfterStroke 的 mood）、上次结束时刻
-  let ruaStartleK = 0, ruaAfter = null, ruaLastEnd = -9;
+  let ruaStartleK = 0, ruaLastEnd = -9;
   /** 脸红强度 0→1 的缓动（他们「脸红」是表情层，有淡入；我们直接写 key7=1 是硬切，红得很突然） */
   let blushK = 0, lastBlushAt = -9;
   /** rua 表情的淡出权重：摸时 1，松手后 0.35 秒时间常数淡到 0。
@@ -795,43 +800,52 @@ export async function createLive2DBody(base, opts, entry, kit) {
    *    Gesture     → 手型切换（默认手切举手 = 抬手到胸口）
    *  我们的模型没有 exp 层，「脸红」就是贴图参数 key7 → exps 里写逻辑名，运行时映射成 key7。 */
   const RUA_MOODS = {
+    // 数据全部逐字对 Behavior.cs:25 的 Moods 表（2026-11-23 重新核过一遍）。
+    // 他们的时间轴规则：所有 keys 的最后一帧正好落在 Seconds，Seconds 到点 EndMood：
+    //   exp 关（0.5s 权重淡出）+ clear 每个 set（0.15s 时间常数）+ motion 收手（同一个 tick）。
+    // 所以「一起收」是他们数据格式逼出来的，不是调出来的。
     lost: {   // 摸后失落（按了 3 秒以内）
-      dur: 3.4,
+      dur: 3.4, delay: 1.5,
       exps: ['脸红'],
       sets: { BrowInnerUp: .7, ParamMouthPressLipOpen: .3, ParamMouthForm: -.1, ParamEyeBallY: -.4, FaceAngleY: -5, FaceAngleZ: 4 },
-      keys: { FaceAngleZ: [[0, 0], [.5, 3], [1.3, -2], [2.1, 3], [3.4, 0]] },
+      keys: {
+        FaceAngleZ: [[0, 0], [.5, 3], [1.3, -2], [2.1, 3], [3.4, 0]],
+        ViewSquash: [[0, 0], [.3, .01], [2.8, .01], [3.4, 0]],
+      },
     },
-    reluctant: {   // 摸后不舍（3~8 秒）
-      dur: 4,
+    reluctant: {   // 摸后不舍（3~8 秒）—— 他们没有手型，之前我们多抬了一次手
+      dur: 4, delay: 1.5,
       exps: ['脸红'],
       sets: { EyeSmile: .45, BrowInnerUp: .9, ParamMouthPressLipOpen: .5, ParamMouthForm: .2, ParamEyeBallY: -.45, FaceAngleY: -8, FaceAngleZ: 7 },
-      keys: { LeanInput: [[0, 0], [.5, -9], [3.3, -8], [4, 0]], FaceAngleZ: [[0, 0], [.7, 3], [1.5, -3], [2.3, 3], [3.1, -2], [4, 0]] },
-      hand: true,
+      keys: {
+        LeanInput: [[0, 0], [.5, -9], [3.3, -8], [4, 0]],
+        FaceAngleZ: [[0, 0], [.7, 3], [1.5, -3], [2.3, 3], [3.1, -2], [4, 0]],
+        ViewSquash: [[0, 0], [.4, .02], [3.4, .02], [4, 0]],
+      },
     },
     clingy: {   // 摸后腻歪（8~20 秒）
-      dur: 4.8,
+      dur: 4.8, delay: 1.5,
       exps: ['脸红'],
       sets: { EyeSmile: .6, ParamMouthForm: 1, ParamMouthPressLipOpen: .4, BrowInnerUp: .6, FaceAngleY: -6, FaceAngleZ: 9 },
       keys: {
         LeanInput: [[0, 0], [.5, -15], [3.9, -14], [4.8, 0]],
         FaceAngleZ: [[0, 0], [.8, 3], [1.6, -3], [2.4, 3], [3.2, -3], [4, 2], [4.8, 0]],
         FaceAngleX: [[0, 0], [.8, -4], [1.8, 4], [2.8, -4], [3.8, 3], [4.8, 0]],
+        ViewSquash: [[0, 0], [.5, .03], [4.1, .03], [4.8, 0]],
       },
-      hand: true,
+      hand: true,   // 他们的 Gesture = ("默认手切举手", "举手切默认手")
     },
-    melt: {   // 摸后融化（20 秒彩蛋）
-      dur: 6,
+    melt: {   // 摸后融化（20 秒彩蛋）—— 他们只等 0.8 秒就演（PetWindow.Touch.cs:212）
+      dur: 6, delay: .8,
       exps: ['脸红'],
-      // 他们 Behavior.cs:67 的 sets 里就有 ("LeanInput", -17) —— 我搬的时候漏了。
       sets: { EyeSmile: .55, ParamMouthForm: .9, ParamMouthPressLipOpen: .35, BrowInnerUp: .5, FaceAngleY: -4, FaceAngleZ: 4, LeanInput: -17 },
       keys: {
-        // 他们原串 "0:0 .8:1 4.8:1 6:0" 是**增量**（叠加在 sets 的 -17 上）：
-        // 0→0 = -17，.8→+1 = -16，4.8 保持，6→0 仍是 -17。整段都前倾着，退出交给 mood 结束后的 clear。
-        // 之前我抄成绝对值 [[0,-17],[.8,-16],[4.8,-16],[6,0]]，等于 6 秒时硬回 0 —— 比收手（5.1s 开始、1.6s）早。
+        // 他们原串 "0:0 .8:1 4.8:1 6:0" 是**增量**（叠加在 sets 的 -17 上），整段前倾，6 秒时 clear 淡出。
         LeanInput: [[0, 0], [.8, 1], [4.8, 1], [6, 0]],
         FaceAngleZ: [[0, 0], [.8, 5], [2, -2], [3.6, 3], [6, 0]],
         FaceAngleX: [[0, 0], [.7, -3], [2.2, 2], [3.8, -2], [6, 0]],
-        EyeOpen: [[0, 0], [.2, -1], [.28, -.2], [.45, 0], [.95, -1], [1.03, -.2], [1.2, 0], [6, 0]],   // 快眨两下
+        EyeOpen: [[0, 0], [.2, -1], [.28, -.2], [.45, 0], [.95, -1], [1.03, -.2], [1.2, 0], [6, 0]],
+        ViewSquash: [[0, 0], [.6, .02], [5.2, .02], [6, 0]],
       },
       hand: true,
     },
@@ -866,7 +880,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
   const VIRTUAL_KEYS = new Set(['ViewSquash', 'ViewRoll', 'ViewX', 'ViewY']);
   /** 他们的 springK/springC：摸 150/14、松手 200/28（临界阻尼快速回正）、融化 90/9、平时 130/13 */
   function ruaKc() {
-    if (ruaAfter?.melt) return [90, 9];
+    if (clipActive('melt')) return [90, 9];
     if (ruaOnNow) return [150, 14];
     // 他们 StepStroke 里 amp 归 0 但 springK/springC 还是「摸」的 150/14
     // → 手离开头盒子那一下是**带惯性**地弹回去的。ruaW 淡出期沿用这一档。
@@ -1265,11 +1279,11 @@ export async function createLive2DBody(base, opts, entry, kit) {
     for (const [id, c] of [...channel]) {
       if (onlyHand && !isHand(c)) continue;
       const def = c.src ? paramActs[c.src] : null;
-      const frames = def?.exit?.keys?.filter((k) => k.id === id).map((k) => [k.t ?? 0, k.v ?? 0]);
+      const frames = (def?.exit?.keys ?? def?.exitKeys)?.filter((k) => k.id === id).map((k) => [k.t ?? 0, k.v ?? 0]);
       if (frames?.length) {
         // 转成一条轨道播收手动画（轨道是相加语义，留在 channel 里会被当成 hold 写，必须挪过去）
         channel.delete(id);
-        tracks.push({ id, kind: 'keys', frames, t0: clockT, dur: def.exit.dur ?? 1.25, post: false, src: c.src, bornS: sentenceCount, bornT: clockT });
+        tracks.push({ id, kind: 'keys', frames, t0: clockT, dur: def.exit?.dur ?? def.exitDur ?? 1.25, post: false, src: c.src, bornS: sentenceCount, bornT: clockT });
         continue;
       }
       if (c.kind !== 'static' && c.to === undefined) { toDelete.push(id); continue; }
@@ -1282,9 +1296,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
       const c = tracks[n];
       if (onlyHand && !isHand(c)) continue;
       const def = c.src ? paramActs[c.src] : null;
-      const frames = def?.exit?.keys?.filter((k) => k.id === c.id).map((k) => [k.t ?? 0, k.v ?? 0]);
+      const frames = (def?.exit?.keys ?? def?.exitKeys)?.filter((k) => k.id === c.id).map((k) => [k.t ?? 0, k.v ?? 0]);
       if (frames?.length) {
-        c.kind = 'keys'; c.frames = frames; c.t0 = clockT; c.dur = def.exit.dur ?? 1.25; c.eyeLid = isLidParam(c.id);
+        c.kind = 'keys'; c.frames = frames; c.t0 = clockT; c.dur = def.exit?.dur ?? def.exitDur ?? 1.25; c.eyeLid = isLidParam(c.id);
       } else {
         tracks.splice(n, 1);
       }
@@ -1515,7 +1529,12 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 另加 1.2 秒保护：实测一次 12 秒的 rua 触发了 6 次（kit 的 rua 中间被清了几次），
     // 每次只剩 peak 3~5 秒，档位自然全错。
     const on = !!frame.rua;
-    if (on) { ruaPeak = Math.max(ruaPeak, frame.rua?.seconds ?? 0); ruaPrevOn = true; return; }
+    if (on) {
+      ruaPeak = Math.max(ruaPeak, frame.rua?.seconds ?? 0);
+      if (!ruaPrevOn) stopMoodClips();   // 新的一轮摸头：上一轮没演完的摸后反应直接撤
+      ruaPrevOn = true;
+      return;
+    }
     if (!ruaPrevOn) return;
     ruaPrevOn = false;
     // 2026-11-22：原来这里有个「1.2 秒内不重复结算」的保护，结果 rua 一结束就 return，
@@ -1530,7 +1549,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 他们松手后**不是马上**动情：EndStroke 里 afterStrokeAt = UtcNow + 1.5s，
     // 这 1.5 秒只有「头回正 + 脸红还在」，之后 PlayAfterStroke 才播 mood。
     // 之前我们 t 从 0 开始，松手瞬间就演，观感和他们对不上（用户：一松手就清零/立刻变）。
-    ruaAfter = { mood, def: RUA_MOODS[mood], t: -1.5, melt: mood === 'melt', hand: false, handOff: false };
+    startLayerClip(MOOD_CLIPS[mood]);
     audit('rua-after peak=' + peak.toFixed(1) + ' → ' + mood);
   }
 
@@ -1676,7 +1695,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
         : f0 + ((p.to ?? 0) - f0) * effScale;
       // p.in：单个参数可以自己定淡入时长（「放下手」那种要慢慢收的手势用）——
       // 统一 min(0.45, dur*0.2) 对它是瞬间清零，手就「啪」一下掉了
-      channel.set(p.id, { kind: 'hold', lid, smile, from: lid || smile ? 0 : f0, to: mir(p.id, to), t0: now, dur, in: p.in ?? inT, out: outT, keep: !!(def.state || def.keep), faceLinked: !!fromFace, emo, bornS: sentenceCount, bornT: clockT, src: w, group: ctx.group, skit: ctx.skit, life: life ?? undefined });
+      channel.set(p.id, { kind: 'hold', lid, smile, from: lid || smile ? 0 : f0, to: mir(p.id, to), t0: now, dur: clipHandHold ? 1e9 : dur, in: p.in ?? inT, out: clipHandHold ? 0 : outT, keep: !!(def.state || def.keep), faceLinked: !!fromFace, clipHold: clipHandHold, emo, bornS: sentenceCount, bornT: clockT, src: w, group: ctx.group, skit: ctx.skit, life: life ?? undefined });
     }
     // 波形动作（点头、摇头、甩草…）：正弦摆动叠在通道上。
     // 不支持这一种的话，点头永远只能走旧路，也就永远不能和别的东西叠加。
@@ -1708,7 +1727,11 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 比正弦强在能做到"过冲一点再落回来""点一下、停、再点一下"——
     // 正弦两端必然对称，所以永远是钟摆感，做不出真人的节奏。
     // keysPost：物理输出参数（胸腔 Z 等）的关键帧——写早了会被物理算回，由 applyChannelPost 收尾。
-    for (const [keyArr, post] of [[def.keys, false], [def.keysPost, true]]) {
+    // clip 自带的手型：只播抬起段，末尾挂一个很远的保持帧，什么时候放由 clip 说（gesture.off）
+    const clipKeys = clipHandHold && def.raiseKeys
+      ? def.raiseKeys.concat(def.raiseKeys.map((f) => ({ ...f, t: 1e9 })))
+      : null;
+    for (const [keyArr, post] of [[clipKeys ?? def.keys, false], [def.keysPost, true]]) {
       if (!keyArr?.length) continue;
       const byId = new Map();
       for (const f of keyArr) {
@@ -1723,7 +1746,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
         for (let r = 0; r < mod.repeat; r++) {
           for (const [t, v] of frames) out.push([(r * span + t) * mod.pace, mir(id, v) * effScale]);
         }
-        tracks.push({ id, kind: 'keys', frames: out, t0: now, dur, emo, post, eyeLid: isLidParam(id), bornS: sentenceCount, bornT: clockT, src: w, group: ctx.group, skit: ctx.skit });
+        tracks.push({ id, kind: 'keys', frames: out, t0: now, dur: clipHandHold ? 1e9 : dur, emo, post, eyeLid: isLidParam(id), bornS: sentenceCount, bornT: clockT, src: w, group: ctx.group, skit: ctx.skit });
       }
     }
     audit('write ' + w);
@@ -1772,6 +1795,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
   /** 保持型条目的寿命闸门：1 = 还活着，0 = 该退场了（返回 0 时调用处删条目）。
    *  自动放松：说话语境跟 2 句或说完话 2 秒，闲置语境限时（默认 3 秒）。 */
   function lifeGate(c) {
+    // clip 自带的手型（chest-hand 这类）：活到 clip 结束，由 gesture.off 统一撤——不能按句子/闲置寿命先死
+    if (c.clipHold && clipList.some((x) => x.def.gesture && !x.handOff)) return 1;
     // 自动放松（2.6 改造）：寿命按语境分——
     //   说话语境（最近 30 秒说过话）：跟句 2 句 或 说完话 2 秒，先到先退
     //   闲置语境（30 秒没说话，随机动作触发的）：限时 3 秒（对齐他们 mood.Seconds）
@@ -1929,6 +1954,99 @@ export async function createLive2DBody(base, opts, entry, kit) {
     }
   }
 
+  // ---------- Layer：一段表演（clip）----------
+  // 一条 clip = 常量 sets + 每参数关键帧 keys + 手型 on/off + 时长 dur，全部按同一条 age 采样。
+  // 所以「手放下 / 前倾回正 / 表情归零」在同一个小数点发生，不再靠三处代码各自收尾。
+  // delay：他们松手后有 1.5 秒空档（手走了、头回正、脸红还在），这段只等，不写任何参数。
+  const clipList = [];
+  let clipHandHold = false;   // stepClips 正在调 gesture.on/off：这段里生出来的通道条目要活到 clip 结束
+  const MOOD_CLIPS = {};
+  for (const [id, d] of Object.entries(RUA_MOODS)) {
+    MOOD_CLIPS[id] = {
+      // delay：他们松手后先等弹簧回稳再演（普通 1.5s，融化 0.8s，PetWindow.Touch.cs:212/233）
+      mood: id, delay: d.delay ?? 1.5, dur: d.dur,
+      exprs: d.exps ?? [], sets: d.sets, keys: d.keys,
+      gesture: d.hand ? { on: 'chest-hand', off: 'put-hand-down' } : null,
+    };
+  }
+  function startLayerClip(def) {
+    if (!def) return null;
+    // 摸后反应开始后，前倾完全交给 clip（sets/keys 里有 -17 那条）：
+    // 旧的 ruaMeltHold 锁存如果继续留着，clip 结束删条目以后它会接着写 -17*ruaLeanK，
+    // 把人又拽回前倾再慢慢松——「回正以后又倒回去」就是这么来的。
+    if (def.mood) ruaMeltHold = 0;
+    const c = { def, t0: clockT, hand: false, handOff: false, w: 0, lastT: clockT };
+    clipList.push(c);
+    return c;
+  }
+  const clipActive = (mood) => clipList.some((c) => (!mood || c.def.mood === mood) && clockT - c.t0 - (c.def.delay ?? 0) < c.def.dur);
+  function stopMoodClips() {
+    for (let i = clipList.length - 1; i >= 0; i--) if (clipList[i].def.mood) clipList.splice(i, 1);
+  }
+  function stepClips(t) {
+    if (!clipList.length) return;
+    for (let n = clipList.length - 1; n >= 0; n--) {
+      const c = clipList[n], d = c.def;
+      const age = t - c.t0 - (d.delay ?? 0);
+      if (age < 0) continue;   // 他们松手后先等弹簧回稳（1.5s / 融化 0.8s），这段什么都不写
+
+      // sets（他们叫 Parameters）的权重：和 main.cpp:549 的 Hold 一模一样 ——
+      //   weight += (on ? 1 : 0 - weight) * (1 - exp(-dt / 0.15))
+      // clear 之后他们还会留 0.7 秒把这个权重衰到 0 才 erase，所以我们也不能 dur 一到就整条删。
+      const dt = Math.min(.1, Math.max(0, t - c.lastT));
+      c.lastT = t;
+      const playing = age < d.dur;
+      c.w = (c.w ?? 0) + ((playing ? 1 : 0) - (c.w ?? 0)) * (1 - Math.exp(-dt / 0.15));
+
+      // 手型：clip 开始抬起来；结束前 exitDur 秒开始放，落地时刻和身体回正同一帧。
+      // （他们 EndMood 是 motion Off 和 clear 同一个 tick；我们的收手是一段 1.05s 的显式动画，
+      //   不往前挪就会「人已经站直了手还举着」）
+      if (d.gesture && !c.hand) {
+        c.hand = true;
+        pendingMod = { scale: 1, pace: 1, repeat: 1, explicit: true };
+        dirSide = 1;
+        clipHandHold = true;
+        try { applyOneWord(d.gesture.on, null, {}, {}); } finally { clipHandHold = false; }
+      }
+      const onAct = d.gesture ? paramActs[d.gesture.on] : null;
+      const exitDur = onAct?.exit?.dur ?? onAct?.exitDur ?? 1.05;
+      if (d.gesture && !c.handOff && age >= d.dur - exitDur) {
+        c.handOff = true;
+        pendingMod = { scale: 1, pace: 1, repeat: 1, explicit: true };
+        dirSide = 1;
+        clipHandHold = true;
+        try { applyOneWord(d.gesture.off, null, {}, {}); } finally { clipHandHold = false; }
+        // 收手这一刻，clip 自己抬起来的手必须立刻让位（否则它每帧还在写 Movement2=1，收手动画被盖回去）
+        for (const [id, ch] of [...channel]) if (ch.clipHold) channel.delete(id);
+      }
+
+      // 参数合成：他们的语义是「set 按住 + anim 叠加」，同一个参数两边都有时是**相加**，
+      // 不是后写的盖掉前写的（FaceAngleZ 就是这种：set 4 + 关键帧 ±3）。
+      if (playing || c.w > .004) {
+        const acc = {};
+        if (c.w > .004) for (const [k, v] of Object.entries(d.sets ?? {})) acc[k] = v * c.w;
+        if (playing) {
+          for (const [k, frames] of Object.entries(d.keys ?? {})) {
+            acc[k] = (acc[k] ?? 0) + sampleKeys(frames, age);
+          }
+        }
+        for (const [k, v] of Object.entries(acc)) {
+          if (k === 'EyeOpen') {   // EyeOpen 是乘数：负数 = 额外闭合（melt 的快眨两下）
+            for (const id of ['ParamEyeLOpen', 'ParamEyeROpen']) setParamByName(id, clamp(1 + v, 0, 1));
+            continue;
+          }
+          if (VIRTUAL_KEYS.has(k)) { virtualParams.set(k, { v, t }); continue; }
+          setParamByName(resolveId(k), v);
+        }
+      }
+
+      if (!playing && c.w <= .004) {
+        if (d.mood) ruaSecHold = 0;
+        clipList.splice(n, 1);
+      }
+    }
+  }
+
   function applyParamActs(frame) {
     const g = frame?.gesture;
     const act = g && paramActs[g.kind];
@@ -2065,7 +2183,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       ruaW += (0 - ruaW) * (1 - Math.exp(-dt / 0.35));
     } else ruaW = 0;
     // 前倾单独一条：摸的时候和 mood 期间都保持，mood 演完才 0.6 秒褪掉
-    if (frame.rua?.on || ruaAfter) ruaLeanK = 1;
+    if (frame.rua?.on || clipActive()) ruaLeanK = 1;
     // 前倾的退出时长**跟收手动作为准**，不拍数字：他们 mood 结束时 clear LeanInput 和
     // PutHandDown 是同时发生的，所以我们用 put-hand-down 自己的 dur（1.6 秒）当时间常数。
     else if (ruaLeanK > 0.002) {
@@ -2188,7 +2306,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
     if (ruaOn && !ruaWasOn) {
       relaxChannels();
       // 上一次的「摸后」还在演的话清掉：不然一摸上来就带着上次的脸红和表情
-      if (ruaAfter) { ruaAfter = null; for (const k of VIRTUAL_KEYS) virtualParams.delete(k); }
+      if (clipList.length) { clipList.length = 0; for (const k of VIRTUAL_KEYS) virtualParams.delete(k); }
       audit('rua-interrupt 打断当前动作');
     }
     ruaWasOn = ruaOn;
@@ -2674,6 +2792,11 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 头/脸的实时盒（模型坐标）+ 部件树诊断，给调试和 kit 读
     get headBox() { return headFaceBoxes().head; },
     get faceBox() { return headFaceBoxes().face; },
+    // 调试/测试：直接演一条摸后反应（不经过命中判定）
+    playMood(id) { return !!startLayerClip(MOOD_CLIPS[id]); },
+    // 调试/测试：走真实的「松手 → 按峰值档位选 mood」分支（不经过 kit 的命中）
+    debugRuaAfter(sec) { ruaPeak = sec; ruaPrevOn = true; stepRuaState({}); return clipList.at(-1)?.def.mood ?? null; },
+    get clipDebug() { return clipList.map((c) => ({ mood: c.def.mood, age: +(clockT - c.t0 - (c.def.delay ?? 0)).toFixed(2), dur: c.def.dur })); },
     get partBoxDebug() { return { ...headBoxDbg, head: headBoxModel(), face: faceBoxModel(), extent: currentExtent() }; },
     // 彩蛋台词：交给页面临时显示一句话（页面侧不排队、不发给 World）。
     // 她正在说话/有问答挂着时页面自己忽略，所以不会和对话抢气泡。
@@ -2989,11 +3112,11 @@ export async function createLive2DBody(base, opts, entry, kit) {
         {
           // 他们：摸到 3 秒 PlayAfterStroke 前是 Face(NoSets, ["脸红"])，mood 里 Expressions 又带 ["脸红"]
           // → 脸红从 3 秒起一直挂到**摸后动作演完**才退，不是松手就退。
-          const _wantBlush = (_ruaOn && _secR >= 3) || !!ruaAfter ? 1 : 0;
+          const _wantBlush = (_ruaOn && _secR >= 3) || clipActive() ? 1 : 0;
           blushK += (_wantBlush - blushK) * (1 - Math.exp(-dt / (_wantBlush ? 0.5 : 1.2)));
           if (Date.now() - (globalThis.__blushDbg ?? 0) > 400) {
             globalThis.__blushDbg = Date.now();
-            audit('blush want=' + _wantBlush + ' k=' + blushK.toFixed(3) + ' rua=' + _ruaOn + ' sec=' + _secR.toFixed(1) + ' after=' + (ruaAfter?.mood ?? '-'));
+            audit('blush want=' + _wantBlush + ' k=' + blushK.toFixed(3) + ' rua=' + _ruaOn + ' sec=' + _secR.toFixed(1) + ' after=' + (clipList[0]?.def.mood ?? '-'));
           }
           if (blushK > 0.003) {
             const _k7 = paramIndex.get('key7');
@@ -3012,62 +3135,6 @@ export async function createLive2DBody(base, opts, entry, kit) {
       // ---------- 摸后的四个 mood（Behavior.cs:59-67）----------
       // 全部写在这里（saveParameters 之后、物理之前）：直写参数不会进基准，
       // 播完下一帧 loadParameters 就恢复（写进 applyFrame 会永久残留）。
-      if (ruaAfter) {
-        const A = ruaAfter, D = A.def;
-        A.t += dt;
-        if (A.t >= D.dur) {
-          ruaAfter = null;
-          ruaSecHold = 0;
-          // 他们 EndMood：Gesture.Off（举手切默认手）和前倾的 clear 同时发生。
-          // 之前手在 dur-0.9 就提前收，前倾还在演、手已经放到一半（用户：抚胸手没放下就回去了）。
-          if (D.hand) {
-            pendingMod = { scale: 1, pace: 1, repeat: 1, explicit: true };
-            dirSide = 1;
-            applyOneWord('put-hand-down', null, {}, {});
-          }
-          ruaLeanK = 1;   // 从这里开始按 put-hand-down 的时长曲线退出
-          for (const k of VIRTUAL_KEYS) virtualParams.delete(k);   // 压扁/滚转别残留
-        }
-        else if (A.t < 0) {
-          // 松手后的 1.5 秒空档期：他们这期间是 Face(NoSets, ["脸红"]) + AimAllZero，
-          // 也就是「手走了、头回正、脸红还在」，mood 还没开始。这里什么都不写。
-        }
-        else {
-          const t = A.t;
-          const sp = (id, v) => { const _i = paramIndex.get(resolveId(id)); if (_i !== undefined) model._model.setParameterValueByIndex(_i, v); };
-          // 他们的名字 → 我们的名字。不过这张表的话 FaceAngleY/Z（低头、歪头）和
-          // ParamMouthPressLipOpen（抿嘴）会被 paramIndex 判成不存在、静默丢掉。
-          for (const [k, v] of Object.entries(D.sets)) sp(resolveId(k), v);
-          // 诊断（临时）：mood 开始时打一行「我到底写了什么」，用来核对表情有没有真的进模型
-          if (A.t < dt * 1.5) {
-            const gv = (id) => { const i = paramIndex.get(id); return i === undefined ? null : +model._model.getParameterValueByIndex(i).toFixed(3); };
-            audit('mood-start ' + A.mood + ' exps=' + JSON.stringify(D.exps ?? []) + ' → EyeSmile=' + gv('EyeSmile') + ' MouthForm=' + gv('ParamMouthForm') + ' eL=' + gv('ParamEyeLOpen') + ' AngleY=' + gv('AngleY') + ' AngleZ=' + gv('AngleZ') + ' Brow=' + gv('BrowInnerUp') + ' Lip=' + gv('MouthPressLipOpen') + ' BallY=' + gv('ParamEyeBallY'));
-          }
-          let eyeAdd = 0;
-          for (const [k, fps] of Object.entries(D.keys)) {
-            const v = moodAt(fps, t);
-            if (k === 'EyeOpen') { eyeAdd = v; continue; }         // 负数 = 额外闭合
-            // ViewSquash / ViewRoll / ViewX / ViewY：模型里没有这些参数，但 figure 早就把它们
-            // 当"虚拟参数"接给 kit 了（squash()/groupTilt()/groupMove() → kit 的挤压弹簧、
-            // 整组旋转、整组平移）。叹气的压扁走的就是这条，所以摸后的压扁直接写虚拟表。
-            if (VIRTUAL_KEYS.has(k)) { virtualParams.set(k, { v: (D.sets[k] ?? 0) + v, t: clockT }); continue; }
-            const arg = resolveId(k);
-            // **keys 是叠加在 sets 上的增量**，不是绝对值 —— 他们 Behavior.cs 的注释：
-            // 「前倾：松手时按住 -17，表情里用动画加 0→+1 慢慢回到 -16」。
-            // 所以 FaceAngleZ 的 0:3 / 1.6:-3 是「在 9 度上再晃 ±3」，LeanInput 的 .8:1 是「-17+1」。
-            if (arg) sp(arg, (D.sets[k] ?? 0) + v);
-          }
-          if (eyeAdd) {   // melt 的快眨两下
-            const o = clamp(1 + eyeAdd, 0, 1);
-            for (const id of ['ParamEyeLOpen', 'ParamEyeROpen']) sp(id, o);
-          }
-          // 脸红由 Lids 段的 _wantBlush（ruaAfter 非空即保持）统一处理
-          // 手抬到胸口（他们 HandToChest「默认手切举手」），结束前 0.9 秒放下
-          // 他们 Gesture 的语义：Show(mood) 时抬手，**EndMood 才放下**（不是演出中途提前 0.9 秒收）。
-          // 之前提前收手 → 前倾还在、手已经放到一半（用户：「抚胸手都没放下就回去了」）。
-          if (D.hand && !A.hand) { A.hand = true; applyOneWord('chest-hand', null, {}, {}); }
-        }
-      }
 
       // 打点：眨眼只在眨时打（0.05 秒一次，精确测时长）+ 每秒打身体/呼吸
       {
@@ -3092,6 +3159,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       applyActPostWaves(clockT);
       applyChannelPost(clockT);   // 通道里标了 post 的那批（腰/胯）：必须是物理之后当帧最终值
       try { model._pose?.updateParameters(model._model, dt); } catch { /* 姿势失败不致命 */ }
+      stepClips(clockT);   // Layer：一段表演（含 rua 摸后四档），写在 physics/pose 之后，谁也盖不掉
       model._model.update();
       render();
 
