@@ -1979,7 +1979,13 @@ export async function createLive2DBody(base, opts, entry, kit) {
     clipList.push(c);
     return c;
   }
-  const clipActive = (mood) => clipList.some((c) => (!mood || c.def.mood === mood) && clockT - c.t0 - (c.def.delay ?? 0) < c.def.dur);
+  // 「正在演」= 延迟已经过去、还没到 dur（弹簧/前倾锁存看这个）
+  const clipActive = (mood) => clipList.some((c) => {
+    const a = clockT - c.t0 - (c.def.delay ?? 0);
+    return (!mood || c.def.mood === mood) && a >= 0 && a < c.def.dur;
+  });
+  // 「这条 clip 还在」（含松手后 1.5s 的空档）—— 脸红要跨过这段，不能一松手就白回去
+  const clipAlive = (mood) => clipList.some((c) => !mood || c.def.mood === mood);
   function stopMoodClips() {
     for (let i = clipList.length - 1; i >= 0; i--) if (clipList[i].def.mood) clipList.splice(i, 1);
   }
@@ -3112,7 +3118,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
         {
           // 他们：摸到 3 秒 PlayAfterStroke 前是 Face(NoSets, ["脸红"])，mood 里 Expressions 又带 ["脸红"]
           // → 脸红从 3 秒起一直挂到**摸后动作演完**才退，不是松手就退。
-          const _wantBlush = (_ruaOn && _secR >= 3) || clipActive() ? 1 : 0;
+          const _wantBlush = (_ruaOn && _secR >= 3) || clipAlive() ? 1 : 0;
           blushK += (_wantBlush - blushK) * (1 - Math.exp(-dt / (_wantBlush ? 0.5 : 1.2)));
           if (Date.now() - (globalThis.__blushDbg ?? 0) > 400) {
             globalThis.__blushDbg = Date.now();
