@@ -101,9 +101,10 @@ export default {
     { word: 'slow-sway', kind: 'act', w: 2 },
     { word: 'theater-sway-1', kind: 'act', w: 3 },   // 2026-11-22 提权：整套摇摆太少见（原来 3 小时一次）
     { word: 'theater-sway-2', kind: 'act', w: 3 },
-    // 2026-11-23：grass-hand（只举手）和 grass-play（举起+歪头逗 5.4s）重复，池子里只留完整版，
-    // 权重沿用原来 give grass-hand 的 4（手部词用户点名过要常见）。
-    { word: 'grass-play', kind: 'act', w: 4 },
+    { word: 'grass-hand', kind: 'act', w: 4, life: 4 },   // 手部词上调（用户点名难触发）
+    // 2026-11-23 备注：池子里**不要**再放 grass-play —— 「甩狗尾草」swing 已经在下面（w=2，
+    // 手臂 Param41/42 波形甩草），grass-play 是同一场景的另一种表现（举着不动+歪头逗），
+    // 只在台词里说【玩狗尾草】时用，不参与随机。
     { word: 'chest-hand', kind: 'act', w: 4, life: 4 },
     { word: 'finger-point', kind: 'act', w: 4, life: 4 },
     { word: 'swing', kind: 'act', w: 2 },
