@@ -2063,6 +2063,15 @@ export async function createLive2DBody(base, opts, entry, kit) {
         }
       }
 
+      // 打点：每 0.5 秒说一次「这条 clip 演到哪、写了什么」——实机出问题看这一行就够
+      if (Date.now() - (globalThis.__clipDbg ?? 0) > 500) {
+        globalThis.__clipDbg = Date.now();
+        const gv2 = (id) => { const i2 = paramIndex.get(id); return i2 !== undefined ? +model._model.getParameterValueByIndex(i2).toFixed(2) : null; };
+        audit('clip ' + (d.mood ?? '?') + ' age=' + age.toFixed(2) + '/' + d.dur + ' w=' + c.w.toFixed(2)
+          + ' lean=' + gv2('LeanInput') + ' az=' + gv2('AngleZ') + ' ay=' + gv2('AngleY')
+          + ' smile=' + gv2('EyeSmile') + ' brow=' + gv2('BrowInnerUp') + ' hand=' + gv2('Movement2'));
+      }
+
       if (!playing && c.w <= .004) {
         if (d.mood) { ruaSecHold = 0; ruaMeltHold = 0; }
         clipList.splice(n, 1);

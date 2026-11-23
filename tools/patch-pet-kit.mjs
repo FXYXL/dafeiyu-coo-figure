@@ -1067,8 +1067,21 @@ function toneOf(text: string): string {
       //    之前固定 +6 秒，融化档最后那一秒会被闲时动作插进来抢表情（用户实测「一松手就做别的」）。
       const a5 = "    ruaDown = false;\n    const held = Math.round(ruaMax * 10) / 10;";
       if (!out.includes(a5)) throw new Error('ruaTune：endRua 锚点未命中');
-      out = out.replace(a5, "    ruaDown = false;\n    const held = Math.round(ruaMax * 10) / 10;\n    // 摸后 mood 还在演：按档位压住闲时动作（融化 6s+0.8s 空档，留一点余量）\n    pet.idleHoldUntil = T + (ruaMelted ? 9 : held >= 8 ? 7.6 : held >= 3 ? 6.8 : 5.5);");
+      out = out.replace(a5, "    ruaDown = false;\n    const held = Math.round(ruaMax * 10) / 10;\n    // 摸后 mood 还在演：按档位压住闲时动作（融化 6s+0.8s 空档，留一点余量）\n    pet.idleHoldUntil = T + (ruaMelted ? 25 : held >= 8 ? 20 : held >= 3 ? 15 : 10);");
       return out;
+    },
+  },
+  {
+    file: 'body', id: 'squashDirect',
+    desc: '形象给的 ViewSquash 直通（他们的 renderer 直接乘矩阵）；以前并进 kit 的弹簧（k280/c14，ζ≈0.42）会过冲抖动，看着像「啪一下压扁又弹回来」',
+    detect: (s) => s.includes('const figSq = custom?.squash?.() ?? 0;'),
+    apply: (s) => {
+      const a = "    pet.sqv += (((sqT + (custom?.squash?.() ?? 0)) - pet.sq) * 280 - pet.sqv * 14) * dt;   // 2.7 整图压扁：figure 虚拟参数 ViewSquash 叠加进弹簧目标";
+      if (!s.includes(a)) throw new Error('squashDirect：弹簧锚点未命中');
+      s = s.replace(a, "    pet.sqv += ((sqT - pet.sq) * 280 - pet.sqv * 14) * dt;   // 弹簧只跟 kit 自己的 sqT（落地/跳舞）");
+      const b = "    const sx = (1 + pet.sq * .7) * (1 - .05 * pet.stretch);\n    const sy = (1 - pet.sq) * (1 + .09 * pet.stretch);";
+      if (!s.includes(b)) throw new Error('squashDirect：缩放锚点未命中');
+      return s.replace(b, "    // 形象给的压扁（ViewSquash）直通：他们的 renderer 是 bodySquash 直接乘进矩阵，不过弹簧\n    const figSq = custom?.squash?.() ?? 0;\n    const sqAll = pet.sq + figSq;\n    const sx = (1 + sqAll * .7) * (1 - .05 * pet.stretch);\n    const sy = (1 - sqAll) * (1 + .09 * pet.stretch);");
     },
   },
   {
