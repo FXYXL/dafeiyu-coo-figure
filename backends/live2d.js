@@ -95,9 +95,16 @@ export async function createLive2DBody(base, opts, entry, kit) {
   }
 
   // ---------- 画布（放 kit 的 SVG 组里） ----------
+  // 分辨率由**贴图本身**决定：先探第一张，长边 ≥4096 就当 HD（画布 2048²、贴图上限 4096），
+  // 否则维持 1024²/2048。之前两个包都封 2048，HD 的 4096×8192、8192² 全被缩成 2048，
+  // 看起来和普通包一模一样（用户：「HD 没往原画靠近」）。用尺寸判断，换包不用改代码。
+  let firstImg = null;
+  try { firstImg = await opts.loadImage(new URL(`models/${entry.id}/${entry.textures[0]}`, base)); } catch { firstImg = null; }
+  const HD_PACK = Math.max(firstImg?.naturalWidth || 0, firstImg?.naturalHeight || 0) >= 4096;
+  const CANVAS_USE = HD_PACK ? 2048 : CANVAS_PX;
   const canvas = doc.createElementNS(XHTML, 'canvas');
-  canvas.width = CANVAS_PX;
-  canvas.height = CANVAS_PX;
+  canvas.width = CANVAS_USE;
+  canvas.height = CANVAS_USE;
   canvas.style.width = '100%';
   canvas.style.height = '100%';
   canvas.style.pointerEvents = 'none';
@@ -198,7 +205,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
   // 贴图：后台加载，不阻塞 ready（8192² 在慢显卡上要几秒，kit 只等 20 秒）。
   // 尺寸兜底：包里已经缩过图（convert --max-texture），但老包 / 别人给的包可能还是 4096~8192。
   // 一张 8192² RGBA 显存 256 MB，桌宠实际只占 200 px 高——超过 maxTex 先在 2D canvas 里缩再上传。
-  const maxTex = Math.min(2048, Number(gl.getParameter(gl.MAX_TEXTURE_SIZE)) || 2048);
+  // HD 贴图放到 4096（8192² 直接上传要 256MB/张）；普通包贴图本来就 ≤2048，不受影响。
+  const maxTex = Math.min(4096, Number(gl.getParameter(gl.MAX_TEXTURE_SIZE)) || 2048);
   const isPOT = (n) => n > 0 && (n & (n - 1)) === 0;
   const shrinkForUpload = (img) => {
     const w = img.naturalWidth || img.width;
@@ -222,7 +230,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
   let texturesReady = false;
   (async () => {
     for (let i = 0; i < entry.textures.length; i++) {
-      const img = await opts.loadImage(new URL(`models/${entry.id}/${entry.textures[i]}`, base));
+      const img = i === 0 && firstImg ? firstImg : await opts.loadImage(new URL(`models/${entry.id}/${entry.textures[i]}`, base));
       const { src, w, h } = shrinkForUpload(img);
       const tex = gl.createTexture();
       gl.bindTexture(gl.TEXTURE_2D, tex);
@@ -327,6 +335,145 @@ export async function createLive2DBody(base, opts, entry, kit) {
   }
   // 常规情绪 + 模型的"重口味"表情（圈圈眼、黑脸…）。
   // 后者不挂默认情绪，只作为独立词存在，AI 主动打 <circleEyes> 才会用到。
+  // ---------- 头部/脸部包围盒（S0，2026-11-23）----------
+  // 不再用「整幅 canvas 包围盒 × 比例」推头：这张 canvas 被尾巴和头发撑宽，头心会偏右，
+  // 之前只能退回手写的 128/58 救命。改成用模型自己的部件树：
+  //   cdi3.json 里有显示名（Part99 = 头、Part15 = 脸、Part9 = 五官），moc3 的 part id 就是 cdi3 的 Id。
+  //   取「头」的整棵子树（含脸/五官/头发），每帧把它的 drawable 顶点聚合成包围盒。
+  // 这样前倾、歪头、呼吸都跟着走；换体型/换皮肤也不用重调比例。
+  // 拿不到（换皮、部件改名）就返回 null，调用处退回旧的比例盒。
+  const headBoxDbg = { build: 'pending', root: '', parts: 0, drawables: 0, names: [] };
+  let headParts = null;   // { drawables: number[], names: string[] }
+  let faceParts = null;
+  let hairParts = null;   // 后发/下侧发：只取头部高度以内那圈
+
+  async function buildPartBoxes() {
+    try {
+      const cdi = (await import(new URL(`models/${entry.id}/cdi3.js`, base))).default;
+      const nameById = new Map((cdi.Parts ?? []).map((p) => [String(p.Id), String(p.Name ?? '')]));
+      const M = model._model;
+      const n = M?.getPartCount?.() ?? 0;
+      if (!n) { headBoxDbg.build = 'no-parts-api'; return; }
+      const parents = M.getPartParentPartIndices?.() ?? [];
+      const ids = [];
+      for (let i = 0; i < n; i++) { const pid = M.getPartId(i); ids.push(String(pid?.getString ? pid.getString() : (pid ?? ''))); }
+      const pick = (names) => {
+        const roots = [];
+        for (let i = 0; i < n; i++) {
+          const name = nameById.get(ids[i]) ?? '';
+          if (names.some((k) => name.includes(k))) roots.push(i);
+        }
+        if (!roots.length) return null;
+        const set = new Set(roots);
+        for (let grew = true; grew;) {
+          grew = false;
+          for (let i = 0; i < n; i++) {
+            if (!set.has(i) && set.has(parents[i])) { set.add(i); grew = true; }
+          }
+        }
+        const drawables = [];
+        const dc = M.getDrawableCount();
+        for (let d = 0; d < dc; d++) {
+          if (set.has(M.getDrawableParentPartIndex(d))) drawables.push(d);
+        }
+        if (!drawables.length) return null;
+        const names2 = [...set].map((i) => nameById.get(ids[i]) ?? ids[i]);
+        return { drawables, partCount: set.size, names: names2, set };
+      };
+      // 「头」优先；有的模型没有头部件，就退而用 脸+五官+头发（HD 包/换皮时走这条）
+      const head = pick(['头', 'Head', '頭'])
+        ?? pick(['脸', '臉', '五官', '前发', '后发', '头发']);
+      const face = pick(['五官', '脸', '臉']);
+      // 后发/下侧发挂在身体下面，整块包围盒会垂到腰，但**贴近头的那圈头发**属于「摸头」的范围。
+      // 单独取出来，由 partBox 按头的下巴高度裁一刀，只留头部高度以内那段。
+      const hair = pick(['后发', '下侧发', '側髮', '後髮']);
+      if (hair && head?.set) {
+        hair.drawables = hair.drawables.filter((d) => !head.set.has(M.getDrawableParentPartIndex(d)));
+      }
+      headParts = head;
+      faceParts = face ?? head;
+      hairParts = hair && hair.drawables.length ? hair : null;
+      headBoxDbg.build = head ? 'ok' : 'no-part';
+      headBoxDbg.root = head ? head.names.join('/').slice(0, 60) : '';
+      headBoxDbg.parts = head?.partCount ?? 0;
+      headBoxDbg.drawables = head?.drawables.length ?? 0;
+      headBoxDbg.names = head?.names ?? [];
+      console.log('[headBox] ' + headBoxDbg.build + ' 部件=' + headBoxDbg.parts + ' drawable=' + headBoxDbg.drawables
+        + ' ' + (head ? head.names.slice(0, 8).join(',') : ''));
+    } catch (e) {
+      headBoxDbg.build = 'err:' + (e?.message ?? e);
+      console.warn('[headBox] 初始化失败，退回比例盒', e);
+    }
+  }
+  // drawable 顶点是**模型归一化坐标**（画布 ±1），extent/touchZones 用的是 logo 单位（BOX=256，原点左下）。
+  // 换算走渲染用的同一条矩阵链：projection.scale(h/w,1) * modelMatrix，再 NDC → logo。
+  function modelToLogoMatrix() {
+    const p = new CubismMatrix44();
+    p.scale(canvas.height / canvas.width, 1);
+    p.multiplyByMatrix(model._modelMatrix);
+    return p.getArray();
+  }
+  // 模型坐标的包围盒 → logo 单位（用同一矩阵映射四个角，取 min/max）
+  // clipY：只统计模型 y ≥ clipY 的顶点（后发要按头的下巴裁一刀，否则会垂到腰）
+  function partBox(parts, clipY = -Infinity) {
+    if (!parts) return null;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const d of parts.drawables) {
+      let v;
+      try { v = model._model.getDrawableVertices(d); } catch { continue; }
+      if (!v || !v.length) continue;
+      for (let i = 0; i < v.length; i += 2) {
+        const x = v[i], y = v[i + 1];
+        if (y < clipY) continue;
+        if (x < x0) x0 = x; else if (x > x1) x1 = x;
+        if (y < y0) y0 = y; else if (y > y1) y1 = y;
+      }
+    }
+    if (!(x1 > x0 && y1 > y0)) return null;
+    const a = modelToLogoMatrix();
+    let lx0 = Infinity, ly0 = Infinity, lx1 = -Infinity, ly1 = -Infinity;
+    for (const [mx, my] of [[x0, y0], [x0, y1], [x1, y0], [x1, y1]]) {
+      const nx = a[0] * mx + a[4] * my + a[12];
+      const ny = a[1] * mx + a[5] * my + a[13];
+      const lx = (nx + 1) / 2 * BOX;
+      // logo 的 y 是**从顶部往下**（kit 的 ay=256 是脚底，extent 也是这个方向），NDC 是往上，所以这里要翻
+      const ly = (1 - ny) / 2 * BOX;
+      if (lx < lx0) lx0 = lx; if (lx > lx1) lx1 = lx;
+      if (ly < ly0) ly0 = ly; if (ly > ly1) ly1 = ly;
+    }
+    return {
+      x: (lx0 + lx1) / 2, y: (ly0 + ly1) / 2, rx: (lx1 - lx0) / 2, ry: (ly1 - ly0) / 2,
+      x0: lx0, y0: ly0, x1: lx1, y1: ly1,
+      model: { x0, y0, x1, y1 },
+    };
+  }
+  // 头盒 = 头部件子树 ∪（后发/下侧发里、头部高度以内的那段）
+  function headBoxModel() {
+    const bone = partBox(headParts);
+    if (!bone) return null;
+    if (!hairParts) return bone;
+    const mh = bone.model.y1 - bone.model.y0;
+    const hair = partBox(hairParts, bone.model.y0 - mh * 0.12);
+    if (!hair) return bone;
+    const x0 = Math.min(bone.x0, hair.x0), x1 = Math.max(bone.x1, hair.x1);
+    const y0 = Math.min(bone.y0, hair.y0), y1 = Math.max(bone.y1, hair.y1);
+    return {
+      x: (x0 + x1) / 2, y: (y0 + y1) / 2, rx: (x1 - x0) / 2, ry: (y1 - y0) / 2,
+      x0, y0, x1, y1, model: bone.model,
+    };
+  }
+  const faceBoxModel = () => partBox(faceParts);
+  void buildPartBoxes();
+
+  // 每帧最多算一次：zoneAt 是每个 pointermove 调一次，逐顶点重算太重
+  let boxCacheT = Number.NaN, boxCache = null;
+  function headFaceBoxes() {
+    if (boxCacheT === clockT && boxCache) return boxCache;
+    boxCacheT = clockT;
+    boxCache = { head: headBoxModel(), face: faceBoxModel() };
+    return boxCache;
+  }
+
   const exprTable = { ...(profile.expressions ?? {}), ...(profile.extraExpressions ?? {}) };
   let currentExpr = null;
   let expressionOverride = null;
@@ -2498,28 +2645,36 @@ export async function createLive2DBody(base, opts, entry, kit) {
 
   const figure = {
     // 摸摸分区（kit 的 zoneAt 读这个，坐标是**模型坐标**，kit 会乘 kx/ky 转屏幕）。
-    // 2026-11-23：不再用手写的 profile.touchZones —— 那份 head.rx=49 和模型真实头宽对不上
-    // （×4.2 缩放后 205px，实际头半宽只有 ~120），导致 side .65 要离头心 133px 才成立，
-    // 摸右脸永远够不着 → 单闭眼完全不触发。改成按**包围盒比例**算，比例照他们 Behavior.HeadBox：
-    //   chibi (X .5, Y .31, Rx .26, Ry .22)，模型坐标，随包围盒/缩放自动正确。
+    // 2026-11-23（S0）：头/脸优先用**模型部件树的实时包围盒**（见 buildPartBoxes）；
+    // 拿不到部件才退回旧的「整幅包围盒 × 比例」——那份比例是照他们 Behavior.HeadBox 抄的，
+    // 但乘的是被尾巴撑宽的 canvas 包围盒，头心本来就偏，所以只当兜底。
     touchZones() {
       const [x0, y0, x1, y1] = currentExtent();
       const w = x1 - x0, h = y1 - y0;
-      // 头心**不能**用包围盒中心：这个模型右侧有尾巴和头发，包围盒被撑宽，
-      // 中心会明显偏右（日志里 hx=2276，视觉头心在更左边）。
-      // 白手的透视用 (手 - 头心) 归一化，头心偏一点，手在眼睛位置就已经 r≈0.6 → 直接压扁。
-      // 所以中心的 x 沿用手写数据（128 = 画面中线），只有半径按包围盒比例随缩放走。
-      const _legacyHead = (profile.touchZones ?? []).find((z) => z.id === 'head');
-      const cx = _legacyHead?.x ?? (x0 + x1) / 2;
-      const cy = _legacyHead?.y ?? (y0 + h * .31);
-      const heads = [
-        { id: 'head', x: cx, y: cy, rx: w * .26, ry: h * .22 },
-        { id: 'face', x: cx, y: cy, rx: w * .17, ry: h * .10 },
-      ];
-      // 下面几个沿用手写数据并夹进包围盒（胸部/裙子/腿/尾巴），只为「右键点在别处不触发」。
+      const { head: hb, face: fb } = headFaceBoxes();
+      let heads;
+      if (hb) {
+        heads = [{ id: 'head', x: hb.x, y: hb.y, rx: hb.rx, ry: hb.ry }];
+        // 脸盒：有「五官/脸」部件就用它的包围盒；没有再按头的下半部推
+        const f = fb ?? { x: hb.x, y: hb.y + hb.ry * .18, rx: hb.rx * .62, ry: hb.ry * .42 };
+        heads.push({ id: 'face', x: f.x, y: f.y, rx: f.rx, ry: f.ry });
+      } else {
+        const _legacyHead = (profile.touchZones ?? []).find((z) => z.id === 'head');
+        const cx = _legacyHead?.x ?? (x0 + x1) / 2;
+        const cy = _legacyHead?.y ?? (y0 + h * .31);
+        heads = [
+          { id: 'head', x: cx, y: cy, rx: w * .26, ry: h * .22 },
+          { id: 'face', x: cx, y: cy, rx: w * .17, ry: h * .10 },
+        ];
+      }
+      // 下面几个沿用手写数据（胸部/裙子/腿/尾巴），只为「右键点在别处不触发」。
       const rest = (profile.touchZones ?? []).filter((z) => z.id !== 'head' && z.id !== 'face');
       return [...heads, ...rest];
     },
+    // 头/脸的实时盒（模型坐标）+ 部件树诊断，给调试和 kit 读
+    get headBox() { return headFaceBoxes().head; },
+    get faceBox() { return headFaceBoxes().face; },
+    get partBoxDebug() { return { ...headBoxDbg, head: headBoxModel(), face: faceBoxModel(), extent: currentExtent() }; },
     // 彩蛋台词：交给页面临时显示一句话（页面侧不排队、不发给 World）。
     // 她正在说话/有问答挂着时页面自己忽略，所以不会和对话抢气泡。
     emitBubble(text, seconds) {
