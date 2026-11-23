@@ -1323,6 +1323,27 @@ function toneOf(text: string): string {
       return s.replace(a, "case 'poke': text = t.woke ? m.pokedAwake(u) : m.poked(u, t.count, t.zone); break;");
     },
   },
+  {
+    file: 'body', id: 'hoverAct',
+    desc: '鼠标停在某个部位上 0.45 秒（不点不拖）→ custom.hover(zone)，形象演他们那 6 条悬停反应',
+    detect: (s) => s.includes('pet.hoverFired'),
+    apply: (s) => {
+      const a = `    T += dt; pet.modeT += dt;
+    A = anchors();`;
+      if (!s.includes(a)) throw new Error('hoverAct：step 锚点未命中');
+      s = s.replace(a, a + "\n    // 悬停：鼠标停在某个部位上、不按不拖，0.45 秒后演一条轻微反应（他们 Behavior.cs:70-75）。\n"
+        + "    // 只在没有按键、没在摸头时算，离开/换部位就重置，同一部位只触发一次。\n"
+        + "    {\n"
+        + "      const hz = pointer.inside && !press && !ruaDown ? (zoneAt(pointer) ?? null) : null;\n"
+        + "      if (hz && hz === pet.hoverZone) {\n"
+        + "        pet.hoverT = (pet.hoverT ?? 0) + dt;\n"
+        + "        if (pet.hoverT >= .45 && !pet.hoverFired) { pet.hoverFired = 1; custom?.hover?.(hz); }\n"
+        + "      } else { pet.hoverZone = hz; pet.hoverT = 0; pet.hoverFired = 0; }\n"
+        + "    }");
+
+      return s;
+    },
+  },
 ];
 
 const mode = process.argv.includes('--check') ? 'check'

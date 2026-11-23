@@ -3419,6 +3419,17 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 头/脸的实时盒（模型坐标）+ 部件树诊断，给调试和 kit 读
     get headBox() { return headFaceBoxes().head; },
     get faceBox() { return headFaceBoxes().face; },
+    /** kit 的悬停钩子：鼠标在某个部位上停 0.45 秒 → 演他们那条轻微反应。
+     *  正在演别的（clip）就先让位，不打断；胸/肚/腿归到 body 那一条。 */
+    hover(zone) {
+      const id = ({ chest: 'body', belly: 'body', legs: 'body' })[zone] ?? zone;
+      const def = EMO_CLIPS['hover-' + id];
+      if (!def) return false;
+      if (clipActive()) return false;   // 摸后/情绪/落地正在演，别插
+      startLayerClip(def);
+      audit('hover ' + id + '（停 0.45s）');
+      return true;
+    },
     // 调试/测试：直接演一条摸后反应（不经过命中判定）
     playMood(id) { return !!startLayerClip(MOOD_CLIPS[id]); },
     /** kit 左键戳一下（不是拖拽）时调：zone = touchZones 的 id，side = 点在中心左边 -1 / 右边 1 */
