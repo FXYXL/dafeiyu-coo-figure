@@ -249,6 +249,11 @@ export default {
     // 第三批待机小动作（2026-11-23）：打瞌睡/玩狗尾草 是新 id，其余六个复用现有 id（EMO_CLIPS 优先，走整段 clip）
     '打瞌睡': 'doze', '打盹': 'doze',
     '玩狗尾草': 'grass-play', '逗狗尾草': 'grass-play',
+    // 第四批（2026-11-23）：出场/告别/落地。问候和落地默认由 figure 自动触发，
+    // 这里登记是为了台词也能点名（【告别】她就会抬手低头）
+    '问候': 'greeting', '打招呼': 'greeting',
+    '告别': 'farewell', '再见': 'farewell', '拜拜': 'farewell',
+    '落地': 'land-hit', '摔地上': 'land-hit',
     'thinking': 'thinking',
     '神气': 'smug-face', 'smug': 'smug-face',
     '嘟嘴': 'mouth-pout', 'pout': 'mouth-pout',
