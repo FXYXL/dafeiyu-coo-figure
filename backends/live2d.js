@@ -3023,19 +3023,20 @@ export async function createLive2DBody(base, opts, entry, kit) {
         id: 'face', x: fb?.x ?? hb.x, y: (fy0 + fy1) / 2,
         rx: Math.max(12, hb.rx * .45), ry: (fy1 - fy0) / 2,
       });
-      zones.push({ id: 'head', x: hb.x, y: hb.y, rx: hb.rx, ry: hb.ry });
+      // 用户 17:58：下巴和胸口上方都算「胸」，不算头。头盒只留到脸下沿 +2（≈68），
+      // 下面交给 chest —— 之前头盒到 86，点下巴/脖子都报「头」。
+      const headBot = Math.min(hb.y1, fy1 + 2);
+      zones.push({ id: 'head', x: hb.x, y: (hb.y0 + headBot) / 2, rx: hb.rx, ry: (headBot - hb.y0) / 2 });
 
       // 以下全部按「纵向带」切，彼此**不重叠**——重叠就会被 find 里排前面的那块吃掉，
       // 用户实测：点胸口算头、点肚子算胸、点裙摆上半算肚子，全是同一个病。
-      const hy1 = hb.y1;                                    // 下巴（含发尾）≈ 88
       const chestB = bodySets?.chest ? partBox(bodySets.chest) : null;
       const cy1 = chestB?.y1 ?? 99;                         // 胸下沿
       const cRx = (chestB?.rx ?? 22) * 1.05;
 
-      // 胸：下巴 → 胸下沿（不再往上扩到 84，否则胸口那一段被头吃掉）
-      // 胸和肚子的分界取 100（实测胸下沿 99）：再往上一点胸口就会被头吃掉。
-      const cBot = Math.min(cy1 + 1, hy1 + 13);
-      zones.push({ id: 'chest', x: hb.x, y: (hy1 + cBot) / 2, rx: cRx, ry: Math.max(6.5, (cBot - hy1) / 2) });
+      // 胸：头下沿（≈68，下巴）→ 胸下沿 99。下巴、脖子、胸口上半全归这里。
+      const cBot = cy1 + 1;
+      zones.push({ id: 'chest', x: hb.x, y: (headBot + cBot) / 2, rx: cRx, ry: Math.max(8, (cBot - headBot) / 2) });
       // 肚子：胸下沿 → 裙上沿（只有 ~13 logo 高，Q 版就这点空间）
       zones.push({ id: 'belly', x: hb.x, y: cBot + 6.5, rx: cRx * .78, ry: 6.5 });
 
@@ -3051,6 +3052,13 @@ export async function createLive2DBody(base, opts, entry, kit) {
       // 尾巴从身后绕到右侧：上段在腰侧（y≈100~150）、下段垂在右外（y≈150~212）。
       // x 从 154 起（裙右沿 168 左侧那一小条会归尾巴，视觉上那本来就是尾巴）。
       const tb = bodySets?.tail ? partBox(bodySets.tail) : null;
+      // 左边还有一条**大尾巴**（白色那条，从腰侧垂到脚踝）——用户 17:58 圈的红色区域就是它。
+      // 右侧那个是尾鳍，两截都要算尾巴。用包围盒左侧一段（它被身体挡住一部分，但露出来的都能点）。
+      zones.push({
+        id: 'tail',
+        x: ex0 + ew * .13, y: ey0 + eh * .75,
+        rx: Math.max(14, ew * .11), ry: Math.max(40, eh * .22),
+      });
       if (tb) {
         const midY = tb.y0 + (tb.y1 - tb.y0) * .45;
         zones.push({ id: 'tail', x: 175, y: (tb.y0 + midY) / 2, rx: 21, ry: Math.max(20, (midY - tb.y0) / 2) });
