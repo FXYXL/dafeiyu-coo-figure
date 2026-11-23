@@ -2105,7 +2105,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
     },
     hand: {
       dur: 3,
-      sets: { EyeSmile: 1, EyeOpen: 0, ParamMouthForm: 1, ParamMouthOpenY: .5, FaceAngleY: 6 },
+      // 他们的 EyeOpen 是**绝对睁眼度**（0 = 闭成弯的笑眼），我们 clip 里是增量（-1 = 全闭）
+      sets: { EyeSmile: 1, EyeOpen: -1, ParamMouthForm: 1, ParamMouthOpenY: .5, FaceAngleY: 6 },
       keys: {
         FaceAngleZ: [[0, 0], [.3, -10], [.7, 10], [1.1, -8], [1.5, 6], [2, 0]],
         FaceAngleY: [[0, 0], [.3, 6], [.7, 2], [1.1, 6], [1.5, 2], [2, 0]],
@@ -2302,7 +2303,10 @@ export async function createLive2DBody(base, opts, entry, kit) {
         }
         for (const [k, v] of Object.entries(acc)) {
           if (k === 'EyeOpen') {   // EyeOpen 是乘数：负数 = 额外闭合（melt 的快眨两下）
-            for (const id of ['ParamEyeLOpen', 'ParamEyeROpen']) setParamByName(id, clamp(1 + v, 0, 1));
+            const closed = clamp(1 + v, 0, 1);
+            // 只在「要闭」时写。写 1（睁眼）会把 Lids 段算完的眨眼结果整个盖掉 ——
+            // 之前 happy 的 EyeOpen:0 被当成 1，于是整段表演里眼睛一直瞪着不眨。
+            if (closed < .999) for (const id of ['ParamEyeLOpen', 'ParamEyeROpen']) setParamByName(id, closed);
             continue;
           }
           if (VIRTUAL_KEYS.has(k)) { virtualParams.set(k, { v, t }); continue; }
@@ -2321,7 +2325,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
         globalThis.__clipDbg = Date.now();
         const gv2 = (id) => { const i2 = paramIndex.get(id); return i2 !== undefined ? +model._model.getParameterValueByIndex(i2).toFixed(2) : null; };
         audit('clip ' + (d.tag ?? d.mood ?? '?') + ' age=' + age.toFixed(2) + '/' + d.dur + ' w=' + c.w.toFixed(2)
-          + ' lean=' + gv2('LeanInput') + ' az=' + gv2('AngleZ') + ' ay=' + gv2('AngleY')
+          + ' lean=' + gv2('LeanInput') + ' az=' + gv2('AngleZ') + ' ay=' + gv2('AngleY') + ' ax=' + gv2('AngleX')
           + ' smile=' + gv2('EyeSmile') + ' brow=' + gv2('BrowInnerUp') + ' hand=' + gv2('Movement2'));
       }
 
