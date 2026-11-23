@@ -115,7 +115,7 @@ export default {
   useChannels: true,
   // 试点白名单：只放纯姿态类词，它们本来就不带手部动画/退出剪辑，接管风险最小。
   channelWords: [
-    "wave", "nod", "shake", "bow", "spin", "dance", "jump", "shiver", "look", "lean-in", "lean-back", "side", "peek", "tilt", "wiggle", "finger-point", "chest-hand", "grass-hand", "swing", "eye-smile", "eye-close", "eye-half", "eye-wide", "wink-left", "wink-right", "brow-frown", "brow-up", "brow-knit", "mouth-smile", "mouth-pout", "mouth-open", "blush",
+    "wave", "nod", "shake", "bow", "spin", "dance", "jump", "shiver", "look", "lean-in", "lean-back", "side", "peek", "tilt", "wiggle", "finger-point", "chest-hand", "grass-hand", "swing", "eye-smile", "eye-close", "eye-half", "eye-wide", "wink-left", "wink-right", "wink-keep", "wink-hold",   // 2026-11-21 加进来：不接管时走 act 路径是瞬时写 0（眨单眼一闪的真因） "brow-frown", "brow-up", "brow-knit", "mouth-smile", "mouth-pout", "mouth-open", "blush",
     "bitter-smile", "holding-up", "guilty-look", "act-cute",
     "defiant", "holding-tears", "smug-face", "perfunctory",
     "head-down", "head-up", "face-front", "stand-straight", "squint", "smirk",
@@ -129,9 +129,10 @@ export default {
   // 走神只靠鼠标唤回：光标停住 3.6 秒（或盯 8 秒）后再酝酿 1.5 秒开始飘，
   // 一直飘到鼠标动为止（span: 0 = 不过期；想加保质期就写秒数，比如 120~180）。
   // fade = 收回速度（越大越快，0.6 大约两秒收干净）；resume = 回神速度（0.9 比收回稍快，像人反应过来）
-  // 2026-11-21 走神分层对齐 DeepFish（眼睛先走→头跟→身体最后）：
-  // fadeEye 8（时间常数 0.125s，眼睛瞬间不再跟鼠标，交给眼跳主动瞟）+ fadeHead 1.2（0.83s）+ fade 0.35（2.9s）
-  gazeFollow: { idleSec: 3.6, holdSec: 8, onset: 1.5, fade: 0.35, fadeEye: 8, fadeHead: 1.2, resume: 10, movePx: 3, span: 0, spanJitter: 0, wake: 1.2 },
+  // 2026-11-21 去掉分层系数（fadeEye/fadeHead 是我手调的）：只保留一条 fade。
+  // 他们的「眼睛先走」来自 saccade 瞬跳 + headRate 10 的一阶平滑，不需要三段衰减。
+  // eyeReturn/headReturn/headDelay = PetWindow.cs:92 的 EyeReturnRate 5 / HeadReturnRate 1.6 / HeadReturnDelay .5，原值
+  gazeFollow: { idleSec: 3.6, holdSec: 8, onset: 1.5, fade: 0.5, resume: 10, movePx: 3, span: 0, spanJitter: 0, wake: 1.2, eyeReturn: 5, headReturn: 1.6, headDelay: 0.5 },
 
   idlePhysics: {
     // 只写"源头参数"。ParamBodyAngleX / HipAngleX / ParamBodyAngleZ 本身是物理的
@@ -193,6 +194,7 @@ export default {
     '甩草': 'swing',
     '甩狗尾草': 'swing',
     '笑眼': 'eye-smile',
+    '眯眼笑': 'eye-squeeze',
     '眼睛笑': 'eye-smile',
     '闭眼': 'eye-close',
     '半睁': 'eye-half',
@@ -287,7 +289,7 @@ export default {
     // —— 静态姿态（进入 → 保持 → 退出）——
     // 探身贴近镜头：负值往前靠，物理会联动身体透视（最像 VTS 里的前倾）
     'lean-in':   { params: [{ id: 'LeanInput', to: -30 }] },
-    'lean-back': { params: [{ id: 'LeanInput', to: 30 }] },
+    'lean-back': { params: [{ id: 'LeanInput', to: 9 }] },   // 对齐 Body.cs 后仰 LeanInput 9（原 30 大 3 倍）,
     // 探身鞠躬：上半身真的往前压，配合 kit 自带的闭眼
     bow:         { params: [{ id: 'LeanInput', to: -24 }] },
     // 侧身：身体侧转 + 头跟着转一点，单靠身体参数幅度太小吃不出来
@@ -405,7 +407,7 @@ export default {
     'dazed':      { state: true, dur: 1.2, params: [{ id: 'Param11', to: 6 }] },
 
     // 歪头
-    tilt:        { state: true, dur: 1.2, params: [{ id: 'AngleZ', to: 28 }] },
+    tilt:        { state: true, dur: 1.2, params: [{ id: 'AngleZ', to: 16 }] },   // 2026-11-21 对齐 Body.cs: 歪头 FaceAngleZ 16（原 28 大 75%）,
 
     // —— 波形动作（连续摆动）——
     // 点头：头上下点几下
@@ -453,34 +455,36 @@ export default {
 
     // —— 单通道表情（2026-11-18）——
     'eye-smile':   { state: true, dur: 1.2, params: [{ id: 'EyeSmile', to: 1 }, { id: 'ParamEyeLOpen', to: 0.45 }, { id: 'ParamEyeROpen', to: 0.45 }] },
+    // 眯眼笑（Body.cs:70 EyeOpen 0 + EyeSmile 1）：眼睛闭着笑——和「笑眼」(.45) 区分
+    'eye-squeeze': { state: true, dur: 1.2, params: [{ id: 'ParamEyeLOpen', to: 0 }, { id: 'ParamEyeROpen', to: 0 }, { id: 'EyeSmile', to: 1 }] },
     'eye-close':   { state: true, dur: 1.2, params: [{ id: 'ParamEyeLOpen', to: 0 }, { id: 'ParamEyeROpen', to: 0 }] },
     'eye-half':    { state: true, dur: 1.2, params: [{ id: 'ParamEyeLOpen', to: 0.45 }, { id: 'ParamEyeROpen', to: 0.45 }, { id: 'EyeSmile', to: 0 }] },
     'eye-wide':    { state: true, dur: 1.2, params: [{ id: 'ParamEyeLOpen', to: 1.35 }, { id: 'ParamEyeROpen', to: 1.35 }, { id: 'EyeSmile', to: 0 }] },
-    // 快眨单眼·左（Body.cs:76-77 套件）：笑眼渐入 + 左眼闭 0.6s + 歪头 12 同步——
-    // 全 keys 版（1.2s 收尾渐回）：dur 到期删条目会让 ROpen 跳回 roles 写入值（眨一下观感）
-    'wink-left':   { reflex: true, dur: 1.2,
+    // 快眨单眼·左（Body.cs:76-77 原样，不再自己加尾巴）：
+    //   Hold: EyeOpen .45 + EyeSmile 1 ；Move: 左眼 0:0 .14:0 .6:0 .8:1 ＋ 歪头 0:0 .14:12 .6:12 .8:0
+    'wink-left':   { reflex: true, dur: 0.8,
       keys: [
-        { id: 'ParamEyeLOpen', t: 0, v: 1 }, { id: 'ParamEyeLOpen', t: 0.14, v: 0 },
-        { id: 'ParamEyeLOpen', t: 0.6, v: 0 }, { id: 'ParamEyeLOpen', t: 0.9, v: 1 }, { id: 'ParamEyeLOpen', t: 1.2, v: 1 },
-        { id: 'ParamEyeROpen', t: 0, v: 1 }, { id: 'ParamEyeROpen', t: 0.14, v: 0.45 },
-        { id: 'ParamEyeROpen', t: 0.6, v: 0.45 }, { id: 'ParamEyeROpen', t: 0.9, v: 1 }, { id: 'ParamEyeROpen', t: 1.2, v: 1 },
+        // 他们 Hold EyeOpen .45 × Move(0→-1→0) = 0.45→0→0.45（只睁回半睁笑眼，所以柔）
+        { id: 'ParamEyeLOpen', t: 0, v: 0.45 }, { id: 'ParamEyeLOpen', t: 0.14, v: 0 },
+        { id: 'ParamEyeLOpen', t: 0.6, v: 0 }, { id: 'ParamEyeLOpen', t: 0.8, v: 0.45 },
+        { id: 'ParamEyeROpen', t: 0, v: 0.45 }, { id: 'ParamEyeROpen', t: 0.8, v: 0.45 },
         { id: 'AngleZ', t: 0, v: 0 }, { id: 'AngleZ', t: 0.14, v: 12 },
-        { id: 'AngleZ', t: 0.6, v: 12 }, { id: 'AngleZ', t: 0.9, v: 12 }, { id: 'AngleZ', t: 1.2, v: 0 },
+        { id: 'AngleZ', t: 0.6, v: 12 }, { id: 'AngleZ', t: 0.8, v: 0 },
         { id: 'EyeSmile', t: 0, v: 0.45 }, { id: 'EyeSmile', t: 0.14, v: 1 },
-        { id: 'EyeSmile', t: 0.9, v: 1 }, { id: 'EyeSmile', t: 1.2, v: 0.45 },
+        { id: 'EyeSmile', t: 0.6, v: 1 }, { id: 'EyeSmile', t: 0.8, v: 0.45 },
       ],
       params: [] },
-    // 快眨单眼·右（Body.cs:76-77 镜像）——全 keys 版 1.2s
-    'wink-right':  { reflex: true, dur: 1.2,
+    // 快眨单眼·右（Body.cs:76-77 镜像）
+    'wink-right':  { reflex: true, dur: 0.8,
       keys: [
-        { id: 'ParamEyeROpen', t: 0, v: 1 }, { id: 'ParamEyeROpen', t: 0.14, v: 0 },
-        { id: 'ParamEyeROpen', t: 0.6, v: 0 }, { id: 'ParamEyeROpen', t: 0.9, v: 1 }, { id: 'ParamEyeROpen', t: 1.2, v: 1 },
-        { id: 'ParamEyeLOpen', t: 0, v: 1 }, { id: 'ParamEyeLOpen', t: 0.14, v: 0.45 },
-        { id: 'ParamEyeLOpen', t: 0.6, v: 0.45 }, { id: 'ParamEyeLOpen', t: 0.9, v: 1 }, { id: 'ParamEyeLOpen', t: 1.2, v: 1 },
+        // 镜像：0.45→0→0.45
+        { id: 'ParamEyeROpen', t: 0, v: 0.45 }, { id: 'ParamEyeROpen', t: 0.14, v: 0 },
+        { id: 'ParamEyeROpen', t: 0.6, v: 0 }, { id: 'ParamEyeROpen', t: 0.8, v: 0.45 },
+        { id: 'ParamEyeLOpen', t: 0, v: 0.45 }, { id: 'ParamEyeLOpen', t: 0.8, v: 0.45 },
         { id: 'AngleZ', t: 0, v: 0 }, { id: 'AngleZ', t: 0.14, v: -12 },
-        { id: 'AngleZ', t: 0.6, v: -12 }, { id: 'AngleZ', t: 0.9, v: -12 }, { id: 'AngleZ', t: 1.2, v: 0 },
+        { id: 'AngleZ', t: 0.6, v: -12 }, { id: 'AngleZ', t: 0.8, v: 0 },
         { id: 'EyeSmile', t: 0, v: 0.45 }, { id: 'EyeSmile', t: 0.14, v: 1 },
-        { id: 'EyeSmile', t: 0.9, v: 1 }, { id: 'EyeSmile', t: 1.2, v: 0.45 },
+        { id: 'EyeSmile', t: 0.6, v: 1 }, { id: 'EyeSmile', t: 0.8, v: 0.45 },
       ],
       params: [] },
     // 单眨眼（Body.cs:74）：左眼闭着停 2 秒再开——抛媚眼式
@@ -489,7 +493,10 @@ export default {
         { id: 'ParamEyeLOpen', t: 0, v: 1 }, { id: 'ParamEyeLOpen', t: 0.2, v: 0 },
         { id: 'ParamEyeLOpen', t: 2.2, v: 0 }, { id: 'ParamEyeLOpen', t: 2.35, v: 1 },
       ] },
-    // 眨单眼（Body.cs:73）：左眼常闭 + 笑眼——保持型
+    // 眨单眼（Body.cs:73 的 state 版在我们这里被自动放松打断，看起来只闪一下——
+    // 2026-11-21 改成柔和关键帧：0.22s 闭 → 停 0.55s → 0.33s 慢慢睁开，带笑眼）
+    // 眨单眼（Body.cs:73 原样，不再自己编曲线）：左眼闭住 + 笑眼，保持型。
+    // 松开交给通道的自动放松（平滑淡出），不手写时长——这才是他们那一套。
     'wink-keep':   { reflex: true, state: true, dur: 1.2, params: [
       { id: 'ParamEyeLOpen', to: 0 }, { id: 'EyeSmile', to: 1 },
     ] },
@@ -515,8 +522,8 @@ export default {
     // 恢复：实际清空在 baseWord 里做；这里占位让 kit 认识它
     'restore':     { dur: 0.5, params: [] },
     // —— 基础词补齐（3.1）——
-    'head-down':  { state: true, dur: 1.0, params: [{ id: 'AngleY', to: -18 }] },
-    'head-up':    { state: true, dur: 1.0, params: [{ id: 'AngleY', to: 15 }] },
+    'head-down':  { state: true, dur: 1.0, params: [{ id: 'AngleY', to: -14 }] },   // 对齐 Body.cs 低头 FaceAngleY -14,
+    'head-up':    { state: true, dur: 1.0, params: [{ id: 'AngleY', to: 12 }] },   // 对齐 Body.cs 抬头 FaceAngleY 12,
     'face-front': { state: true, dur: 1.0, params: [
       { id: 'AngleX', to: 0 }, { id: 'AngleY', to: 0 }, { id: 'AngleZ', to: 0 },
     ] },
@@ -628,8 +635,9 @@ export default {
     // kit 渲染 sy=1-pet.sq（正值=压扁）；keys 密集中间点缓动防弹簧过冲。
     'sigh': { dur: 3.5,
       keys: [
-        { id: 'ViewSquash', t: 0, v: 0 }, { id: 'ViewSquash', t: 0.8, v: 0.04 },
-        { id: 'ViewSquash', t: 1.2, v: 0.05 }, { id: 'ViewSquash', t: 2.2, v: 0.02 },
+        { id: 'ViewSquash', t: 0, v: 0 }, { id: 'ViewSquash', t: 0.8, v: -0.02 },
+        { id: 'ViewSquash', t: 1.2, v: -0.02 }, { id: 'ViewSquash', t: 1.9, v: 0.03 },
+        { id: 'ViewSquash', t: 2.8, v: 0.025 },
         { id: 'ViewSquash', t: 3.5, v: 0 },
         { id: 'AngleY', t: 0, v: 0 }, { id: 'AngleY', t: 0.8, v: 7 },
         { id: 'AngleY', t: 1.8, v: -8 }, { id: 'AngleY', t: 2.8, v: -7 }, { id: 'AngleY', t: 3.5, v: 0 },
@@ -698,8 +706,8 @@ export default {
     // 惊吓脸——瞪眼写 1 无对比，得把笑眼清成 0）+ 挑眉 + 微张嘴——1.4s
     'startle': { dur: 1.4,
       keys: [
-        { id: 'ViewSquash', t: 0, v: 0 }, { id: 'ViewSquash', t: 0.06, v: 0.1 },
-        { id: 'ViewSquash', t: 0.18, v: -0.08 }, { id: 'ViewSquash', t: 0.4, v: 0.08 }, { id: 'ViewSquash', t: 0.6, v: 0 },
+        { id: 'ViewSquash', t: 0, v: 0 }, { id: 'ViewSquash', t: 0.06, v: 0.06 },
+        { id: 'ViewSquash', t: 0.18, v: -0.05 }, { id: 'ViewSquash', t: 0.4, v: 0.05 }, { id: 'ViewSquash', t: 0.6, v: 0 },
         { id: 'EyeSmile', t: 0, v: 0 }, { id: 'EyeSmile', t: 1.4, v: 0 },
         { id: 'BrowInnerUp', t: 0, v: 0 }, { id: 'BrowInnerUp', t: 0.08, v: 0.9 },
         { id: 'BrowInnerUp', t: 1.0, v: 0.6 }, { id: 'BrowInnerUp', t: 1.4, v: 0 },
@@ -906,8 +914,9 @@ export default {
     // 得救（睁大+微笑+叹气）——3.5s 完整松一口气
     'rescued': { dur: 3.5,
       keys: [
-        { id: 'ViewSquash', t: 0, v: 0 }, { id: 'ViewSquash', t: 0.8, v: 0.04 },
-        { id: 'ViewSquash', t: 1.2, v: 0.05 }, { id: 'ViewSquash', t: 2.2, v: 0.02 }, { id: 'ViewSquash', t: 3.5, v: 0 },
+        { id: 'ViewSquash', t: 0, v: 0 }, { id: 'ViewSquash', t: 0.8, v: -0.02 },
+        { id: 'ViewSquash', t: 1.2, v: -0.02 }, { id: 'ViewSquash', t: 1.9, v: 0.03 },
+        { id: 'ViewSquash', t: 2.8, v: 0.025 }, { id: 'ViewSquash', t: 3.5, v: 0 },
         { id: 'AngleY', t: 0, v: 12 }, { id: 'AngleY', t: 0.8, v: 7 },
         { id: 'AngleY', t: 1.8, v: -8 }, { id: 'AngleY', t: 2.8, v: -7 }, { id: 'AngleY', t: 3.5, v: 0 },
         { id: 'LeanInput', t: 0, v: 0 }, { id: 'LeanInput', t: 0.8, v: 5 },
@@ -1446,6 +1455,9 @@ export default {
       monocle: { params: { key11: 0, key12: 1 } },
     },
   },
+  // 2026-11-21：angleX/Y/Z、bodyX、lean 的 space 从 [-1,1] 改成度数域 [-30,30]。
+  // 原因：paramActs 所有曲线都按度数写（-10/16/28），旧 space 会把它们 clamp 成 ±1 = 全部满幅，
+  // 曲线形状彻底丢失。改后可直接抄 DeepFish 的度数数据（FaceAngleY -10 等）。
   roles: {
     eyeOpen: {"targets":["ParamEyeLOpen","ParamEyeROpen"],"space":[0,1],"default":1},
     browY: {"targets":["ParamBrowLY","ParamBrowRY"],"space":[-1,1],"default":0},
@@ -1457,13 +1469,13 @@ export default {
     eyeBallY: {"targets":["ParamEyeBallY"],"space":[-1,1],"default":0},
     // 只写模型自己的 AngleX。ParamAngleX 是物理的输入，写了物理会拿头部角度去推身体，
     // 和我们用 PositionX 做的身体倾斜抢方向 —— 插件生成的包也是只写 AngleX。
-    angleX: {"targets":["AngleX"],"space":[-1,1],"default":0},
-    angleY: {"targets":["AngleY"],"space":[-1,1],"default":0},
-    angleZ: {"targets":["AngleZ"],"space":[-1,1],"default":0},
+    angleX: {"targets":["AngleX"],"space":[-30,30],"default":0},
+    angleY: {"targets":["AngleY"],"space":[-30,30],"default":0},
+    angleZ: {"targets":["AngleZ"],"space":[-30,30],"default":0},
     // bodyX 是横向重心（物理输入）。lean 是前倾，单独走 LeanInput —— 两者别混用，
     // 混用会让"往左走"和"前倾"挤在同一个参数上，身体被推错方向。
-    bodyX: {"targets":["PositionX"],"space":[-1,1],"default":0},
-    lean:  {"targets":["LeanInput"],"space":[-1,1],"default":0},
+    bodyX: {"targets":["PositionX"],"space":[-30,30],"default":0},
+    lean:  {"targets":["LeanInput"],"space":[-30,30],"default":0},
     breath: {"targets":["ParamBreath"],"space":[0,1],"default":0},
   },
   expression: {
