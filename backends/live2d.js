@@ -1370,6 +1370,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
     };
     for (let n = layers.length - 1; n >= 0; n--) {
       const c = layers[n];
+      if (c.clip) continue;   // 表演层不归「恢复」管：它的组自己演完自己收（剧本里 restore 后面常接 clip）
       if (onlyHand && !(c.hand || (c.src && paramActs[c.src]?.hand))) continue;
       if (c.exiting) continue;   // 收手动画正在播：别重置它
       const def = c.src ? paramActs[c.src] : null;
@@ -1503,7 +1504,11 @@ export async function createLive2DBody(base, opts, entry, kit) {
    *  同一张表之后，「删参数」只需一次过滤 —— 以前 hold 删了、动作轨道还在写（表情清不干净的经典款）。 */
   function dropParam(id) {
     let hit = 0;
-    for (let n = layers.length - 1; n >= 0; n--) if (layers[n].id === id) { layers.splice(n, 1); hit++; }
+    for (let n = layers.length - 1; n >= 0; n--) {
+      const L = layers[n];
+      if (L.clip) continue;   // 表演层的参数归它的组管：词/互斥清场不能把它拆掉（否则表演中途少一条参数）
+      if (L.id === id) { layers.splice(n, 1); hit++; }
+    }
     if (hit) audit('del ' + id + ' <' + ((new Error().stack ?? '').split('\n')[2] ?? '').trim().slice(0, 60) + '>');
   }
   function clearAllParams() { if (layers.length) audit('clear ALL'); layers.length = 0; }
@@ -2014,6 +2019,29 @@ export async function createLive2DBody(base, opts, entry, kit) {
     return 1;
   }
 
+  /** 表演层的参数落笔（词层和表演层共用的唯一写入口）。
+   *  id 已经是模型名（建层时过过 resolveId），值还是他们的 VTS 输入空间，
+   * 所以要过 VTS_IN；EyeOpen 是乘数、View* 是虚拟参数、Angle* 要派生 Position*。 */
+  function writeParamVal(id, v, t) {
+    if (id === 'EyeOpen') {   // 乘数：负数 = 额外闭合（melt 的快眨两下）
+      // 2026-11-24：**不能直接写 ParamEyeL/ROpen**（合表后这一步排在 eyeBlink 之前，
+      // 会被眨眼 updater 每帧写回 1 —— 问候/融化/打哈欠的闭眼全丢了）。
+      // 折成「相对 1 的增量」交给 Lids 段（它在眨眼之后乘），和词的眼睛关键帧同一条路。
+      const closed = clamp(1 + v, 0, 1);
+      const delta = closed - 1;
+      lidAdd.L += delta;
+      lidAdd.R += delta;
+      return;
+    }
+    if (VIRTUAL_KEYS.has(id)) { virtualParams.set(id, { v, t }); return; }
+    const mapped = vtsOut(id, v);
+    setParamByName(id, mapped);
+    // 他们的 PositionX/Y/Z 吃的是**输入值**（FaceAngleY 输入 ±20、角度输出 ±30），
+    // setParamByName 默认按角度 1:1 派生位置，这里按他们的规则再写一次。
+    const posId = ANGLE_TO_POS[id];
+    if (posId && mapped !== v) setParamByName(posId, v);
+  }
+
   /** 整张 Layer 表 → 模型参数（物理前后各一次，post 层各写各的）。
    *  合成规则只有三条：常量覆盖（后写赢）、关键帧/波形相加、手型参数取最新（绝对值）。 */
   function writeLayers(t, wantPost) {
@@ -2023,6 +2051,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
     const hands = new Map();   // 手型参数：绝对值覆盖，最新的那条赢
     for (let n = 0; n < layers.length; n++) {
       const c = layers[n];
+      if (c.clip) continue;   // 表演层由下面的 clip 段统一处理（共享权重、跨组仲裁）
       const age = t - c.t0;
       // 过期：普通层播完 dur 就走；保持层等寿命闸门放行（淡出期间还要写）
       if (!c.keep && age > c.dur) { layers.splice(n--, 1); continue; }
@@ -2088,6 +2117,44 @@ export async function createLive2DBody(base, opts, entry, kit) {
     }
     for (const [id, v] of hands) setParamByName(id, v);   // 手型：绝对值覆盖
     for (const [id, sum] of sums) addParam(id, sum);      // 相加（夹在参数范围内）
+
+    // ---------- 表演层（clip）：和词同一张表、同一条写入路径 ----------
+    // 一条表演的 sets 共享它的权重 w（0.15 秒 Hold 那条），keys 照常相加；
+    // 同一个参数被两条表演同时写时按**权重仲裁**（w 大的赢，一样大听新的）——
+    // 这样交接点是 0.5 对 0.5 的交叉淡入，既不会被收尾的旧的吃掉，也不会闪一下。
+    if (!wantPost) {
+      const byClip = new Map();   // 组 → Map(参数, 值)
+      for (const c of layers) {
+        if (!c.clip) continue;
+        const g = c.clip;
+        const age = t - g.t0 - (g.def.delay ?? 0);
+        if (age < 0) continue;   // 延迟期（他们松手后 1.5s 空档）什么都不写
+        let acc = byClip.get(g);
+        if (!acc) byClip.set(g, acc = new Map());
+        if (c.kind === 'cset') {
+          if (g.w > .004) {
+            // EyeOpen 的 0 是「不动眼睛」，不能算一次写入 —— 否则它会占住这个参数槽，
+            // 把另一条表演的闭眼/眨眼仲裁掉（问候 clip 闭眼被刚起的歪头 clip 顶开）。
+            if (c.id !== 'EyeOpen' || Math.abs(c.val) > .002) acc.set(c.id, (acc.get(c.id) ?? 0) + c.val * g.w);
+          }
+        } else if (age < g.def.dur) {
+          // 关键帧只在演的时候写（和以前一致）：演完就交还给别的来源，
+          // 否则收尾那 0.7 秒里它还在写最后一帧的值，把待机/鼠标跟随压住。
+          const sv = sampleKeys(c.frames, age);
+          if (c.id !== 'EyeOpen' || Math.abs(sv) > .002) acc.set(c.id, (acc.get(c.id) ?? 0) + sv);
+        }
+      }
+      if (byClip.size) {
+        const win = new Map();   // 参数 → { v, w, t0 }
+        for (const [g, acc] of byClip) {
+          for (const [id, v] of acc) {
+            const p = win.get(id);
+            if (!p || g.w > p.w + 1e-6 || (Math.abs(g.w - p.w) <= 1e-6 && g.t0 > p.t0)) win.set(id, { v, w: g.w, t0: g.t0 });
+          }
+        }
+        for (const [id, { v }] of win) writeParamVal(id, v, t);
+      }
+    }
     // 叠加层（2.8）：主通道写完后，把外力增量**加**到当前值上（rua 头反向叠在歪头词上 = 更歪）
     if (overlay.size) {
       for (const [k, o] of [...overlay]) {
@@ -2522,9 +2589,24 @@ export async function createLive2DBody(base, opts, entry, kit) {
 };
   function startLayerClip(def) {
     if (!def) return null;
-    const c = { def, t0: clockT, hand: false, handOff: false, w: 0, lastT: clockT };
+    // 一条表演 = 一个「组」（共享权重 w / 手势 / 延迟）+ 一组 Layer（参数）。
+    // 参数不再由 stepClips 自己写，而是照常进 layers[]（kind 'cset' / 'ckeys'，带 clip 指针），
+    // 由 writeLayers 统一写 —— 全形象只有一个采样器和一条写入路径。
+    const c = { def, t0: clockT, hand: false, handOff: false, w: 0, lastT: clockT, faceInit: false };
     clipList.push(c);
+    for (const [k, v] of Object.entries(def.sets ?? {})) {
+      layers.push({ id: resolveId(k), kind: 'cset', clip: c, val: v, t0: c.t0, post: false });
+    }
+    for (const [k, frames] of Object.entries(def.keys ?? {})) {
+      layers.push({ id: resolveId(k), kind: 'ckeys', clip: c, frames, t0: c.t0, post: false });
+    }
     return c;
+  }
+  /** 撤掉一条表演：组 + 它带进来的所有 Layer（否则参数会永远留在表里）。 */
+  function killClip(g) {
+    const i = clipList.indexOf(g);
+    if (i >= 0) clipList.splice(i, 1);
+    for (let n = layers.length - 1; n >= 0; n--) if (layers[n].clip === g) layers.splice(n, 1);
   }
   // 「正在演」= 延迟已经过去、还没到 dur（弹簧/前倾锁存看这个）
   const clipActive = (mood) => clipList.some((c) => {
@@ -2534,7 +2616,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
   // 「这条 clip 还在」（含松手后 1.5s 的空档）—— 脸红要跨过这段，不能一松手就白回去
   const clipAlive = (mood) => clipList.some((c) => !mood || c.def.mood === mood);
   function stopMoodClips() {
-    for (let i = clipList.length - 1; i >= 0; i--) if (clipList[i].def.mood) clipList.splice(i, 1);
+    for (let i = clipList.length - 1; i >= 0; i--) if (clipList[i].def.mood) killClip(clipList[i]);
   }
   // ---------- 自动表演：落地、出场问候 ----------
   // 他们没有单独的触发器，是 PetWindow 在落地/出场时直接 Apply("落地") / ("问候")。
@@ -2548,7 +2630,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
       startLayerClip(EMO_CLIPS['land-hit']);
     }
     // 出场问候：页面起来 2.5 秒后、站在 idle 时问候一次（换形象/重载就是一次出场）
-    if (!greeted && clockT > 2.5 && (mode === 'idle' || mode === 'sit') && EMO_CLIPS.greeting) {
+    // __l2dNoGreet 是测试台开关（?nogreet=1）：单测摸后/情绪时别让问候来抢参数。
+    if (!greeted && !globalThis.__l2dNoGreet && clockT > 2.5 && (mode === 'idle' || mode === 'sit') && EMO_CLIPS.greeting) {
       greeted = true;
       startLayerClip(EMO_CLIPS.greeting);
     }
@@ -2557,10 +2640,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
 
   function stepClips(t) {
     if (!clipList.length) { releaseOrphanHand(); for (const [id, v] of debugOverrides) setParamByName(id, v); return; }
-    // 正序遍历（旧 → 新）+ 权重仲裁：同一个参数两条 clip 都在写时，**w 大的赢**，一样大听新的。
-    // 2026-11-23 23:55 实测：原来倒序写，旧的（正在收尾、w 已衰到 0.03）会把新的盖回去
-    // —— 委屈(70s) → 心慌(120s) 到 175 帧 key7 从 1 掉到 0.036。
-    const win = new Map();   // 参数名 → { v, w }：这一帧该写谁的值
+    // 只推进「组」的状态（权重 / 手势 / 贴图槽 / 过期）；参数写入在 writeLayers 里，
+    // 和词共用同一条路径、同一套跨组权重仲裁。
     for (let n = 0; n < clipList.length; n++) {
       const c = clipList[n], d = c.def;
       const age = t - c.t0 - (d.delay ?? 0);
@@ -2601,12 +2682,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
         for (let k = layers.length - 1; k >= 0; k--) if (layers[k].clipHold) layers.splice(k, 1);
       }
 
-      // 贴图槽：clip 写哪个 key，就把**同一个 key** 的旧层撤掉（避免两条表演抢同一张贴图，
-      // 新那条 w 从 0 起跳把旧的值压成 0，闪一下）。
+      // 贴图槽：clip 写哪个 key，就把**同一个 key** 的**词层**撤掉（表演层之间由权重仲裁交接）。
       // 2026-11-23 23:40 用户实测：**不要再清别的 key**。这张模型的贴图是叠层，
       // 他们自己的组合就证明了：无语=黑脸+圈圈眼、委屈=流泪+脸红、心慌=冷汗+脸红。
-      // 以前"每帧清其他 key"是旧表情通道的「换一张脸」语义，换成 clip 之后这是错的
-      // （〔脸红〕演着的时候说〔圈圈眼〕，key3 永远不亮）。
       // key3~6（四种眼睛画法）的互斥由词自己写兄弟参数 0 保证，不靠这里。
       if (!c.faceInit) {
         c.faceInit = true;
@@ -2614,26 +2692,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
         for (const k of FACE_KEYS) if (k in (d.sets ?? {})) dropParam(k);
       }
 
-      // 参数合成：他们的语义是「set 按住 + anim 叠加」，同一个参数两边都有时是**相加**，
-      // 不是后写的盖掉前写的（FaceAngleZ 就是这种：set 4 + 关键帧 ±3）。
-      // 跨 clip 的同一个参数用**权重仲裁**：谁的 w 大听谁的（一样大听新的）。
-      // 直接按顺序写的话两种错法都试过了：
-      //   倒序（旧的后写）→ 旧 clip 收尾时 w 只剩 0.03，却把新的 1 盖成 0.03（心慌不红）
-      //   正序（新的后写）→ 新 clip 刚起、w=0.02，把旧的 1 压成 0.02（贴图闪一下）
-      // 取大的那个，交接点两条都在 0.5 附近，是平滑的交叉淡入淡出。
-      if (playing || c.w > .004) {
-        const acc = {};
-        if (c.w > .004) for (const [k, v] of Object.entries(d.sets ?? {})) acc[k] = v * c.w;
-        if (playing) {
-          for (const [k, frames] of Object.entries(d.keys ?? {})) {
-            acc[k] = (acc[k] ?? 0) + sampleKeys(frames, age);
-          }
-        }
-        for (const [k, v] of Object.entries(acc)) {
-          const prev = win.get(k);
-          if (!prev || c.w > prev.w + 1e-6) win.set(k, { v, w: c.w });
-        }
-      }
+      // 参数写入已经交给 writeLayers（表演层的 sets/keys 就是 layers[] 里的数据），
+      // 这里只做「组」自己的事：权重、手势、贴图槽、打点、过期。
 
       // 打点：每 0.5 秒说一次「这条 clip 演到哪、写了什么」——实机出问题看这一行就够
       if (Date.now() - (globalThis.__clipDbg ?? 0) > 500) {
@@ -2656,26 +2716,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
       }
       if (!playing && c.w <= .004) {
         if (d.mood) { ruaSecHold = 0; ruaMeltHold = 0; }
-        clipList.splice(n--, 1);   // 正序遍历：删掉自己之后下标要退一格
+        killClip(c);   // 组和它带进来的 Layer 一起撤（正序遍历：删掉自己之后下标要退一格）
+        n--;
       }
-    }
-    // 仲裁结果落地（这一步以前在循环里直接写，所以"谁后写谁赢"）
-    for (const [k, { v }] of win) {
-      if (k === 'EyeOpen') {   // EyeOpen 是乘数：负数 = 额外闭合（melt 的快眨两下）
-        const closed = clamp(1 + v, 0, 1);
-        // 只在「要闭」时写。写 1（睁眼）会把 Lids 段算完的眨眼结果整个盖掉 ——
-        // 之前 happy 的 EyeOpen:0 被当成 1，于是整段表演里眼睛一直瞪着不眨。
-        if (closed < .999) for (const id of ['ParamEyeLOpen', 'ParamEyeROpen']) setParamByName(id, closed);
-        continue;
-      }
-      if (VIRTUAL_KEYS.has(k)) { virtualParams.set(k, { v, t }); continue; }
-      const id = resolveId(k);          // ParamMouthPressLipOpen → MouthPressLipOpen：映射表按**模型 id** 认
-      const mapped = vtsOut(id, v);
-      setParamByName(id, mapped);
-      // 他们的 PositionX/Y/Z 吃的是**输入值**（FaceAngleY 输入 ±20、角度输出 ±30），
-      // setParamByName 默认按角度 1:1 派生位置，这里按他们的规则再写一次。
-      const posId = ANGLE_TO_POS[id];
-      if (posId && mapped !== v) setParamByName(posId, v);
     }
     // clip 被提前撤掉（摸后被情绪词顶掉 / rua 打断清空 clipList）时，它举着的手没人放 ——
     // 会一直举到寿命判死、然后「啪」地消失。这里补一次收手：没有 clip 再拥有这只手就放下来。
@@ -2951,7 +2994,10 @@ export async function createLive2DBody(base, opts, entry, kit) {
     if (ruaOn && !ruaWasOn) {
       relaxChannels();
       // 上一次的「摸后」还在演的话清掉：不然一摸上来就带着上次的脸红和表情
-      if (clipList.length) { clipList.length = 0; for (const k of VIRTUAL_KEYS) virtualParams.delete(k); }
+      if (clipList.length) {   // 打断：组和它们的 Layer 一起撤（不能只清 clipList，参数会留在表里）
+        for (let k = clipList.length - 1; k >= 0; k--) killClip(clipList[k]);
+        for (const k of VIRTUAL_KEYS) virtualParams.delete(k);
+      }
       audit('rua-interrupt 打断当前动作');
     }
     ruaWasOn = ruaOn;
@@ -3766,7 +3812,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
       //  6. Lids（他们 main.cpp:327 的 CubismUpdateOrder_EyeBlink + 50）：把「情绪/动作想要的
       //     睁眼度」按眨眼剩余量**乘**进去 —— 必须排在眨眼之后，否则眨眼会被表情覆盖成睁眼；
       //     也必须排在物理之前，睫毛才会跟着物理动。
-      //  7. stepClips（Layer：摸后四档/戳一戳）
+      //  7. stepClips（只推进表演的「组状态」：权重/手势/贴图槽/过期）
+      //      → 参数在 6.5 的 applyChannel → writeLayers 里和词一起写（一张表、一条路）
       //  8. physics.evaluate        ← 所有 AngleX/Y/Z、LeanInput、PositionX/Y/Z 都在这一步之前写
       //  9. pose.updateParameters
       // 10. update → draw
@@ -3804,6 +3851,11 @@ export async function createLive2DBody(base, opts, entry, kit) {
         }
       }
       applyPartOpacity(currentId);
+      // 表演层（clip）的「组状态」必须先推进：writeLayers 要用**这一帧**的权重 w 和
+      // 手势（gesture.on/off 会调 applyOneWord 生成手型层）。以前 stepClips 自己算自己写，
+      // 顺序无所谓；合表之后它只更新状态，必须跑在 applyChannel 之前，否则晚一帧。
+      stepAutoClips(frame);
+      stepClips(clockT);
       // 通道叠加必须写在 stepMotion 之后：Cubism 的 idle 动作每帧会改参数，
       // 写早了会被它盖掉（实测鞠躬的低头被 idle 吃掉，AngleY 读回是正值）。
       // 放物理之前，物理才能把它当输入用。
@@ -3911,13 +3963,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
           audit('lid L=' + lidMul.L.toFixed(3) + ' R=' + lidMul.R.toFixed(3) + ' eL=' + gv('ParamEyeLOpen') + ' eR=' + gv('ParamEyeROpen') + ' open=' + (globalThis.__l2dLast?.open ?? '?') + ' ec=' + (globalThis.__l2dLast?.ec ?? '?'));
         }
       }
-      // Layer：一段表演（含 rua 摸后四档）。**必须在物理之前** ——
-      // AngleX/Y/Z、LeanInput、PositionX/Y/Z 都是 physics3.json 的输入
-      // （AngleX→ParamAngleX、LeanInput→ParamBodyAngleY、PositionX→ParamBodyAngleX …），
-      // 写在物理后面等于这帧的参数物理根本没看见，下一帧 loadParameters 又恢复基准，
-      // 头和身体一次都不会动（用户：「只有手在执行」）。2026-11-23 修正。
-      stepAutoClips(frame);
-      stepClips(clockT);
+      // 表演层（含 rua 摸后四档）的参数已经由 applyChannel → writeLayers 写完
+      // （和词同一张表）。这里不再写参数，只留物理。
       try { model._physics?.evaluate(model._model, dt); } catch { /* 物理失败不致命 */ }
       // ---------- 摸后的四个 mood（Behavior.cs:59-67）----------
       // 全部写在这里（saveParameters 之后、物理之前）：直写参数不会进基准，
