@@ -520,7 +520,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
     if (!bone) return null;
     if (!hairParts) return bone;
     const mh = bone.y1 - bone.y0;
-    const hair = partBox(hairParts, bone.y1 + mh * 0.12);
+    // 2026-11-23 用户：点胸口报「头」。后发原来延到下巴以下 12%（y≈90），
+    // 而胸部件是 72~99 —— 胸口上半截全在头盒里。收到 6%（y≈84）。
+    const hair = partBox(hairParts, bone.y1 + mh * 0.06);
     if (!hair) return bone;
     const x0 = Math.min(bone.x0, hair.x0), x1 = Math.max(bone.x1, hair.x1);
     const y0 = Math.min(bone.y0, hair.y0), y1 = Math.max(bone.y1, hair.y1);
@@ -3013,7 +3015,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
       // 实测模型「脸」部件 Part15 = 32~67，头盒 16~89 —— 正好落在这两个比例上。
       // 以前用脸的**子树**包围盒（含脸底/眼眶/嘴，一直垂到 80），于是整个头都是脸、
       // 只有呆毛点得到「头」（用户 17:33 实测）。fb 现在只用来校 x 中心。
-      const fy0 = hb.y0 + (hb.y1 - hb.y0) * .22;
+      // 2026-11-23 用户：点头顶三下都算脸。上边界 .22 → .38（33 → 45）；
+      // 眼睛 49~60、嘴 60~67，脸正好 45~68 这一条。
+      const fy0 = hb.y0 + (hb.y1 - hb.y0) * .38;
       const fy1 = hb.y0 + (hb.y1 - hb.y0) * .70;
       zones.push({
         id: 'face', x: fb?.x ?? hb.x, y: (fy0 + fy1) / 2,
@@ -3042,6 +3046,16 @@ export async function createLive2DBody(base, opts, entry, kit) {
         zones.push({ id: 'hand', x: b.x, y: b.y, rx: Math.max(b.rx * 1.8, 10), ry: Math.max(b.ry * 1.3, 10) });
       }
 
+      // 尾巴：**不跟尾巴尖走**（一直摆，盒跟着实时顶点会甩出去、用户就点空），
+      // 但也不能只圈尖——用户实测「尾巴尖有、尾巴身没有」。
+      // 尾巴从身后绕到右侧：上段在腰侧（y≈100~150）、下段垂在右外（y≈150~212）。
+      // x 从 154 起（裙右沿 168 左侧那一小条会归尾巴，视觉上那本来就是尾巴）。
+      const tb = bodySets?.tail ? partBox(bodySets.tail) : null;
+      if (tb) {
+        const midY = tb.y0 + (tb.y1 - tb.y0) * .45;
+        zones.push({ id: 'tail', x: 175, y: (tb.y0 + midY) / 2, rx: 21, ry: Math.max(20, (midY - tb.y0) / 2) });
+        zones.push({ id: 'tail', x: 178, y: (midY + tb.y1) / 2, rx: 23, ry: Math.max(22, (tb.y1 - midY) / 2) });
+      }
       // 裙：从肚子下沿 → 短裙下沿（不并长裙的下摆，否则会把用户点的「腿」吃掉）
       const skirtB = bodySets?.skirt ? partBox(bodySets.skirt) : null;
       const sy0 = cBot + 13, sy1 = skirtB?.y1 ?? 175;
@@ -3055,19 +3069,6 @@ export async function createLive2DBody(base, opts, entry, kit) {
         const b = partBox(bodySets.legs, Infinity, sy1 - 6);
         if (b) zones.push({ id: 'legs', x: b.x, y: b.y, rx: b.rx * 1.15, ry: Math.min(b.ry, 48) });
       }
-
-      // 尾巴：**不跟尾巴尖走**（尾巴一直在摆，盒跟着实时顶点会甩出去、用户就点空）。
-      // 用「短裙右沿 → 模型右缘」这一条当尾巴区：短裙是实心的、位置最稳，
-      // 尾巴从她身后绕到右侧，露出来的那截正好在短裙右沿之外（实测短裙 x1=164、尾巴 x1=198）。
-      const tx0 = skirtB ? Math.max(skirtB.x1 - 4, hb.x + 24) : ex0 + ew * .72;
-      const tx1 = ex1 + ew * .02;                       // 尾巴尖常常比 alpha 包围盒再出去一点
-      const tb = bodySets?.tail ? partBox(bodySets.tail) : null;
-      const tyc = tb ? (tb.y0 + tb.y1) / 2 : ey0 + eh * .70;
-      zones.push({
-        id: 'tail',
-        x: (tx0 + tx1) / 2, y: tyc,
-        rx: Math.max(15, (tx1 - tx0) / 2), ry: Math.max(26, tb ? (tb.y1 - tb.y0) * .42 : eh * .115),
-      });
 
       return zones;
     },
