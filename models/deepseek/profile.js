@@ -73,7 +73,9 @@ export default {
   idleMoodLife: 6,
   idleRepertoire: [
     // —— 表情类 ——
-    { word: 'tilt-look', kind: 'face', w: 3 },            // 歪头瞧（一次性，替代原 tilt 挂脸）
+    // 2026-11-23：tilt-look 换成他们那版 tilt（歪 18°+抬下巴 5°+眉心 .6+眼珠上飘，中途眨两下）——
+    // 三个歪头里 tilt-look(3.8s 歪 16°保持) 和 tilt(3.2s) 最像，留新的那个。
+    { word: 'tilt', kind: 'act', w: 3 },
     { word: 'dazed', kind: 'face', w: 3, life: 6 },
     { word: 'happy', kind: 'face', w: 2, life: 5 },       // kit 六张脸收编
     { word: 'wink-slow', kind: 'face', w: 2 },   // 2026-11-22：原来是 'wink'，形象包和 kit 都没有这个词 → 抽到等于空转                 // kit 原生脸（词表没有 wink 词，走 kit setExpr）
@@ -99,10 +101,17 @@ export default {
     { word: 'slow-sway', kind: 'act', w: 2 },
     { word: 'theater-sway-1', kind: 'act', w: 3 },   // 2026-11-22 提权：整套摇摆太少见（原来 3 小时一次）
     { word: 'theater-sway-2', kind: 'act', w: 3 },
-    { word: 'grass-hand', kind: 'act', w: 4, life: 4 },   // 手部词上调（用户点名难触发）
+    // 2026-11-23：grass-hand（只举手）和 grass-play（举起+歪头逗 5.4s）重复，池子里只留完整版，
+    // 权重沿用原来 give grass-hand 的 4（手部词用户点名过要常见）。
+    { word: 'grass-play', kind: 'act', w: 4 },
     { word: 'chest-hand', kind: 'act', w: 4, life: 4 },
     { word: 'finger-point', kind: 'act', w: 4, life: 4 },
     { word: 'swing', kind: 'act', w: 2 },
+    // 2026-11-23 补：新做的整段 clip 也要进池子，否则她只有被人说才做
+    { word: 'yawn', kind: 'act', w: 2 },          // 打哈欠（3.6s，整段）
+    { word: 'doze', kind: 'act', w: 1 },          // 打瞌睡（5.2s，最长，彩蛋级）
+    { word: 'nod', kind: 'act', w: 3 },           // 点头（1.06s，带过冲）
+    { word: 'shake', kind: 'act', w: 2 },         // 摇头（1.34s）
     { word: 'skit', kind: 'act', w: 4 },   // 彩蛋小剧场（见 profile.skits）：13 段日常 + 6 段时间条件，
     // 每次要占 15~30 秒（演出 + 保持），按「占用时间」算比同权重的单动作重得多，所以压到 4。
     // 权重只管「多久演一次」；演哪一段由 when 条件过滤（0~3 点催睡等），两者互不影响
