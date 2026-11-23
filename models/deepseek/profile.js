@@ -245,7 +245,11 @@ export default {
     '挨打': 'hit', '被打': 'hit', '被砸': 'hit',
     // 悬停六条（等 kit 的 hover 接上；现在也能被台词直接点名）
     '悬停头': 'hover-head', '悬停脸': 'hover-face', '悬停手': 'hover-hand',
-    '悬停裙': 'hover-skirt', '悬停尾': 'hover-tail', '悬停身': 'hover-body', 'thinking': 'thinking',
+    '悬停裙': 'hover-skirt', '悬停尾': 'hover-tail', '悬停身': 'hover-body',
+    // 第三批待机小动作（2026-11-23）：打瞌睡/玩狗尾草 是新 id，其余六个复用现有 id（EMO_CLIPS 优先，走整段 clip）
+    '打瞌睡': 'doze', '打盹': 'doze',
+    '玩狗尾草': 'grass-play', '逗狗尾草': 'grass-play',
+    'thinking': 'thinking',
     '神气': 'smug-face', 'smug': 'smug-face',
     '嘟嘴': 'mouth-pout', 'pout': 'mouth-pout',
     '坚定': 'determined', 'determined': 'determined',
