@@ -3122,7 +3122,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       const angleXVal = clamp((lookHead[0] ?? 0) / 5 * 22 * _lookW + driftX + ruaRX, -30, 30);
       const angleYVal = clamp(ay * 30 + (lookHead[1] ?? 0) / 4 * 16 * _lookW + driftY + ruaRY, -30, 30);
       // 拖拽两级（见下面 else 分支的同一处注释）：只在 drag 补，其他 mode 恒 0
-      const _dragLag = frame.mode === 'drag' ? clamp(-tilt * 0.35, -14, 14) : 0;
+      const _dragLag = frame.mode === 'drag' ? clamp(-tilt * 1.8, -20, 20) : 0;
       const angleZVal = clamp(az * 30 + driftZ + _ruaTilt + _dragLag, -30, 30);
       // 2026-11-21 照搬他们 Spring（springK=130/springC=13）：头角度过弹簧，有惯性/过冲才自然
       const [sK, sC] = ruaKc();   // 摸 150/14 · 松手 200/28 · 融化 90/9 · 平时 130/13
@@ -3183,14 +3183,15 @@ export async function createLive2DBody(base, opts, entry, kit) {
         : 0;
       const angleXVal = clamp((lookHead[0] ?? 0) / 5 * 22 * _lookW + driftX + ruaRX, -30, 30);
       const angleYVal = clamp((lookHead[1] ?? 0) / 4 * 16 * _lookW + driftY + ruaRY, -30, 30);
-      // 拖拽两级（2026-11-24，照 PetWindow.Touch.cs:403-405 的思路）：
+      // 拖拽两级（2026-11-24，照 PetWindow.Touch.cs:403-405 的比例）：
       // groupTilt 把 tilt 转在**整张图**上 —— 头和身体一起（刚体），所以甩起来没有相对运动。
-      // 这里让头**反向**补一部分：整图转 +tilt，头的参数补 -0.35·tilt → 头相对世界只转了 0.65·tilt，
-      // 视觉上头就"落后"于身体，停下时还会晃两下（甩尾）。
+      // 这里让头**反向**补：整图转 +tilt，头的参数补 -1.8·tilt（clamp ±20）→
+      // tilt=12 时头相对世界是 -8，和身体差了 20 度 —— 就是他们的比例（body 4° / head −18°）。
+      // 补偿 <1 倍的时候头只是"少转一点"，看不出二级；要超过 1 倍才会真的"甩在后面"。
       // 只在 drag 生效 —— 其他 mode 恒 0，所以词/表演/摸头的手感一点不受影响。
       // 他们读的是物理输出 ParamBodyAngleX（Aimed），我们读 tilt：整图旋转就是"身体转了多少"的等价量，
       // 而且不受物理时序影响（physics 在 applyChannel 之后才算）。
-      const _dragLag = frame.mode === 'drag' ? clamp(-tilt * 0.35, -14, 14) : 0;
+      const _dragLag = frame.mode === 'drag' ? clamp(-tilt * 1.8, -20, 20) : 0;
       const angleZVal = clamp(driftZ + _ruaTilt + _dragLag, -30, 30);
       // 2026-11-21 照搬他们 Spring（springK=130/springC=13）：头角度过弹簧，有惯性/过冲才自然
       {

@@ -1305,6 +1305,28 @@ function toneOf(text: string): string {
     },
   },
   {
+    file: 'body', id: 'dragTiltPivot',
+    desc: '拖拽倾斜的支点与幅度：原版支点是脖子（ay=36）→ 绕脖子转，头定、脚在 220 单位外被甩飞（用户「头跟着鼠标、脚反方向飘」）；改成接近脚（220）。幅度也从 ±40 收到 ±12（他们 body 4° + ViewRoll 4°），弹簧换他们的 70/7',
+    detect: (s) => /ay = drag \? 220 : 256/.test(s),
+    apply: (s) => {
+      let out = s;
+      const p1 = "    const ax = 128, ay = drag ? 36 : 256;";
+      if (!out.includes(p1)) throw new Error('dragTiltPivot：支点未命中');
+      out = out.replace(p1,
+        "    // 2026-11-24 用户：「往左拖，头跟着鼠标，但身体到脚那部分往反方向飘」。\n"
+        + "    // 原因是拖拽把旋转支点从脚（256）改到了脖子（36）—— 绕脖子转，头在支点附近几乎不动，\n"
+        + "    // 脚离支点 220 单位，被甩到相反方向。支点下移到接近脚，就变成「站姿整体倾倒」。\n"
+        + "    const ax = 128, ay = drag ? 220 : 256;");
+      const p2 = "        tiltT = clamp(pointer.vx * .035, -40, 40); tk = 90; tc = 5;";
+      if (!out.includes(p2)) throw new Error('dragTiltPivot：drag tilt 未命中');
+      out = out.replace(p2,
+        "        // 幅度照他们（body 4° + ViewRoll 4°）：原来 ±40 是他们的 10 倍，甩起来像被风吹。\n"
+        + "        // 弹簧用他们的 body 70/7（原来是 90/5，更软更荡）。\n"
+        + "        tiltT = clamp(pointer.vx * .012, -12, 12); tk = 70; tc = 7;");
+      return out;
+    },
+  },
+  {
     file: 'body', id: 'landKind',
     desc: '落地判据按真实松手速度：原作者把 pet.airKind 无条件写成 throw，事件却按速度分 throw/drop —— 轻轻放下落地也会按「抛出去」判 crash（用户 22:32 的「重重摔晕」就是这么来的）',
     detect: (s) => /airKind = speed > 700/.test(s),
