@@ -1281,6 +1281,30 @@ function toneOf(text: string): string {
     },
   },
   {
+    file: 'body', id: 'dragStretch',
+    desc: '拖拽形变改成跟垂直速度：原来一进 drag 就把 stretch 拉到 1（横向 −5%、纵向 +9% 恒定），用户「一拉起来她就拉伸一样」；改成快速甩才变形、停下归零',
+    detect: (s) => /pointer\.vy/.test(s),
+    apply: (s) => {
+      let out = s;
+      const p1 = "  const pointer = { x: -1e4, y: -1e4, inside: false, vx: 0, samples: [] };";
+      if (!out.includes(p1)) throw new Error('dragStretch：pointer 定义未命中');
+      out = out.replace(p1, "  const pointer = { x: -1e4, y: -1e4, inside: false, vx: 0, vy: 0, samples: [] };");
+      const p2 = "    pointer.vx = lerp(pointer.vx, velocity().x, .35);";
+      if (!out.includes(p2)) throw new Error('dragStretch：pointer.vx 未命中');
+      out = out.replace(p2, p2 + "\n    pointer.vy = lerp(pointer.vy, velocity().y, .35);");
+      const p3 = "    pet.stretch = lerp(pet.stretch, m === 'drag' ? 1 : 0, ease(8, dt));";
+      if (!out.includes(p3)) throw new Error('dragStretch：stretch 未命中');
+      out = out.replace(p3,
+        "    // 2026-11-24 用户：「一拉起来她就拉伸一样」。原版一进 drag 就恒定拉满（sx −5% / sy +9%），\n"
+        + "    // 看着像橡皮。他们的 ViewSquash 是跟手相对头的位置（±8%，手不动就不变），\n"
+        + "    // 我们的抓取点可以是身上任意高度，没有「后颈」这个基准 —— 改成跟**垂直速度**：\n"
+        + "    // 快速甩才变形，停下就归零（-1 压扁 / +1 拉长，1200 px/s 打满）。\n"
+        + "    const stT = m === 'drag' ? clamp(-pointer.vy / 1200, -.8, 1) : 0;\n"
+        + "    pet.stretch = lerp(pet.stretch, stT, ease(8, dt));");
+      return out;
+    },
+  },
+  {
     file: 'body', id: 'landKind',
     desc: '落地判据按真实松手速度：原作者把 pet.airKind 无条件写成 throw，事件却按速度分 throw/drop —— 轻轻放下落地也会按「抛出去」判 crash（用户 22:32 的「重重摔晕」就是这么来的）',
     detect: (s) => /airKind = speed > 700/.test(s),
