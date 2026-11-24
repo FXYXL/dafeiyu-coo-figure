@@ -1360,13 +1360,15 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 播完自己走。没 exit 的照旧写 0 清掉。
     // 2026-11-23：合成一张表之后只剩**一个**循环（以前 channel 和 tracks 各扫一遍，
     // 而且第二遍会把第一遍刚生成的收手轨道又重置一次 → 寻宝剧本「放完手又放一遍」）。
-    const exitFrames = (def, id) => {
-      const raw = (def?.exit?.keys ?? def?.exitKeys)?.filter((k) => k.id === id);
+    const exitFrames = (def, c) => {
+      const raw = (def?.exit?.keys ?? def?.exitKeys)?.filter((k) => k.id === c.id);
       if (!raw?.length) return null;
-      // 起始值改成参数当前值：手抬到一半被打断时，直接从 exit 第 0 帧起播会「啪」地跳一下
-      const i = paramIndex.get(id);
-      const cur = i === undefined ? null : model._model.getParameterValueByIndex(i);
-      return raw.map((k, n) => [k.t ?? 0, n === 0 && cur !== null ? cur : (k.v ?? 0)]);
+      // 起始值 = 这条**自己**现在到哪了：手抬到一半被打断时，直接从 exit 第 0 帧起播会「啪」跳一下。
+      // 2026-11-24：**不能读模型的当前值** —— 表演手势的收手是在 draw 里（loadParameters 之后）
+      // 算的，那时参数还是基准值 0，读出来就把 exit 的第 0 帧改成 0
+      // → 收手动画变成「0 → 1 → 0」的一次抽搐（用户：像放了两遍 / 放手动画消失直接回去）。
+      const cur = c.kind === 'keys' ? sampleKeys(c.frames, clockT - c.t0) : (c.to ?? 0);
+      return raw.map((k, n) => [k.t ?? 0, n === 0 ? cur : (k.v ?? 0)]);
     };
     for (let n = layers.length - 1; n >= 0; n--) {
       const c = layers[n];
@@ -1374,11 +1376,15 @@ export async function createLive2DBody(base, opts, entry, kit) {
       if (onlyHand && !(c.hand || (c.src && paramActs[c.src]?.hand))) continue;
       if (c.exiting) continue;   // 收手动画正在播：别重置它
       const def = c.src ? paramActs[c.src] : null;
-      const frames = exitFrames(def, c.id);
+      const frames = exitFrames(def, c);
       if (frames) {
         // 就地改成收手关键帧（相加语义），时间轴从头起
         c.kind = 'keys'; c.frames = frames; c.t0 = clockT; c.dur = def.exit?.dur ?? def.exitDur ?? 1.25;
         c.keep = false; c.hand = true; c.exiting = true; c.post = false;
+        // **必须清掉 clipHold**：合表之后 clipHold 的条目和收手轨道在同一张表里，
+        // stepClips 那句「收手时删掉 clipHold 的条目」会把刚生成的收手动画一起删掉
+        // → 手「啪」地直接回去（用户 2026-11-24：表演类的手放手动画消失/像放了两遍）。
+        c.clipHold = false;
         delete c.from; delete c.to;
         continue;
       }
@@ -2119,9 +2125,12 @@ export async function createLive2DBody(base, opts, entry, kit) {
     for (const [id, sum] of sums) addParam(id, sum);      // 相加（夹在参数范围内）
 
     // ---------- 表演层（clip）：和词同一张表、同一条写入路径 ----------
-    // 一条表演的 sets 共享它的权重 w（0.15 秒 Hold 那条），keys 照常相加；
-    // 同一个参数被两条表演同时写时按**权重仲裁**（w 大的赢，一样大听新的）——
-    // 这样交接点是 0.5 对 0.5 的交叉淡入，既不会被收尾的旧的吃掉，也不会闪一下。
+    // 一组表演的 sets 共享它的权重 w（0.15 秒 Hold 那条），keys 照常相加。
+    // 两条表演同时写同一个参数时：**连续量按权重混合**（Σv·w / max(1,Σw)），
+    // 而不是「谁大听谁」——后者在交接那一帧是个硬台阶（用户 2026-11-24：
+    // 连说两次脸红，身体角度会抽一下）。混合后是一条连续的过渡曲线。
+    // 贴图 key 和手型开关（Movement1/2/3）是**二元**的，混合会变成半透明/半抬手，
+    // 这两个还是取权重最大的那条（一样大听新的）。
     if (!wantPost) {
       const byClip = new Map();   // 组 → Map(参数, 值)
       for (const c of layers) {
@@ -2134,7 +2143,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
         if (c.kind === 'cset') {
           if (g.w > .004) {
             // EyeOpen 的 0 是「不动眼睛」，不能算一次写入 —— 否则它会占住这个参数槽，
-            // 把另一条表演的闭眼/眨眼仲裁掉（问候 clip 闭眼被刚起的歪头 clip 顶开）。
+            // 把另一条表演的闭眼/眨眼稀释掉（问候 clip 闭眼被刚起的歪头 clip 顶开）。
+            // sets 在这里就乘上权重（整组一起淡入淡出）；keys 不乘。
             if (c.id !== 'EyeOpen' || Math.abs(c.val) > .002) acc.set(c.id, (acc.get(c.id) ?? 0) + c.val * g.w);
           }
         } else if (age < g.def.dur) {
@@ -2145,14 +2155,26 @@ export async function createLive2DBody(base, opts, entry, kit) {
         }
       }
       if (byClip.size) {
-        const win = new Map();   // 参数 → { v, w, t0 }
+        const HARD = /^(key\d+|Movement\d)$/;   // 二元参数：只选一个，不混合
+        const blend = new Map();   // 参数 → { sum, wsum }
+        const pick = new Map();    // 参数 → { v, w, t0 }
         for (const [g, acc] of byClip) {
           for (const [id, v] of acc) {
-            const p = win.get(id);
-            if (!p || g.w > p.w + 1e-6 || (Math.abs(g.w - p.w) <= 1e-6 && g.t0 > p.t0)) win.set(id, { v, w: g.w, t0: g.t0 });
+            if (HARD.test(id)) {
+              const p = pick.get(id);
+              if (!p || g.w > p.w + 1e-6 || (Math.abs(g.w - p.w) <= 1e-6 && g.t0 > p.t0)) pick.set(id, { v, w: g.w, t0: g.t0 });
+            } else {
+              // v 已经含 sets 的权重（keys 不含）——所以这里只累加，不再乘 w；
+              // 除数用 max(1, Σw)：只有一组时原样输出（淡入淡出不受影响），
+              // 多组同时演时是它们的加权平均。
+              const b = blend.get(id) ?? { sum: 0, wsum: 0 };
+              b.sum += v; b.wsum += g.w;
+              blend.set(id, b);
+            }
           }
         }
-        for (const [id, { v }] of win) writeParamVal(id, v, t);
+        for (const [id, { sum, wsum }] of blend) writeParamVal(id, sum / Math.max(1, wsum), t);
+        for (const [id, { v }] of pick) writeParamVal(id, v, t);
       }
     }
     // 叠加层（2.8）：主通道写完后，把外力增量**加**到当前值上（rua 头反向叠在歪头词上 = 更歪）
