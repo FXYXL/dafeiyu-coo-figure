@@ -1306,24 +1306,38 @@ function toneOf(text: string): string {
   },
   {
     file: 'body', id: 'dragTiltPivot',
-    desc: '拖拽倾斜的支点与幅度：原版支点是脖子（ay=36）→ 绕脖子转，头定、脚在 220 单位外被甩飞（用户「头跟着鼠标、脚反方向飘」）；改成接近脚（220）。幅度也从 ±40 收到 ±12（他们 body 4° + ViewRoll 4°），弹簧换他们的 70/7',
-    detect: (s) => /ay = drag \? 220 : 256/.test(s),
+    desc: '拖拽倾斜幅度收到他们的量级（±40 → ±6，弹簧 90/5 → 70/7）',
+    detect: (s) => /pointer\.vx \* \.006/.test(s),
     apply: (s) => {
+      // 2026-11-24 教训：`const ax = 128, ay = drag ? 36 : 256;` 里的 (ax,ay) 在
+      // translate(AX AY) rotate(rot) scale() translate(-ax -ay) 里**同时**是旋转中心和
+      // 「落在鼠标上的那个点」。曾把 drag 的 36 改成 220 想让身体绕脚倾 ——
+      // 结果变成「脚底板落在鼠标上」，整个人往上窜 184 单位（用户："一拖头就飞到天上"）。
+      // 数学上这两个角色拆不开：只要要求某点落在 A，旋转中心就只能是它。
+      // 所以整图旋转必须留在脖子（36）；「身体倾、脚不动」只能靠模型参数（ParamBodyAngleX），
+      // 我们不能直接写（那是 physics3.json 的输出）。整图旋转幅度只能往小收：
+      // 脚离支点 220 单位，12° 时脚位移 46（形象的 18%），6° 时 23（9%）。
       let out = s;
-      const p1 = "    const ax = 128, ay = drag ? 36 : 256;";
-      if (!out.includes(p1)) throw new Error('dragTiltPivot：支点未命中');
-      out = out.replace(p1,
-        "    // 2026-11-24 用户：「往左拖，头跟着鼠标，但身体到脚那部分往反方向飘」。\n"
-        + "    // 原因是拖拽把旋转支点从脚（256）改到了脖子（36）—— 绕脖子转，头在支点附近几乎不动，\n"
-        + "    // 脚离支点 220 单位，被甩到相反方向。支点下移到接近脚，就变成「站姿整体倾倒」。\n"
-        + "    const ax = 128, ay = drag ? 220 : 256;");
-      const p2 = "        tiltT = clamp(pointer.vx * .035, -40, 40); tk = 90; tc = 5;";
-      if (!out.includes(p2)) throw new Error('dragTiltPivot：drag tilt 未命中');
-      out = out.replace(p2,
-        "        // 幅度照他们（body 4° + ViewRoll 4°）：原来 ±40 是他们的 10 倍，甩起来像被风吹。\n"
+      const prev = "        tiltT = clamp(pointer.vx * .012, -12, 12); tk = 70; tc = 7;";
+      const orig = "        tiltT = clamp(pointer.vx * .035, -40, 40); tk = 90; tc = 5;";
+      const next = "        // 幅度照他们的 ViewRoll（4°）再宽一点：原来 ±40 是他们的 10 倍，甩起来像被风吹。\n"
         + "        // 弹簧用他们的 body 70/7（原来是 90/5，更软更荡）。\n"
-        + "        tiltT = clamp(pointer.vx * .012, -12, 12); tk = 70; tc = 7;");
-      return out;
+        + "        // 支点仍是 36（脖子）—— 不能改：那个点同时是「挂在鼠标上的点」。\n"
+        + "        // 头部的「甩尾」不靠这个，靠形象侧的 _dragLag（反向补 2.5 倍，clamp ±15）。\n"
+        + "        tiltT = clamp(pointer.vx * .006, -6, 6); tk = 70; tc = 7;";
+      if (out.includes(prev)) return out.replace(prev, next);   // 已打过 ±12 的版本
+      if (!out.includes(orig)) throw new Error('dragTiltPivot：drag tilt 未命中');
+      return out.replace(orig, next);
+    },
+  },
+  {
+    file: 'body', id: 'dragPivotRevert',
+    desc: '把拖拽支点从 220 改回 36 —— 220 会让「脚底板落在鼠标上」，整个人往上窜 184 单位（用户 14:00「一拖头就飞到天上」）',
+    detect: (s) => /ay = drag \? 36 : 256;/.test(s),
+    apply: (s) => {
+      const a = '    const ax = 128, ay = drag ? 220 : 256;';
+      if (!s.includes(a)) return null;
+      return s.replace(a, '    const ax = 128, ay = drag ? 36 : 256;   // 别改大：这个点同时是「挂在鼠标上的点」，改了整张图会窜');
     },
   },
   {

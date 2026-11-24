@@ -3122,7 +3122,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       const angleXVal = clamp((lookHead[0] ?? 0) / 5 * 22 * _lookW + driftX + ruaRX, -30, 30);
       const angleYVal = clamp(ay * 30 + (lookHead[1] ?? 0) / 4 * 16 * _lookW + driftY + ruaRY, -30, 30);
       // 拖拽两级（见下面 else 分支的同一处注释）：只在 drag 补，其他 mode 恒 0
-      const _dragLag = frame.mode === 'drag' ? clamp(-tilt * 1.8, -20, 20) : 0;
+      const _dragLag = frame.mode === 'drag' ? clamp(-tilt * 2.5, -15, 15) : 0;
       const angleZVal = clamp(az * 30 + driftZ + _ruaTilt + _dragLag, -30, 30);
       // 2026-11-21 照搬他们 Spring（springK=130/springC=13）：头角度过弹簧，有惯性/过冲才自然
       const [sK, sC] = ruaKc();   // 摸 150/14 · 松手 200/28 · 融化 90/9 · 平时 130/13
@@ -3191,7 +3191,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       // 只在 drag 生效 —— 其他 mode 恒 0，所以词/表演/摸头的手感一点不受影响。
       // 他们读的是物理输出 ParamBodyAngleX（Aimed），我们读 tilt：整图旋转就是"身体转了多少"的等价量，
       // 而且不受物理时序影响（physics 在 applyChannel 之后才算）。
-      const _dragLag = frame.mode === 'drag' ? clamp(-tilt * 1.8, -20, 20) : 0;
+      const _dragLag = frame.mode === 'drag' ? clamp(-tilt * 2.5, -15, 15) : 0;
       const angleZVal = clamp(driftZ + _ruaTilt + _dragLag, -30, 30);
       // 2026-11-21 照搬他们 Spring（springK=130/springC=13）：头角度过弹簧，有惯性/过冲才自然
       {
