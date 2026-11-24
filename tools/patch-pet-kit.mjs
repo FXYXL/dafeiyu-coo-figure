@@ -19,10 +19,40 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-// 桌宠引擎位置：默认作者的机器，其他人用 --dir= 传自己的安装目录
-//   node patch-pet-kit.mjs --dir="C:/我的Coo路径/resources/app/node_modules/cortico-world-desktop-pet"
+// 桌宠引擎位置。三种找法（按顺序）：
+//   1. --dir="..."  显式指定。可以传 Coo 根目录，也可以直接传引擎目录，两种都认
+//   2. 依次探测常见安装位置
+//   3. 作者的机器（只有本机开发时才会命中）
+//   node patch-pet-kit.mjs --dir="C:/Program Files/Coopanion"
 const argDir = process.argv.find((a) => a.startsWith('--dir='));
-const DIR = (argDir ? argDir.slice(6).replace(/[\\/]+$/, '') : 'D:/Coopanion/resources/app/node_modules/cortico-world-desktop-pet');
+const ENGINE_SUFFIX = '/resources/app/node_modules/cortico-world-desktop-pet';
+const lookLikeEngine = (d) => !!d && fs.existsSync(path.join(d, 'web/kit/body.js'));
+const CANDIDATES = [
+  process.env.LOCALAPPDATA && `${process.env.LOCALAPPDATA}/Programs/Coopanion${ENGINE_SUFFIX}`,
+  `C:/Program Files/Coopanion${ENGINE_SUFFIX}`,
+  `C:/Program Files (x86)/Coopanion${ENGINE_SUFFIX}`,
+  `D:/Coopanion${ENGINE_SUFFIX}`,
+  `E:/Coopanion${ENGINE_SUFFIX}`,
+].filter(Boolean);
+function resolveDir() {
+  if (argDir) {
+    const d = argDir.slice(6).replace(/["']/g, '').replace(/[\\/]+$/, '');
+    if (lookLikeEngine(d)) return d;
+    if (lookLikeEngine(d + ENGINE_SUFFIX)) return d + ENGINE_SUFFIX;   // 传的是 Coo 根目录
+    console.error(`\n找不到桌宠引擎：${d}\n`
+      + `  这个目录下没有 web/kit/body.js。--dir= 可以传两种路径：\n`
+      + `    · Coo 根目录            C:/Program Files/Coopanion\n`
+      + `    · 引擎目录（更精确）    C:/Program Files/Coopanion${ENGINE_SUFFIX}\n`
+      + `  不知道装在哪：任务管理器 → 详细信息 → 右键 Coopanion.exe → 「打开文件位置」\n`);
+    process.exit(2);
+  }
+  for (const c of CANDIDATES) if (lookLikeEngine(c)) return c;
+  console.error(`\n没找到 Coo 的安装位置。自动探测过这些：\n${CANDIDATES.map((c) => '  ' + c).join('\n')}\n\n`
+    + `  请显式指定：node patch-pet-kit.mjs --dir="C:/你的/Coo安装目录"\n`
+    + `  不知道装在哪：任务管理器 → 详细信息 → 右键 Coopanion.exe → 「打开文件位置」\n`);
+  process.exit(2);
+}
+const DIR = resolveDir();
 const FILES = {
   body: `${DIR}/web/kit/body.js`,
   host: `${DIR}/web/body-host.js`,
