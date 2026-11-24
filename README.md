@@ -55,6 +55,10 @@ node tools/patch-pet-kit.mjs --dir="C:/你的/Coo安装目录"
 > **Coo 每次更新都会覆盖这些文件**，更新完重跑一次补丁。
 > 每打一个文件会留一份 `<文件名>.bak-petkit`（只保留第一次的原版），`--revert` 靠它还原。
 
+> **如果 Coo 更新后补丁开始报 `✗ 找不到锚点`**：说明引擎源码结构变了，补丁需要跟着适配。
+> 到 [Issues](https://github.com/FXYXL/dafeiyu-coo-figure/issues) 提一下，附上 `--check` 的完整输出
+> 和你的 Coo 版本号（设置 → 关于）即可。形象包本身仍然能用，只是对应的那几个新交互会失效。
+
 ## 这个包比原皮多了什么
 
 | 能力 | 说明 |
