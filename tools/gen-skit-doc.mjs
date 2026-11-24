@@ -4,11 +4,11 @@
  *
  *   node tools/gen-skit-doc.mjs ["输出路径"]
  *
- * 默认输出到 D:/AI/大肥鱼形象用/小剧场台词.md
+ * 默认输出到 D:/AI/大肥鱼形象用/docs/02-系统设计/小剧场台词.md
  */
 import fs from 'node:fs';
 
-const OUT = process.argv[2] || 'D:/AI/大肥鱼形象用/小剧场台词.md';
+const OUT = process.argv[2] || 'D:/AI/大肥鱼形象用/docs/02-系统设计/小剧场台词.md';
 const profile = (await import('../models/deepseek/profile.js')).default;
 const alias = profile.wordAlias ?? {};
 
@@ -52,9 +52,9 @@ const WHEN = (w) => {
 };
 
 const lines = [];
-lines.push('# 小剧场台词（13 段）');
+lines.push(`# 小剧场台词（${profile.skits.length} 段）`);
 lines.push('');
-lines.push('待机时偶尔自己演一小段，**随机抽**，约 3~4 分钟一次（测试期频率，正式是 20 分钟）。');
+lines.push('待机时从闲时池按权重随机抽（`skit` 权重 4），一段占 15~30 秒；其中 6 段看时间/日期触发。');
 lines.push('台词是固定的、我这边写好放进去的，**不进对话上下文**——她不会记得自己说过这些。');
 lines.push('演到一半她真的开口说话、或者被拖动/走路，会立刻打断。');
 lines.push('');
