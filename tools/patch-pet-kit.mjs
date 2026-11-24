@@ -1060,7 +1060,7 @@ function toneOf(text: string): string {
       // 3) 1.5 秒宽限（放在 stepRua 末尾）
       const a2 = "      onEvent('touch', { kind: 'rua-still', tier: ruaTier, seconds: Math.max(rua.seconds, ruaMax) });   // 峰值，防倒退\n    }\n  }";
       if (!out.includes(a2)) throw new Error('ruaTune：stepRua 尾部锚点未命中');
-      out = out.replace(a2, "      onEvent('touch', { kind: 'rua-still', tier: ruaTier, seconds: Math.max(rua.seconds, ruaMax) });   // 峰值，防倒退\n    }\n    lastRuaAt = t;\n    // 2026-11-22 用户：1.5 秒宽限不要了 —— 手离开头区就算了，只在松手时结算。\n  }");
+      out = out.replace(a2, "      onEvent('touch', { kind: 'rua-still', tier: ruaTier, seconds: Math.max(rua.seconds, ruaMax) });   // 峰值，防倒退\n    }\n    lastRuaAt = T;   // 秒（T 是同单位）；别写 now(p)，那是毫秒\n    // 2026-11-22 用户：1.5 秒宽限不要了 —— 手离开头区就算了，只在松手时结算。\n  }");
       // 4)（已删）原来这里把落地 crash 事件整个掐掉，理由是「rua 后 3 秒不算摔晕」。
       // 2026-11-23 查明刷屏真因是控制台 touch 渲染器的 default 分支（见 chat 的 ruaChat 补丁），
       // 跟 crash 事件无关；这条抑制只会让「真被甩出去」也不再告诉她。恢复上游原样，不再改。
@@ -1268,6 +1268,16 @@ function toneOf(text: string): string {
       if (!out.includes(a2)) throw new Error('noGrabAfterRua：grab 锚点未命中');
       out = out.replace(a2, "    // rua 刚结束的 3 秒内绝不 grab：残留 press + 鼠标一动就会被当成拖拽，松手甩出去就是\n    // 「摸头 0 秒 + 你重重落地，摔晕了一会儿」（用户 2026-11-22 实测）。\n    if (press && pet.mode !== 'drag' && T - lastRuaAt > 3 && Math.hypot(p.x - press.x, p.y - press.y) > 6) grab();");
       return out;
+    },
+  },
+  {
+    file: 'body', id: 'grabUnitFix',
+    desc: '修 lastRuaAt 的单位：它存的是 now(p)（毫秒），而 noGrabAfterRua 拿它和 T（秒）比 —— 差值恒为负数，于是「摸过一次头之后左键永远拖不动」（用户 2026-11-24 报「触发不了长按拖拽」）',
+    detect: (s) => /lastRuaAt = T;/.test(s),
+    apply: (s) => {
+      const a = "    lastRuaAt = t;";
+      if (!s.includes(a)) return null;   // 已经是 T，或者 ruaTune 没打上
+      return s.replace(a, "    lastRuaAt = T;   // 秒：和 T 同单位（原来写 now(p) 的毫秒，则 T - lastRuaAt 恒为负 → 摸过一次就再也拖不动）");
     },
   },
   {
