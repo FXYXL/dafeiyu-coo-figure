@@ -1,6 +1,6 @@
 # 大肥鱼 · Coo 桌宠形象包
 
-> 当前版本 **1.11.0** ｜ 更新内容见 [Releases](https://github.com/FXYXL/dafeiyu-coo-figure/releases)
+> 当前版本 **1.14.48** ｜ 更新内容见 [Releases](https://github.com/FXYXL/dafeiyu-coo-figure/releases)
 
 把「DeepSeek 免费公皮」（原本是 VTube Studio 生态的 Live2D 模型）改造成 [Coopanion](https://coopanion.com) 桌面宠物可用的形象包。
 
@@ -10,8 +10,12 @@
 
 ## 安装
 
-1. 下载本仓库（或 Release 里的 zip）
-2. 整个目录放进：
+分两步：**放形象** + **打补丁**。只放形象不跑补丁的话，戳一戳、悬停、拖拽、rua 的实时反应都不会出现（那些逻辑在桌宠引擎里，不在形象包里）。
+
+### 第 1 步：放形象
+
+1. 下载本仓库（或 Release 里的 zip 并解压）
+2. 把**含 `figure.json` 的那一层目录**整个放进：
 
 ```
 <Coopanion 数据目录>/home/companion/data/figures/
@@ -23,9 +27,33 @@ Windows 上通常是：
 C:\Users\<你>\AppData\Roaming\Coopanion\data\home\companion\data\figures\
 ```
 
-3. 重启 Coopanion → 形象面板里选「大肥鱼」
+目录名随意（比如 `dafeiyu`），但里面必须有 `figure.json`，Coo 靠它识别形象。
 
-目录里必须有 `figure.json`，Coo 靠它识别形象。
+### 第 2 步：打补丁（必须）
+
+桌宠引擎（`cortico-world-desktop-pet`）是随 Coo 安装的，补丁改的是它里面的文件。
+
+```bash
+cd <本包目录>
+node tools/patch-pet-kit.mjs --dir="C:/你的/Coo安装目录"
+```
+
+- `--dir` 传 **Coo 根目录** 或 **引擎目录** 都行，脚本会自己找
+- 不传 `--dir` 时会自动探测常见安装位置（Program Files、`%LOCALAPPDATA%\Programs`、D/E 盘的 `Coopanion`）
+- **不知道 Coo 装在哪**：任务管理器 → 详细信息 → 右键 `Coopanion.exe` → 「打开文件位置」
+
+常用参数：
+
+| 命令 | 作用 |
+|---|---|
+| `node tools/patch-pet-kit.mjs --dir="..."` | 打补丁（已打的会跳过） |
+| `... --check` | 只检查，不写文件 —— 想知道自己打没打全就跑这个 |
+| `... --revert` | 从 `.bak-petkit` 还原成原版引擎 |
+
+**验证是否打全**：`--check` 输出里每一行都应该是「跳过 xxx（已打）」，出现 `✗` 或 `⚠` 才算有问题。
+
+> **Coo 每次更新都会覆盖这些文件**，更新完重跑一次补丁。
+> 每打一个文件会留一份 `<文件名>.bak-petkit`（只保留第一次的原版），`--revert` 靠它还原。
 
 ## 这个包比原皮多了什么
 
@@ -352,3 +380,18 @@ profile.js 的定制配置        随本仓库以 AGPL-3.0-or-later 发布
 - 形象包运行时：Live2D Simple Workbench（as124da1231）
 - 木偶引擎：Coo / coo-kit
 - SoulLink 情绪引擎
+
+### 动作与曲线的参考来源
+
+本包的动作、情绪、物理参数**大量参照了 DeepFish（DeepSeek 桌宠）的公开 C# 实现**——同一模型在 VTube Studio / 自绘渲染器下的另一套桌宠。具体包括：
+
+| 方面 | 参考内容 |
+|---|---|
+| 物理 | `physics3.json` 的输入映射与摆锤链路：`AngleX/Y/Z`、`LeanInput`、`PositionX/Y/Z` 谁驱动谁 |
+| 动作曲线 | 头/身体的弹簧参数（摸头 150/14、拖拽身体 70/7、头 40/5、松手 200/28、融化 90/9） |
+| 情绪 | 「情绪 = 一组参数 + 关键帧 + 时长」的数据结构，以及各情绪的取值（前倾 −14 / 后仰 +9 等） |
+| 动作表 | 点头/摇头/鞠躬/歪头/抚胸/竖手指/狗尾草/思考等姿势的目标值与过渡 |
+| 交互阈值 | 悬停 10 秒 / 冷却 30 秒、rua 分档 3/8/20 秒、戳一戳的六条反应与左右镜像 |
+| 表演数据 | 小剧场的动作编排、口型时长与标点停顿 |
+
+没有那份实现作为对照，这个包不可能在参数不全、文档缺失的情况下把这些细节调到能用。**它的原创设计与代码版权归原作者**；本包只使用了其中可观察的行为与数值，并按本项目的数据格式重写了一遍（Live2D 参数名、Coo 的 figure 接口、JS 而非 C#）。如果原作者认为某些数值不宜被沿用，请联系我调整。
