@@ -67,8 +67,11 @@ C:\Users\<你>\AppData\Roaming\Coopanion\data\home\companion\data\figures\
 
 ### 第 2 步：打补丁（必须）
 
+听歌集成与微抖修正、补丁测试和回退说明见 [tools/music/README.md](tools/music/README.md)。
+
+
 桌宠引擎（`cortico-world-desktop-pet`）是随 Coo 安装的，补丁改的是它里面的文件——
-一共 **64 个补丁，分布在 10 个文件**（`body.js` 41 个，另有 `pet-app.js` / `script.ts` /
+一共 **83 个补丁，分布在 10 个文件**（`body.js` 45 个，另有 `pet-app.js` / `script.ts` /
 `server.ts` / `world` 等）。
 
 ```bash
@@ -212,7 +215,8 @@ node tools/patch-pet-kit.mjs --dir="C:/你的/Coo安装目录"
 
 ## 装扮开关
 
-服装不是三套写死的套餐，而是七根独立的轴，在 Coo 装扮页里逐项选、任意搭配：
+服装不是三套写死的套餐，而是七根独立的轴，在 Coo 装扮页里逐项选、任意搭配
+（装扮页一共 8 根轴，最后那根是「听歌反应」开关）：
 
 | 轴 | 选项 | 写的参数 |
 |---|---|---|
@@ -329,7 +333,7 @@ models/deepseek/*.moc3, textures/   模型与贴图
 sdk/                         Live2D Cubism SDK（Core + framework + 着色器）
 vendor/                      kit 依赖（木偶引擎由宿主提供，这里只带必要部分）
 thumb/                       形象与各选项的缩略图
-tools/patch-pet-kit.mjs      引擎补丁（64 个补丁，装完必跑）
+tools/patch-pet-kit.mjs      引擎补丁（83 个补丁，装完必跑）
 tools/gen-words-doc.mjs      从 figure.json 生成 WORDS.md
 port-custom.py               重新打包后恢复定制层的脚本
 WORDS.md                     完整词表（自动生成）

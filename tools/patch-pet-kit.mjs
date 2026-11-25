@@ -18,6 +18,9 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 // 桌宠引擎位置。三种找法（按顺序）：
 //   1. --dir="..."  显式指定。可以传 Coo 根目录，也可以直接传引擎目录，两种都认
@@ -67,6 +70,16 @@ const FILES = {
 };
 
 const PATCHES = [
+  {
+    file: 'body', id: 'rotationPrecision',
+    desc: 'SVG旋转保留5位小数，避免0.1度台阶导致听歌头部微抖',
+    detect: (s) => s.includes('rotate(${rot.toFixed(5)})'),
+    apply: (s) => {
+      const anchor = 'rotate(${f(rot)})';
+      if (s.split(anchor).length !== 2) return null;
+      return s.replace(anchor, 'rotate(${rot.toFixed(5)})');
+    },
+  },
   // ===== body.js：1.11 时代的四个 =====
   {
     file: 'body', id: 'pointer',
@@ -117,7 +130,7 @@ const PATCHES = [
         + '    pet.xf = { AX, AY, ax, ay, kx, ky, rot };',
       );
     },
-  },,
+  },
   {
     file: 'body', id: 'noTurn',
     desc: 'noMirror 的形象不做 facing 翻转（待机转身 + 张望动作两处）',
@@ -315,8 +328,15 @@ const PATCHES = [
   {
     file: 'body', id: 'ruaHead',
     desc: '4.2 rua 摸头状态机：分区判定（figure.touchZones）→ 按住头区 = rua（不抓起）；速度平滑/计时/档位（3s 脸红、8s 眉眼软、20s 融化）/单闭眼侧判/融化渐变，每帧 frame.rua 传形象画视觉；其他分区划过摸一下（带分区的事件）；开始/升档/持续心跳/结束四类事件',
-    detect: (s) => /function stepRua/.test(s),
+    // 2026-11-24：detect 只看 function stepRua 太松 —— 引擎里留着 11-21 的旧补丁版 stepRua 时，
+    // 这里判「已打」直接跳过，后面的 ruaHeadBox 却照常插入 rx: headRx → 摸头一触发就 headRx is not defined。
+    // 现在要求新版标志（_zHead / uxRaw）也在才算已打。
+    detect: (s) => /function stepRua/.test(s) && s.includes('const _zHead') && s.includes('uxRaw'),
     apply: (s) => {
+      // 旧补丁状态：stepRua 已存在但不是这一版。锚点早被换掉，硬打只会静默失败 —— 明说怎么恢复。
+      if (/function stepRua/.test(s) && !s.includes('const _zHead')) {
+        throw new Error('ruaHead：kit body.js 停留在旧补丁状态（有 stepRua 但没有 11-23 的头盒版本）。请用 web/kit/body.js.bak-petkit 覆盖 web/kit/body.js 后重跑本脚本');
+      }
       let out = s
         .replace(
           '  let press = null, strokeAcc = 0, petCool = 0;',
@@ -1450,48 +1470,323 @@ function toneOf(text: string): string {
       return s;
     },
   },
+  // ===== 听歌的耳朵（2026-11-24）=====
+  {
+    file: 'body', id: 'musicNoIdle',
+    desc: '听歌期间不抽随机漫游/待机词/小剧场（音乐层由形象自己演）',
+    detect: (s) => s.includes('custom?.musicActive?.()'),
+    apply: (s) => {
+      const a = "  function decide() {";
+      if (!s.includes(a)) throw new Error('musicNoIdle：锚点未命中');
+      return s.replace(a, a + "\n    if (custom?.musicActive?.()) return;   // 听歌时不做随机漫游/待机（小剧场也在 idle 池里）");
+    },
+  },
+  // ===== 听歌耳朵的传输层（2026-11-25 恢复）=====
+  // 链路：server 起 MusicEar → 它拉起 probe.ps1 读系统声音 → 50ms 一行 JSON 广播到 /music
+  //       → body-host 连 /music → post({t:'music', data}) 给形象 iframe
+  //       → figure-frame 转给 body.music() → figure.music(data) 写入 musicRaw。
+  // 形象侧只做判定和压随机，不含摆动（摆动在 live2d.js 的 stepMusicDance 里）。
+  {
+    file: 'server', id: 'musicEarImport',
+    desc: 'server.ts 引入 MusicEar',
+    detect: (s) => s.includes("from './music-ear.ts'"),
+    apply: (s) => {
+      const a = "import { WebSocketServer, type WebSocket } from 'ws';";
+      if (!s.includes(a)) throw new Error('musicEarImport：锚点未命中');
+      return s.replace(a, a + "\nimport { MusicEar } from './music-ear.ts';");
+    },
+  },
+  {
+    file: 'server', id: 'musicEarField',
+    desc: 'PetServer 持有耳朵实例',
+    detect: (s) => s.includes('private music: MusicEar'),
+    apply: (s) => {
+      const a = '  private wss: WebSocketServer | null = null;';
+      if (!s.includes(a)) throw new Error('musicEarField：锚点未命中');
+      return s.replace(a, a + '\n  /** 听歌的耳朵：Windows 下随服务启动，退出时收掉。 */\n  private music: MusicEar | null = null;');
+    },
+  },
+  {
+    file: 'server', id: 'musicEarStart',
+    desc: '服务起来后拉起耳朵',
+    detect: (s) => s.includes('new MusicEar(this.opts.webDir)'),
+    apply: (s) => {
+      const a = '      this.wss = new WebSocketServer({ noServer: true });';
+      if (!s.includes(a)) throw new Error('musicEarStart：锚点未命中');
+      return s.replace(a, a + '\n      this.music = new MusicEar(this.opts.webDir);\n      this.music.start();');
+    },
+  },
+  {
+    file: 'server', id: 'musicEarUpgrade',
+    desc: '/music 走独立 WebSocket，交给耳朵（必须排在 /socket 判断之前）',
+    detect: (s) => s.includes("url.pathname === '/music'"),
+    apply: (s) => {
+      const a = "        const url = new URL(req.url ?? '/', this.origin);\n        if (url.pathname !== '/socket') { socket.destroy(); return; }";
+      if (!s.includes(a)) throw new Error('musicEarUpgrade：锚点未命中');
+      return s.replace(a,
+        "        const url = new URL(req.url ?? '/', this.origin);\n"
+        + "        if (url.pathname === '/music') {\n"
+        + "          this.wss!.handleUpgrade(req, socket, head, (ws) => this.music?.attach(ws));\n"
+        + "          return;\n"
+        + "        }\n"
+        + "        if (url.pathname !== '/socket') { socket.destroy(); return; }");
+    },
+  },
+  {
+    file: 'server', id: 'musicEarStop',
+    desc: 'stop() 里收掉耳朵（否则 PowerShell 采集进程会留在后台）',
+    detect: (s) => s.includes('this.music?.stop()'),
+    apply: (s) => {
+      const a = '    this.wss?.close();';
+      if (!s.includes(a)) throw new Error('musicEarStop：锚点未命中');
+      return s.replace(a, '    this.music?.stop();\n    this.music = null;\n' + a);
+    },
+  },
+  {
+    file: 'host', id: 'musicBridge',
+    desc: '/pet 页连 /music，把快照转发给形象 iframe',
+    detect: (s) => s.includes('connectMusic'),
+    apply: (s) => {
+      const a = "    const timer = setTimeout(() => fail(new Error(t('figure.notReady', { seconds: READY_MS / 1000 }))), READY_MS);";
+      if (!s.includes(a)) throw new Error('musicBridge：锚点未命中');
+      const add = [
+        '    // 听歌的耳朵：引擎把 50ms 音频快照从 /music 推过来，转发给形象 iframe。',
+        '    // 形象 iframe 的 CSP 只能连自己的包目录，不能自己连；这里是普通页面，连本机 WS 没问题。',
+        '    let musicWs = null, musicRetry = 0;',
+        '    const connectMusic = () => {',
+        '      if (gone) return;',
+        "      try { musicWs = new WebSocket('ws://' + location.host + '/music'); } catch { return; }",
+        '      musicWs.onopen = () => { musicRetry = 0; };',
+        "      musicWs.onmessage = (e) => { try { post({ t: 'music', data: JSON.parse(e.data) }); } catch { /* 半行 */ } };",
+        '      musicWs.onclose = () => { musicWs = null; if (!gone) setTimeout(connectMusic, Math.min(10000, 1000 * (++musicRetry))); };',
+        '    };',
+        "    if (location.pathname === '/pet') connectMusic();",
+        '',
+      ].join('\n');
+      return s.replace(a, add + a);
+    },
+  },
+  {
+    file: 'host', id: 'musicClose',
+    desc: '关闭时断开 /music',
+    detect: (s) => s.includes('musicWs?.close()'),
+    apply: (s) => {
+      const a = '      gone = true;';
+      if (!s.includes(a)) throw new Error('musicClose：锚点未命中');
+      return s.replace(a, a + "\n      try { musicWs?.close(); } catch { /* 已经关了 */ }");
+    },
+  },
+  {
+    file: 'frame', id: 'musicMessage',
+    desc: 'figure-frame 把 music 消息转给 body',
+    detect: (s) => s.includes("m.t === 'music'"),
+    apply: (s) => {
+      const a = "    else if (m.t === 'cue') body.cue?.(m.kind);";
+      if (!s.includes(a)) throw new Error('musicMessage：锚点未命中');
+      return s.replace(a, "    else if (m.t === 'music') body.music?.(m.data);\n" + a);
+    },
+  },
+  {
+    file: 'body', id: 'musicForward',
+    desc: 'kit 的 body 把 music 转给 figure（createBody 返回对象本来没有这个方法，数据会静默丢弃）',
+    detect: (s) => s.includes('music: (d) => opts.figure.music'),
+    apply: (s) => {
+      const a = '    setScheme: (id, o) => opts.figure.setScheme?.(id, o),';
+      if (!s.includes(a)) throw new Error('musicForward：锚点未命中');
+      return s.replace(a, a + '\n    music: (d) => opts.figure.music?.(d),');
+    },
+  },
+  {
+    file: 'body', id: 'musicPaceQuery',
+    desc: 'kit 暴露 musicActive 查询（pet-app 提帧要用，figure 的判定结果得能读出来）',
+    detect: (s) => s.includes('musicActive: () => custom?.musicActive?.()'),
+    apply: (s) => {
+      const a = '    music: (d) => opts.figure.music?.(d),';
+      if (!s.includes(a)) throw new Error('musicPaceQuery：锚点未命中（先打 musicForward）');
+      return s.replace(a, a + '\n    musicActive: () => custom?.musicActive?.() === true,');
+    },
+  },
+  {
+    file: 'petapp', id: 'musicRefreshSample',
+    desc: '测屏幕刷新率：用 rAF 间隔的中位数，给 musicFrame 挑一个能整除的帧率',
+    detect: (s) => s.includes('__refreshHz'),
+    apply: (s) => {
+      const a = '    globalThis.__lastRF = now;\n    if (windowShown) lastFrameAt = performance.now();';
+      if (!s.includes(a)) throw new Error('musicRefreshSample：锚点未命中');
+      const add = [
+        '    // 2026-11-25：测屏幕刷新率。听歌摆动要平滑，fps 必须是刷新率的整数分之一',
+        '    // （165Hz 上 60fps = 2.75 个周期，只能落 12/18ms 交替，看起来一抖一抖）。',
+        '    // DeepFish 不受这个影响，因为它用 timeBeginPeriod(1) + 固定 Sleep，和刷新率无关。',
+        '    {',
+        '      const g = now - (globalThis.__lastRF2 ?? now);',
+        '      if (g > 1 && g < 100) {',
+        '        const arr = (globalThis.__rfSamples ??= []);',
+        '        arr.push(g);',
+        '        if (arr.length > 31) {',
+        '          arr.shift();',
+        '          const sorted = arr.slice().sort((x, y) => x - y);',
+        '          globalThis.__refreshHz = 1000 / sorted[sorted.length >> 1];',
+        '        }',
+        '      }',
+        '      globalThis.__lastRF2 = now;',
+        '    }',
+      ].join('\n');
+      return s.replace(a, a + '\n' + add);
+    },
+  },
+  {
+    file: 'petapp', id: 'musicFrame',
+    desc: '听歌时提帧，并按屏幕刷新率取整数分之一（165Hz → 82.5，144 → 72，120 → 60）',
+    detect: (s) => s.includes('const musicOn = !!body?.musicActive?.()'),
+    apply: (s) => {
+      const a = '  const full = drawn && (prefs.lockFrameRate || !!at()?.moving || (!!host && drawnScale.moving) || performance.now() < smoothUntil);';
+      if (!s.includes(a)) throw new Error('musicFrame：锚点未命中');
+      const repl = [
+        '  const full = drawn && (prefs.lockFrameRate || !!at()?.moving || (!!host && drawnScale.moving) || performance.now() < smoothUntil);',
+        '  // 听歌摆动：① 待机 30fps 太稀，慢摆看着一卡一卡 → 提帧；',
+        '  // ② 帧率要能整除屏幕刷新率，否则 2.75 个周期只能 12/18ms 交替（一抖一抖）。',
+        '  // 165Hz → 82.5、144 → 72、120 → 60、60 → 60（60 屏直接满帧）。',
+        '  const musicOn = !!body?.musicActive?.();',
+        '  if (musicOn) {',
+        '    const hz = globalThis.__refreshHz || 0;',
+        '    const paced = hz > 90 ? hz / 2 : (hz > 55 ? hz : prefs.frameRate);',
+        '    // 165 → 82.5（每 2 个刷新一帧）、144 → 72、120 → 60。别 round：',
+        '    // 取整会差零点几 fps，累积几十帧后 dueAt 漂出四分之一 gap，还是会偶尔跳一下。',
+        '    return { fps: drawn ? paced : HIDDEN_FPS, refresh: true };',
+        '  }',
+      ].join('\n');
+      return s.replace(a, repl);
+    },
+  },
+  {
+    file: 'petapp', id: 'musicCadenceNearest60',
+    desc: '听歌选接近60的整数分频（165Hz→55），保留已验收测试台节奏',
+    detect: (s) => s.includes('Math.round(hz / 60)'),
+    apply: (s) => s.replace(
+      'const paced = hz > 90 ? hz / 2 : (hz > 55 ? hz : prefs.frameRate);',
+      'const paced = hz > 20 ? hz / Math.max(1, Math.round(hz / 60)) : 60;',
+    ),
+  },
+  {
+    file: 'frame', id: 'musicFrameStatus',
+    desc: 'iframe上报音乐会话状态，主窗口才能按听歌提帧',
+    detect: (s) => s.includes('musicActive: body.musicActive?.() === true'),
+    apply: (s) => s.replace(
+      "post({ t: 'frame', layout: body.layout(), events, sounds, z: body.z ?? null });",
+      "post({ t: 'frame', layout: body.layout(), events, sounds, z: body.z ?? null, musicActive: body.musicActive?.() === true });",
+    ),
+  },
+  {
+    file: 'host', id: 'musicHostStatus',
+    desc: '主窗口保存iframe音乐状态，提供musicActive查询',
+    detect: (s) => s.includes('musicActive: () => musicSession') && s.includes('musicSession = m.musicActive === true'),
+    apply: (s) => s
+      .replace('    let layout = null, z = null, words = null;', '    let layout = null, z = null, words = null;\n    let musicSession = false;')
+      .replace('      pack: pack.id,', '      pack: pack.id,\n      musicActive: () => musicSession,')
+      .replace('        layout = readLayout(m.layout, size);', '        musicSession = m.musicActive === true;\n        layout = readLayout(m.layout, size);'),
+  },
+  {
+    file: 'host', id: 'musicSubscription',
+    desc: '按ear轴订阅音频，off/非听歌形象不拉采集；切回重新连接',
+    detect: (s) => s.includes('const updateMusicSubscription ='),
+    apply: (s) => {
+      let out=s.replace('    let musicWs = null, musicRetry = 0;', `    let musicWs = null, musicRetry = 0, musicWanted = false;
+    const updateMusicSubscription = (scheme) => {
+      const ear = pack.axes?.findIndex(a => a.id === 'ear') ?? -1;
+      musicWanted = ear >= 0 && String(knownScheme(pack, scheme)).split('-')[ear] !== 'off';
+      if (!musicWanted) { const old = musicWs; musicWs = null; old?.close(); }
+      else if (!musicWs && location.pathname === '/pet') connectMusic();
+    };`)
+        .replace('      if (gone) return;\n      try { musicWs = new WebSocket', '      if (gone || !musicWanted || musicWs) return;\n      try { musicWs = new WebSocket')
+        .replace("    if (location.pathname === '/pet') connectMusic();", '    updateMusicSubscription(start.scheme);')
+        .replace('        const s = ++seq;', '        updateMusicSubscription(id);\n        const s = ++seq;');
+      return out;
+    },
+  },
+  {
+    file: 'host', id: 'musicSocketOwnership',
+    desc: '忽略旧WebSocket回调，避免off再on时关闭新订阅',
+    detect: (s) => s.includes('const ownMusicWs = musicWs;'),
+    apply: (s) => s
+      .replace('      musicWs.onopen = () => { musicRetry = 0; };', '      const ownMusicWs = musicWs;\n      musicWs.onopen = () => { if (musicWs === ownMusicWs) musicRetry = 0; };')
+      .replace("musicWs.onmessage = (e) => { try { post", "musicWs.onmessage = (e) => { if (musicWs !== ownMusicWs || !musicWanted) return; try { post")
+      .replace('musicWs.onclose = () => { musicWs = null;', 'musicWs.onclose = () => { if (musicWs !== ownMusicWs) return; musicWs = null;'),
+  },
 ];
 
 const mode = process.argv.includes('--check') ? 'check'
   : process.argv.includes('--revert') ? 'revert' : 'apply';
-
+const MUSIC_ASSETS = [
+  ['music/probe.ps1', 'web/music/probe.ps1'],
+  ['music/NAudio.dll', 'web/music/NAudio.dll'],
+  ['music/music-ear.ts', 'src/music-ear.ts'],
+];
+const manifestFile = path.join(DIR, '.petkit-transaction.json');
 if (mode === 'revert') {
-  for (const [k, f] of Object.entries(FILES)) {
-    const bak = f + '.bak-petkit';
-    if (fs.existsSync(bak)) { fs.copyFileSync(bak, f); console.log(`已还原 ${k}`); }
+  if (fs.existsSync(manifestFile)) {
+    const saved = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
+    // Validate every path before making changes, including on Windows.
+    for (const item of saved) {
+      const target = path.resolve(DIR, item.relative);
+      if (!target.startsWith(path.resolve(DIR) + path.sep)) throw new Error('Unsafe backup path');
+    }
+    for (const item of saved) {
+      const target = path.join(DIR, item.relative);
+      if (item.content === null) fs.rmSync(target, { force: true });
+      else { fs.mkdirSync(path.dirname(target), { recursive: true }); fs.writeFileSync(target, Buffer.from(item.content, 'base64')); }
+    }
+    fs.rmSync(manifestFile);
+    console.log('已按本次补丁前的快照还原（包括原有音乐资源）。');
+  } else {
+    for (const [k,f] of Object.entries(FILES)) if (fs.existsSync(f+'.bak-petkit')) { fs.copyFileSync(f+'.bak-petkit', f); console.log('已还原 '+k); }
+    console.log('无事务快照；仅使用历史 .bak-petkit，还原时不删除未知音乐资源。');
   }
   process.exit(0);
 }
-
-for (const [k, f] of Object.entries(FILES)) {
-  if (!fs.existsSync(f)) { console.error(`找不到 ${k}: ${f}`); process.exit(1); }
-}
-
-// 按文件分组打补丁（每个文件独立读源 / 独立备份 .bak-petkit）
-for (const [k, f] of Object.entries(FILES)) {
-  let src = fs.readFileSync(f, 'utf8');
-  const before = src;
-  const report = [];
-  const bak = f + '.bak-petkit';
-
-  for (const p of PATCHES.filter((x) => x.file === k)) {
-    if (p.detect(src)) { report.push(`  跳过 ${p.id}（已打）`); continue; }
-    if (!p.apply) { report.push(`  ⚠ ${p.id} 无自动 apply（Coo 更新后需手动按当日实现重写）`); continue; }
-    const next = p.apply(src);
-    if (next === null) { report.push(`  ✗ ${p.id} 失败：找不到锚点（Coo 可能改了结构）`); continue; }
-    if (next === src) { report.push(`  ✗ ${p.id} 失败：替换没生效`); continue; }
-    src = next;
-    report.push(`  ✓ ${p.id} ${p.desc}`);
+const plan = [], errors = [];
+for (const [k,f] of Object.entries(FILES)) {
+  if (!fs.existsSync(f)) { errors.push('找不到 '+f); continue; }
+  const before = fs.readFileSync(f), original = before.toString('utf8');
+  let src = original.replaceAll('\r\n', '\n');
+  for (const p of PATCHES.filter(x => x.file === k)) {
+    if (p.detect(src)) { console.log('✓ '+k+':'+p.id+' 已打'); continue; }
+    if (mode === 'check') { errors.push(k+':'+p.id+' 未打'); continue; }
+    try {
+      const next = p.apply?.(src);
+      if (!next || next === src || !p.detect(next)) throw new Error('锚点不匹配或结果未通过检测');
+      src = next; console.log('✓ '+k+':'+p.id+' 已准备');
+    } catch (e) { errors.push(k+':'+p.id+' '+e.message); }
   }
-
-  console.log(`\n补丁目标[${k}]：${f}`);
-  console.log(report.join('\n') || '  （全部已打）');
-
-  if (mode === 'check') continue;
-  if (src === before) { console.log('  无改动'); continue; }
-  if (!fs.existsSync(bak)) fs.copyFileSync(f, bak);
-  fs.writeFileSync(f, src);
-  console.log(`  已写入（备份 ${path.basename(bak)}）`);
+  const after = Buffer.from(original.includes('\r\n') ? src.replaceAll('\n','\r\n') : src);
+  if (!before.equals(after)) plan.push({f,before,after});
 }
-
-if (mode !== 'check') console.log('\n完全退出 Coo 再启动才生效。');
+for (const [from,to] of MUSIC_ASSETS) {
+  const source=path.join(HERE,from), f=path.join(DIR,to);
+  if (!fs.existsSync(source)) { errors.push('包内缺 '+from); continue; }
+  const after=fs.readFileSync(source),before=fs.existsSync(f)?fs.readFileSync(f):null;
+  if (!before || !before.equals(after)) {
+    if (mode==='check') errors.push('资源内容不符 '+to);
+    else plan.push({f,before,after});
+  }
+}
+if (errors.length) { console.error(errors.join('\n')+'\n预检失败，未写任何文件。'); process.exit(1); }
+if (mode==='check') { console.log('全部补丁和资源内容检查通过。'); process.exit(0); }
+if (!plan.length) { console.log('全部已打，无改动。'); process.exit(0); }
+// Preserve the first pre-apply snapshot across repeated runs, including newly added files.
+const saved=fs.existsSync(manifestFile)?JSON.parse(fs.readFileSync(manifestFile,'utf8')):[];
+for (const item of plan) {
+  const relative=path.relative(DIR,item.f);
+  if (!saved.some(x=>x.relative===relative)) saved.push({relative,content:item.before?.toString('base64')??null});
+}
+fs.writeFileSync(manifestFile,JSON.stringify(saved,null,2));
+try {
+  for (const item of plan) {
+    fs.mkdirSync(path.dirname(item.f),{recursive:true});
+    if (item.before && !fs.existsSync(item.f+'.bak-petkit')) fs.writeFileSync(item.f+'.bak-petkit',item.before);
+    fs.writeFileSync(item.f,item.after);
+  }
+} catch (e) {
+  for (const item of plan) { if(item.before) fs.writeFileSync(item.f,item.before); else fs.rmSync(item.f,{force:true}); }
+  throw e;
+}
+console.log('补丁已写入；完全退出 Coo 再启动才生效。');

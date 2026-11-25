@@ -143,6 +143,14 @@ export default {
 
   bodyFollow: { x: 16, z: 11, walk: -14, k: 42, c: 9.5 },
 
+  // 听歌：节拍估计只决定下一句pace，幅度由强度档位决定；所有舞步和表情走layers。
+  // apps/browser 是进程名白名单，和 DeepFish 的 MusicApps / BrowserApps 同源（可加）。
+  // 白名单只用于筛选音频来源。
+  musicSway: {
+    apps: 'cloudmusic,qqmusic,qqmusicclient,spotify,applemusic,itunes,music,kugou,kuwo,qishui,musicbee,foobar2000,aimp,potplayer,potplayermini64,vlc,mpc-hc,mpc-be',
+    browser: 'chrome,msedge,firefox,brave,opera,vivaldi,arc,iexplore,360se,360chrome,360chromex,qqbrowser,sogouexplorer,2345explorer,liebao,maxthon,ucbrowser,quark,huaweibrowser,whale,thorium,chromium,waterfox,librewolf,zen',
+  },
+
   // 走神只靠鼠标唤回：光标停住 3.6 秒（或盯 8 秒）后再酝酿 1.5 秒开始飘，
   // 一直飘到鼠标动为止（span: 0 = 不过期；想加保质期就写秒数，比如 120~180）。
   // fade = 收回速度（越大越快，0.6 大约两秒收干净）；resume = 回神速度（0.9 比收回稍快，像人反应过来）
@@ -912,9 +920,10 @@ export default {
       params: [] },
     // 摇摆一（Body.cs:120/125/126/129 曲线，node 重算 Dance/Groove）——12 拍快速左右摇摆（听歌第一段）
     'sway-1': { dur: 7.714,
-      // PositionX 前批写（非输出+输入，物理驱动胸晃——铁律）；胸腔 X/Z keysPost 显示
+      // 2026-11-24 对齐 DeepFish：显式 PositionX 轨会被 AngleX→PositionX 同步覆盖（死代码），已删；
+      // ParamBodyAngleX/Z 也不再物理后补写 —— 他们写在物理之前、被物理覆盖，等效不存在。
+      // 重心 / 胯 / 裙摆 / 胸全部靠 AngleX 同步出的 PositionX 走物理（PositionX→ParamBodyAngleX / HipAngleX→SkirtX）。
       keys: [
-        { id: 'PositionX', t: 0, v: 0 }, { id: 'PositionX', t: 0.321, v: 13 }, { id: 'PositionX', t: 0.964, v: -13 }, { id: 'PositionX', t: 1.607, v: 13 }, { id: 'PositionX', t: 2.25, v: -13 }, { id: 'PositionX', t: 2.893, v: 13 }, { id: 'PositionX', t: 3.536, v: -13 }, { id: 'PositionX', t: 4.179, v: 13 }, { id: 'PositionX', t: 4.821, v: -13 }, { id: 'PositionX', t: 5.464, v: 13 }, { id: 'PositionX', t: 6.107, v: -13 }, { id: 'PositionX', t: 6.75, v: 13 }, { id: 'PositionX', t: 7.393, v: -13 }, { id: 'PositionX', t: 7.714, v: 0 },
         { id: 'AngleX', t: 0, v: 0 }, { id: 'AngleX', t: 0.461, v: -19 }, { id: 'AngleX', t: 1.104, v: 19 }, { id: 'AngleX', t: 1.747, v: -19 }, { id: 'AngleX', t: 2.39, v: 19 }, { id: 'AngleX', t: 3.033, v: -19 }, { id: 'AngleX', t: 3.676, v: 19 }, { id: 'AngleX', t: 4.319, v: -19 }, { id: 'AngleX', t: 4.961, v: 19 }, { id: 'AngleX', t: 5.604, v: -19 }, { id: 'AngleX', t: 6.247, v: 19 }, { id: 'AngleX', t: 6.89, v: -19 }, { id: 'AngleX', t: 7.533, v: 19 }, { id: 'AngleX', t: 7.854, v: 0 },
         { id: 'AngleZ', t: 0, v: 0 }, { id: 'AngleZ', t: 0.461, v: -8 }, { id: 'AngleZ', t: 1.104, v: 8 }, { id: 'AngleZ', t: 1.747, v: -8 }, { id: 'AngleZ', t: 2.39, v: 8 }, { id: 'AngleZ', t: 3.033, v: -8 }, { id: 'AngleZ', t: 3.676, v: 8 }, { id: 'AngleZ', t: 4.319, v: -8 }, { id: 'AngleZ', t: 4.961, v: 8 }, { id: 'AngleZ', t: 5.604, v: -8 }, { id: 'AngleZ', t: 6.247, v: 8 }, { id: 'AngleZ', t: 6.89, v: -8 }, { id: 'AngleZ', t: 7.533, v: 8 }, { id: 'AngleZ', t: 7.854, v: 0 },
         { id: 'AngleY', t: 0, v: 0 }, { id: 'AngleY', t: 0.461, v: -4.5 }, { id: 'AngleY', t: 0.783, v: 9.5 }, { id: 'AngleY', t: 1.104, v: -4.5 }, { id: 'AngleY', t: 1.426, v: 9.5 }, { id: 'AngleY', t: 1.747, v: -4.5 }, { id: 'AngleY', t: 2.069, v: 9.5 }, { id: 'AngleY', t: 2.39, v: -4.5 }, { id: 'AngleY', t: 2.711, v: 9.5 }, { id: 'AngleY', t: 3.033, v: -4.5 }, { id: 'AngleY', t: 3.354, v: 9.5 }, { id: 'AngleY', t: 3.676, v: -4.5 }, { id: 'AngleY', t: 3.997, v: 9.5 }, { id: 'AngleY', t: 4.319, v: -4.5 }, { id: 'AngleY', t: 4.64, v: 9.5 }, { id: 'AngleY', t: 4.961, v: -4.5 }, { id: 'AngleY', t: 5.283, v: 9.5 }, { id: 'AngleY', t: 5.604, v: -4.5 }, { id: 'AngleY', t: 5.926, v: 9.5 }, { id: 'AngleY', t: 6.247, v: -4.5 }, { id: 'AngleY', t: 6.569, v: 9.5 }, { id: 'AngleY', t: 6.89, v: -4.5 }, { id: 'AngleY', t: 7.211, v: 9.5 }, { id: 'AngleY', t: 7.533, v: -4.5 }, { id: 'AngleY', t: 7.854, v: 0 },
@@ -927,16 +936,13 @@ export default {
         { id: 'ViewX', t: 4.821, v: -0.02 }, { id: 'ViewX', t: 5.464, v: 0.02 }, { id: 'ViewX', t: 6.107, v: -0.02 }, { id: 'ViewX', t: 6.75, v: 0.02 },
         { id: 'ViewX', t: 7.393, v: -0.02 }, { id: 'ViewX', t: 7.714, v: 0 },
       ],
-      keysPost: [
-        { id: 'ParamBodyAngleX', t: 0, v: 0 }, { id: 'ParamBodyAngleX', t: 0.321, v: 13 }, { id: 'ParamBodyAngleX', t: 0.964, v: -13 }, { id: 'ParamBodyAngleX', t: 1.607, v: 13 }, { id: 'ParamBodyAngleX', t: 2.25, v: -13 }, { id: 'ParamBodyAngleX', t: 2.893, v: 13 }, { id: 'ParamBodyAngleX', t: 3.536, v: -13 }, { id: 'ParamBodyAngleX', t: 4.179, v: 13 }, { id: 'ParamBodyAngleX', t: 4.821, v: -13 }, { id: 'ParamBodyAngleX', t: 5.464, v: 13 }, { id: 'ParamBodyAngleX', t: 6.107, v: -13 }, { id: 'ParamBodyAngleX', t: 6.75, v: 13 }, { id: 'ParamBodyAngleX', t: 7.393, v: -13 }, { id: 'ParamBodyAngleX', t: 7.714, v: 0 },
-        { id: 'ParamBodyAngleZ', t: 0, v: 0 }, { id: 'ParamBodyAngleZ', t: 0.321, v: 6.5 }, { id: 'ParamBodyAngleZ', t: 0.964, v: -6.5 }, { id: 'ParamBodyAngleZ', t: 1.607, v: 6.5 }, { id: 'ParamBodyAngleZ', t: 2.25, v: -6.5 }, { id: 'ParamBodyAngleZ', t: 2.893, v: 6.5 }, { id: 'ParamBodyAngleZ', t: 3.536, v: -6.5 }, { id: 'ParamBodyAngleZ', t: 4.179, v: 6.5 }, { id: 'ParamBodyAngleZ', t: 4.821, v: -6.5 }, { id: 'ParamBodyAngleZ', t: 5.464, v: 6.5 }, { id: 'ParamBodyAngleZ', t: 6.107, v: -6.5 }, { id: 'ParamBodyAngleZ', t: 6.75, v: 6.5 }, { id: 'ParamBodyAngleZ', t: 7.393, v: -6.5 }, { id: 'ParamBodyAngleZ', t: 7.714, v: 0 },
-      ],
       params: [] },
     // 剧场摇摆一（Body.cs:120/125/126/129 曲线，node 重算 Dance/Groove）——摇摆一的柔和慢速版（小剧场用）
     'theater-sway-1': { dur: 11.02,
-      // PositionX 前批写（非输出+输入，物理驱动胸晃——铁律）；胸腔 X/Z keysPost 显示
+      // 2026-11-24 对齐 DeepFish：显式 PositionX 轨会被 AngleX→PositionX 同步覆盖（死代码），已删；
+      // ParamBodyAngleX/Z 也不再物理后补写 —— 他们写在物理之前、被物理覆盖，等效不存在。
+      // 重心 / 胯 / 裙摆 / 胸全部靠 AngleX 同步出的 PositionX 走物理（PositionX→ParamBodyAngleX / HipAngleX→SkirtX）。
       keys: [
-        { id: 'PositionX', t: 0, v: 0 }, { id: 'PositionX', t: 0.459, v: 9.1 }, { id: 'PositionX', t: 1.378, v: -9.1 }, { id: 'PositionX', t: 2.296, v: 9.1 }, { id: 'PositionX', t: 3.214, v: -9.1 }, { id: 'PositionX', t: 4.133, v: 9.1 }, { id: 'PositionX', t: 5.051, v: -9.1 }, { id: 'PositionX', t: 5.969, v: 9.1 }, { id: 'PositionX', t: 6.888, v: -9.1 }, { id: 'PositionX', t: 7.806, v: 9.1 }, { id: 'PositionX', t: 8.724, v: -9.1 }, { id: 'PositionX', t: 9.643, v: 9.1 }, { id: 'PositionX', t: 10.561, v: -9.1 }, { id: 'PositionX', t: 11.02, v: 0 },
         { id: 'AngleX', t: 0, v: 0 }, { id: 'AngleX', t: 0.599, v: -13.3 }, { id: 'AngleX', t: 1.518, v: 13.3 }, { id: 'AngleX', t: 2.436, v: -13.3 }, { id: 'AngleX', t: 3.354, v: 13.3 }, { id: 'AngleX', t: 4.273, v: -13.3 }, { id: 'AngleX', t: 5.191, v: 13.3 }, { id: 'AngleX', t: 6.109, v: -13.3 }, { id: 'AngleX', t: 7.028, v: 13.3 }, { id: 'AngleX', t: 7.946, v: -13.3 }, { id: 'AngleX', t: 8.864, v: 13.3 }, { id: 'AngleX', t: 9.783, v: -13.3 }, { id: 'AngleX', t: 10.701, v: 13.3 }, { id: 'AngleX', t: 11.16, v: 0 },
         { id: 'AngleZ', t: 0, v: 0 }, { id: 'AngleZ', t: 0.599, v: -5.6 }, { id: 'AngleZ', t: 1.518, v: 5.6 }, { id: 'AngleZ', t: 2.436, v: -5.6 }, { id: 'AngleZ', t: 3.354, v: 5.6 }, { id: 'AngleZ', t: 4.273, v: -5.6 }, { id: 'AngleZ', t: 5.191, v: 5.6 }, { id: 'AngleZ', t: 6.109, v: -5.6 }, { id: 'AngleZ', t: 7.028, v: 5.6 }, { id: 'AngleZ', t: 7.946, v: -5.6 }, { id: 'AngleZ', t: 8.864, v: 5.6 }, { id: 'AngleZ', t: 9.783, v: -5.6 }, { id: 'AngleZ', t: 10.701, v: 5.6 }, { id: 'AngleZ', t: 11.16, v: 0 },
         { id: 'AngleY', t: 0, v: 0 }, { id: 'AngleY', t: 0.599, v: -3.15 }, { id: 'AngleY', t: 1.058, v: 6.65 }, { id: 'AngleY', t: 1.518, v: -3.15 }, { id: 'AngleY', t: 1.977, v: 6.65 }, { id: 'AngleY', t: 2.436, v: -3.15 }, { id: 'AngleY', t: 2.895, v: 6.65 }, { id: 'AngleY', t: 3.354, v: -3.15 }, { id: 'AngleY', t: 3.813, v: 6.65 }, { id: 'AngleY', t: 4.273, v: -3.15 }, { id: 'AngleY', t: 4.732, v: 6.65 }, { id: 'AngleY', t: 5.191, v: -3.15 }, { id: 'AngleY', t: 5.65, v: 6.65 }, { id: 'AngleY', t: 6.109, v: -3.15 }, { id: 'AngleY', t: 6.569, v: 6.65 }, { id: 'AngleY', t: 7.028, v: -3.15 }, { id: 'AngleY', t: 7.487, v: 6.65 }, { id: 'AngleY', t: 7.946, v: -3.15 }, { id: 'AngleY', t: 8.405, v: 6.65 }, { id: 'AngleY', t: 8.864, v: -3.15 }, { id: 'AngleY', t: 9.324, v: 6.65 }, { id: 'AngleY', t: 9.783, v: -3.15 }, { id: 'AngleY', t: 10.242, v: 6.65 }, { id: 'AngleY', t: 10.701, v: -3.15 }, { id: 'AngleY', t: 11.16, v: 0 },
@@ -949,16 +955,13 @@ export default {
         { id: 'ViewX', t: 6.888, v: -0.014 }, { id: 'ViewX', t: 7.806, v: 0.014 }, { id: 'ViewX', t: 8.724, v: -0.014 }, { id: 'ViewX', t: 9.643, v: 0.014 },
         { id: 'ViewX', t: 10.561, v: -0.014 }, { id: 'ViewX', t: 11.02, v: 0 },
       ],
-      keysPost: [
-        { id: 'ParamBodyAngleX', t: 0, v: 0 }, { id: 'ParamBodyAngleX', t: 0.459, v: 9.1 }, { id: 'ParamBodyAngleX', t: 1.378, v: -9.1 }, { id: 'ParamBodyAngleX', t: 2.296, v: 9.1 }, { id: 'ParamBodyAngleX', t: 3.214, v: -9.1 }, { id: 'ParamBodyAngleX', t: 4.133, v: 9.1 }, { id: 'ParamBodyAngleX', t: 5.051, v: -9.1 }, { id: 'ParamBodyAngleX', t: 5.969, v: 9.1 }, { id: 'ParamBodyAngleX', t: 6.888, v: -9.1 }, { id: 'ParamBodyAngleX', t: 7.806, v: 9.1 }, { id: 'ParamBodyAngleX', t: 8.724, v: -9.1 }, { id: 'ParamBodyAngleX', t: 9.643, v: 9.1 }, { id: 'ParamBodyAngleX', t: 10.561, v: -9.1 }, { id: 'ParamBodyAngleX', t: 11.02, v: 0 },
-        { id: 'ParamBodyAngleZ', t: 0, v: 0 }, { id: 'ParamBodyAngleZ', t: 0.459, v: 4.55 }, { id: 'ParamBodyAngleZ', t: 1.378, v: -4.55 }, { id: 'ParamBodyAngleZ', t: 2.296, v: 4.55 }, { id: 'ParamBodyAngleZ', t: 3.214, v: -4.55 }, { id: 'ParamBodyAngleZ', t: 4.133, v: 4.55 }, { id: 'ParamBodyAngleZ', t: 5.051, v: -4.55 }, { id: 'ParamBodyAngleZ', t: 5.969, v: 4.55 }, { id: 'ParamBodyAngleZ', t: 6.888, v: -4.55 }, { id: 'ParamBodyAngleZ', t: 7.806, v: 4.55 }, { id: 'ParamBodyAngleZ', t: 8.724, v: -4.55 }, { id: 'ParamBodyAngleZ', t: 9.643, v: 4.55 }, { id: 'ParamBodyAngleZ', t: 10.561, v: -4.55 }, { id: 'ParamBodyAngleZ', t: 11.02, v: 0 },
-      ],
       params: [] },
     // 剧场摇摆二（Body.cs:120/125/126/129 曲线，node 重算 Dance/Groove）——摇摆二的柔和慢速版（小剧场用）
     'theater-sway-2': { dur: 6.531,
-      // PositionX 前批写（非输出+输入，物理驱动胸晃——铁律）；胸腔 X/Z keysPost 显示
+      // 2026-11-24 对齐 DeepFish：显式 PositionX 轨会被 AngleX→PositionX 同步覆盖（死代码），已删；
+      // ParamBodyAngleX/Z 也不再物理后补写 —— 他们写在物理之前、被物理覆盖，等效不存在。
+      // 重心 / 胯 / 裙摆 / 胸全部靠 AngleX 同步出的 PositionX 走物理（PositionX→ParamBodyAngleX / HipAngleX→SkirtX）。
       keys: [
-        { id: 'PositionX', t: 0, v: 0 }, { id: 'PositionX', t: 0.544, v: 2.8 }, { id: 'PositionX', t: 1.633, v: -2.8 }, { id: 'PositionX', t: 2.721, v: 2.8 }, { id: 'PositionX', t: 3.81, v: -2.8 }, { id: 'PositionX', t: 4.898, v: 2.8 }, { id: 'PositionX', t: 5.986, v: -2.8 }, { id: 'PositionX', t: 6.531, v: 0 },
         { id: 'AngleX', t: 0, v: 0 }, { id: 'AngleX', t: 0.644, v: 6.3 }, { id: 'AngleX', t: 1.733, v: -6.3 }, { id: 'AngleX', t: 2.821, v: 6.3 }, { id: 'AngleX', t: 3.91, v: -6.3 }, { id: 'AngleX', t: 4.998, v: 6.3 }, { id: 'AngleX', t: 6.086, v: -6.3 }, { id: 'AngleX', t: 6.631, v: 0 },
         { id: 'AngleZ', t: 0, v: 0 }, { id: 'AngleZ', t: 0.604, v: 14.7 }, { id: 'AngleZ', t: 1.693, v: -14.7 }, { id: 'AngleZ', t: 2.781, v: 14.7 }, { id: 'AngleZ', t: 3.87, v: -14.7 }, { id: 'AngleZ', t: 4.958, v: 14.7 }, { id: 'AngleZ', t: 6.046, v: -14.7 }, { id: 'AngleZ', t: 6.591, v: 0 },
         { id: 'AngleY', t: 0, v: 0 }, { id: 'AngleY', t: 0.594, v: -2.8 }, { id: 'AngleY', t: 1.138, v: 2.1 }, { id: 'AngleY', t: 1.683, v: -2.8 }, { id: 'AngleY', t: 2.227, v: 2.1 }, { id: 'AngleY', t: 2.771, v: -2.8 }, { id: 'AngleY', t: 3.315, v: 2.1 }, { id: 'AngleY', t: 3.86, v: -2.8 }, { id: 'AngleY', t: 4.404, v: 2.1 }, { id: 'AngleY', t: 4.948, v: -2.8 }, { id: 'AngleY', t: 5.492, v: 2.1 }, { id: 'AngleY', t: 6.036, v: -2.8 }, { id: 'AngleY', t: 6.581, v: 0 },
@@ -971,16 +974,13 @@ export default {
         { id: 'ViewY', t: 4.354, v: 0.003 }, { id: 'ViewY', t: 4.898, v: -0.006 }, { id: 'ViewY', t: 5.442, v: 0.003 }, { id: 'ViewY', t: 5.986, v: -0.006 },
         { id: 'ViewY', t: 6.531, v: 0 },
       ],
-      keysPost: [
-        { id: 'ParamBodyAngleX', t: 0, v: 0 }, { id: 'ParamBodyAngleX', t: 0.544, v: 2.8 }, { id: 'ParamBodyAngleX', t: 1.633, v: -2.8 }, { id: 'ParamBodyAngleX', t: 2.721, v: 2.8 }, { id: 'ParamBodyAngleX', t: 3.81, v: -2.8 }, { id: 'ParamBodyAngleX', t: 4.898, v: 2.8 }, { id: 'ParamBodyAngleX', t: 5.986, v: -2.8 }, { id: 'ParamBodyAngleX', t: 6.531, v: 0 },
-        { id: 'ParamBodyAngleZ', t: 0, v: 0 }, { id: 'ParamBodyAngleZ', t: 0.544, v: 3.5 }, { id: 'ParamBodyAngleZ', t: 1.633, v: -3.5 }, { id: 'ParamBodyAngleZ', t: 2.721, v: 3.5 }, { id: 'ParamBodyAngleZ', t: 3.81, v: -3.5 }, { id: 'ParamBodyAngleZ', t: 4.898, v: 3.5 }, { id: 'ParamBodyAngleZ', t: 5.986, v: -3.5 }, { id: 'ParamBodyAngleZ', t: 6.531, v: 0 },
-      ],
       params: [] },
     // 慢摇（Body.cs:120/125/126/129 曲线，node 重算 Dance/Groove）——越摇越慢越小，渐渐停下
     'slow-sway': { dur: 3.857,
-      // PositionX 前批写（非输出+输入，物理驱动胸晃——铁律）；胸腔 X/Z keysPost 显示
+      // 2026-11-24 对齐 DeepFish：显式 PositionX 轨会被 AngleX→PositionX 同步覆盖（死代码），已删；
+      // ParamBodyAngleX/Z 也不再物理后补写 —— 他们写在物理之前、被物理覆盖，等效不存在。
+      // 重心 / 胯 / 裙摆 / 胸全部靠 AngleX 同步出的 PositionX 走物理（PositionX→ParamBodyAngleX / HipAngleX→SkirtX）。
       keys: [
-        { id: 'PositionX', t: 0, v: 0 }, { id: 'PositionX', t: 0.5, v: 4 }, { id: 'PositionX', t: 1.643, v: -2.8 }, { id: 'PositionX', t: 3.071, v: 1.6 }, { id: 'PositionX', t: 3.857, v: 0 },
         { id: 'AngleX', t: 0, v: 0 }, { id: 'AngleX', t: 0.6, v: 9 }, { id: 'AngleX', t: 1.743, v: -6.3 }, { id: 'AngleX', t: 3.171, v: 3.6 }, { id: 'AngleX', t: 3.957, v: 0 },
         { id: 'AngleZ', t: 0, v: 0 }, { id: 'AngleZ', t: 0.56, v: 21 }, { id: 'AngleZ', t: 1.703, v: -14.7 }, { id: 'AngleZ', t: 3.131, v: 8.4 }, { id: 'AngleZ', t: 3.917, v: 0 },
         { id: 'AngleY', t: 0, v: 0 }, { id: 'AngleY', t: 0.55, v: -4 }, { id: 'AngleY', t: 1.121, v: 2.55 }, { id: 'AngleY', t: 1.693, v: -2.8 }, { id: 'AngleY', t: 2.407, v: 1.65 }, { id: 'AngleY', t: 3.121, v: -1.6 }, { id: 'AngleY', t: 3.907, v: 0 },
@@ -990,10 +990,6 @@ export default {
         { id: 'ViewRoll', t: 3.857, v: 0 },
         { id: 'ViewY', t: 0, v: 0 }, { id: 'ViewY', t: 0.5, v: -0.008 }, { id: 'ViewY', t: 1.071, v: 0.003 }, { id: 'ViewY', t: 1.643, v: -0.006 },
         { id: 'ViewY', t: 2.357, v: 0.002 }, { id: 'ViewY', t: 3.071, v: -0.003 }, { id: 'ViewY', t: 3.857, v: 0 },
-      ],
-      keysPost: [
-        { id: 'ParamBodyAngleX', t: 0, v: 0 }, { id: 'ParamBodyAngleX', t: 0.5, v: 4 }, { id: 'ParamBodyAngleX', t: 1.643, v: -2.8 }, { id: 'ParamBodyAngleX', t: 3.071, v: 1.6 }, { id: 'ParamBodyAngleX', t: 3.857, v: 0 },
-        { id: 'ParamBodyAngleZ', t: 0, v: 0 }, { id: 'ParamBodyAngleZ', t: 0.5, v: 5 }, { id: 'ParamBodyAngleZ', t: 1.643, v: -3.5 }, { id: 'ParamBodyAngleZ', t: 3.071, v: 2 }, { id: 'ParamBodyAngleZ', t: 3.857, v: 0 },
       ],
       params: [] },
     // 左右张望（Body.cs:131）：眼珠 + 头同步左右各看一眼——1.9s
@@ -1447,6 +1443,14 @@ export default {
       default: { params: { key11: 0, key12: 0 } },
       black:   { params: { key11: 1, key12: 0 } },
       monocle: { params: { key11: 0, key12: 1 } },
+    },
+    // 听歌反应（第 8 轴，2026-11-24）：不写任何模型参数，只决定形象怎么筛音频。
+    // 顺序必须放最后：老存档只有 7 段 scheme，缺的轴会落到第一个选项（music）。
+    ear: {
+      music:    { params: {} },
+      musicweb: { params: {} },
+      all:      { params: {} },
+      off:      { params: {} },
     },
   },
   // 2026-11-21：angleX/Y/Z、bodyX、lean 的 space 从 [-1,1] 改成度数域 [-30,30]。
