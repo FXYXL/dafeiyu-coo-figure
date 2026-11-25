@@ -27,6 +27,10 @@ import {
   CubismEyeBlink,
 } from '../sdk/framework.js';
 import { SHADERS } from '../sdk/shaders.js';
+import { musicTransform } from './music/transform.js';
+import { MusicAnalysis } from './music/analysis.js';
+import { MusicFaceClock, MUSIC_FACES } from './music/face.js';
+// music-integration-v1: accepted matrix, audio analysis, faces and continuous physics.
 
 // SDK 内置眨眼（效仿 DeepFish main.cpp CubismEyeBlink，不自己造曲线）
 // 呼吸用 SDK 公式（CubismBreath 没导出，照 updateParameters 逻辑写：offset+peak*sin(2πt/cycle)）
@@ -620,15 +624,32 @@ export async function createLive2DBody(base, opts, entry, kit) {
   // 但 `ParamAngle*` 每帧被 idle motion 重写（写成 0），写它等于被吃掉；
   // `Angle*` 是这套模型独占的头部输入，motion 不碰 → 头角度必须写 Angle。
   const ANGLE_TO_POS = { AngleX: 'PositionX', AngleY: 'PositionY', AngleZ: 'PositionZ' };
+
+  // ---- vtube 映射的 Position 平滑（照他们的，2026-11-25）----
+  // 他们 main.cpp:602：`const float lag = mapping.smoothing * 0.005f;`
+  //   大肥鱼.vtube.json 里 FaceAngleX/Y/Z → PositionX/Y/Z 都是 **smooth 20 → lag 0.1 秒**，
+  //   而 → AngleX/Y/Z 分别是 15/4/30（0.075 / 0.02 / 0.15 秒）。
+  // 所以 **Position* 比 Angle* 晚 0.025~0.08 秒才进物理**，物理再放大一层阻尼，
+  // 叠出来就是他们实测的「hip 滞后头 0.049 秒、bX 滞后 0.016 秒」。
+  // 我们原来是同一个值同一时刻直写，所以腿和头完全同步 —— 「刚体」的根因就在这。
+  // POS_LAG = 0 可一键关掉，退回原来的直通。
+  const POS_LAG = 0.1;
+  const posSm = { PositionX: 0, PositionY: 0, PositionZ: 0 };
+  const posHas = { PositionX: false, PositionY: false, PositionZ: false };
+  function writePos(posId, v) {
+    const pi = paramIndex.get(posId);
+    if (pi === undefined) return;
+    if (POS_LAG <= 0 || !posHas[posId]) { posSm[posId] = v; posHas[posId] = true; }
+    else posSm[posId] += (v - posSm[posId]) * (1 - Math.exp(-frameDt / POS_LAG));
+    model._model.setParameterValueByIndex(pi, posSm[posId]);
+  }
+
   function setParamByName(id, v) {
     const i = paramIndex.get(id);
     if (i === undefined) return;
     model._model.setParameterValueByIndex(i, v);
     const posId = ANGLE_TO_POS[id];
-    if (posId) {
-      const pi = paramIndex.get(posId);
-      if (pi !== undefined) model._model.setParameterValueByIndex(pi, v);
-    }
+    if (posId) writePos(posId, v);
   }
 
   /** 把增量加到参数当前值上（轨道相加用），并夹在参数范围内。
@@ -647,10 +668,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       model._model.getParameterMaximumValue(i));
     model._model.setParameterValueByIndex(i, v);
     const posId = ANGLE_TO_POS[id];
-    if (posId) {
-      const pi = paramIndex.get(posId);
-      if (pi !== undefined) model._model.setParameterValueByIndex(pi, v);
-    }
+    if (posId) writePos(posId, v);
   }
 
   /** 每个 role 只保留模型里真实存在的目标参数。 */
@@ -748,6 +766,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
   // 每一轴的选项在 profile.schemes 里声明要写死的参数（也可用 parts 改部件不透明度）。
   // 这些开关是"状态量"，不是表情，所以每帧最后写一次，压过表情和物理。
   let schemeParams = {};
+  let earMode = 'music';   // 听歌反应：music / musicweb / all / off（figure.json 第 8 轴）
   const schemeIdx = new Map();
   function resolveScheme() {
     // scheme 形如 "deepseek-<第1轴>-<第2轴>-<第3轴>"，顺序与 figure.json 的 axes 一致。
@@ -760,7 +779,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
     let slot = start;
     for (const [axis, options] of Object.entries(profile.schemes ?? {})) {
       const token = tokens[slot++];
-      const pick = token && Object.prototype.hasOwnProperty.call(options, token) ? token : 'default';
+      // 第 8 轴没有 default 选项：老存档缺这一段时默认只认音乐软件
+      const pick = token && Object.prototype.hasOwnProperty.call(options, token) ? token : (axis === 'ear' ? 'music' : 'default');
+      if (axis === 'ear') earMode = pick;
       Object.assign(out, (options[pick] ?? options.default ?? {}).params ?? {});
     }
     schemeParams = out;
@@ -1503,6 +1524,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
     auditQ.length = 0;
   };
   const audit = (line) => {
+    if (!globalThis.__l2dTrace && /^(?:dbg trc|lid |blush want|blink-in|blink-end|sq |clip |rua-tier8)/.test(line)) return;
     auditQ.push(clockT.toFixed(1) + ' ' + line);
     if (auditQ.length >= 6) auditFlush();
   };
@@ -1535,6 +1557,365 @@ export async function createLive2DBody(base, opts, entry, kit) {
   const RELAX_FADE = 1.5, SENT_LIFE = 2, SPEECH_END_DELAY = 2, IDLE_LIFE = 3;
   let sentenceCount = 0, bornSentence = -1, lastSpeechEnd = -99;
   let currentTone = '';   // 2.3 tone：当前 beat 的语气（! = 感叹 / … = 省略）——pet-app 每 beat 下发   // 跟句寿命（2.6 改造）
+
+  // ---------- 听歌（判定层，2026-11-24）----------
+  // 这一层只做三件事：① 收到耳朵的快照 ② 判定「现在算不算在放歌」
+  // ③ 把判定结果给 kit 压掉随机动作/小剧场。**不含任何摆动/动画**——
+  // 摆动那张表（slow-sway / sway-1 / theater-sway-*）本来就搬好了，留给下一个接手的人接。
+  // 数据链路：server.ts 起 probe.ps1 → /music WS → body-host → figure-frame → figure.music(data)。
+  let musicRaw = null, musicAt = -99;
+  const labFaceClock = new MusicFaceClock();
+  const musicDetector = new MusicAnalysis();
+  let musicStrength = { size: 0.4, stretch: 2 };
+  let musicOwnAnalysis = false, musicTimeOffset = null, musicLastSample = null;
+  const musicNow = () => Date.now() / 1000;
+  let labFaceClip = null, labFaceMood = -1;
+  function stepLabMusicFace(frame, dt) {
+    if (!labFaceClock) return;
+    const active = danceOn && danceStartOk(frame) && earMode !== 'off'
+      && !frame.rua?.on && frame.mode !== 'drag' && frame.mode !== 'sleep';
+    const mood = labFaceClock.tick(dt, active);
+    if (mood !== labFaceMood) {
+      if (labFaceClip && clipList.includes(labFaceClip)) labFaceClip.def.dur = Math.max(0, clockT - labFaceClip.t0);
+      labFaceClip = null; labFaceMood = mood;
+      if (mood >= 0) {
+        labFaceClip = startLayerClip({ tag: 'music-face', musicFace: true, dur: 1e9,
+          sets: { ...MUSIC_FACES[mood] } });
+        audit('music face ' + (mood + 1));
+      }
+    }
+    globalThis.__musicLabStatus = { clock: clockT, danceOn, bpm: danceBpm, earMode,
+      nextAt: danceNextAt, layers: layers.filter(c => c.group === 'dance').length,
+      blocked: !danceStartOk(frame), face: mood, faceWait: labFaceClock.wait,
+      faceRemaining: labFaceClock.remaining, data: musicRaw?.analysis ?? null };
+  }
+
+  const musicCfg = profile.musicSway ?? {};
+  const musicApps = new Set(String(musicCfg.apps ?? '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean));
+  const musicBrowser = new Set(String(musicCfg.browser ?? '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean));
+
+  /** 现在算不算「在放音乐」：耳轴（music/musicweb/all/off）+ 电平 + 白名单。 */
+  let musicOnAt = -99;
+  /** 瞬时判定（原始）。摆动别直接用：鼓点/换气间隙 rms 会瞬间掉到阈值下，
+   *  幅度跟着掉一帧再回来，看起来就是一抽一抽。 */
+  function musicIntentRaw() {
+    if (!musicRaw || earMode === 'off') return false;
+    if (clockT - musicAt > (musicRaw.analysis ? 6 : 1.5)) return false;   // 1.5 秒没新数据：当作耳朵掉了
+    const rms = Number(musicRaw.rms);
+    if (musicRaw.analysis) {
+      if (!musicRaw.analysis.playing || !musicRaw.analysis.rhythmic || musicRaw.analysis.stale) return false;
+    } else if (!(rms >= 0.0022)) return false;         // 他们 NoiseFloor
+    if (earMode === 'all') return true;
+    const apps = Array.isArray(musicRaw.apps) ? musicRaw.apps : [];
+    let top = 0, mine = 0;
+    for (const item of apps) {
+      if (!Array.isArray(item) || item.length < 2) continue;
+      const name = String(item[0] ?? '').toLowerCase();
+      const level = Number(item[1]) || 0;
+      if (level > top) top = level;
+      if (musicApps.has(name) || (earMode === 'musicweb' && musicBrowser.has(name))) {
+        if (level > mine) mine = level;
+      }
+    }
+    // 他们 AppPlaying：在跳时门槛放低（0.015 / 28%），不跳时 0.03 / 50%。
+    // 这里没有摆动层，但「音乐会话内」仍然沿用放宽的那一档——歌间隙电平会掉，
+    // 用严阈值会让压随机的会话断掉。keep 用会话时间判断，不再是摆动权重。
+    const keep = clockT - musicOnAt < 8;
+    return mine >= (keep ? 0.015 : 0.03) && mine >= top * (keep ? 0.28 : 0.5);
+  }
+
+  /** 「在放歌」判定：瞬时判定 + 1.5 秒保持。鼓点之间、换气口 rms 会短促掉下去，
+   *  不加保持时摆动幅度跟着一帧一掉再回来，观感就是抽动。 */
+  function musicIntent() {
+    if (musicRaw?.analysis) {
+      const analysed = musicIntentRaw(); if (analysed) musicOnAt = clockT; return analysed;
+    }
+    const ok = musicIntentRaw();
+    if (ok) musicOnAt = clockT;
+    return ok || clockT - musicOnAt < 1.5;
+  }
+
+  // 「音乐会话」：真实判定在放时刷新，再保持 8 秒。歌与歌之间的静音段落（往往 2~5 秒）
+  // 会让 musicIntent 短暂变 false，随机动作/小剧场就趁这一下钻进来——用户实测慢摇中还会演小剧场。
+  // 摆动幅度仍用真实判定（停了就淡出），这里只负责压掉随机。
+  let musicHoldAt = -99;
+  function musicBusy() {
+    if (earMode === 'off') return false;
+    if (musicIntent()) musicHoldAt = clockT;
+    return clockT - musicHoldAt < 8;
+  }
+
+  // ---------- 听歌摆动（2026-11-25）----------
+  // 照 DeepFish 的 PetWindow.Dance.cs：确认在放歌之后，每隔「一句」的时长重播一遍「摇摆一」，
+  // 幅度 0.4、按 BPM 拉长（stretch 2 = 放慢一半），一句接一句；被打断时**演完当前这句再停**。
+  // 不按拍点驱动 —— 他们 11-12 试过按相位实时驱动，用户说效果不好，已回滚；拍点只用来估 BPM。
+  //
+  // 三个必须一起成立，缺一个就不起新句（B3）：
+  //   ① musicIntent()     在出声（含 1.5 秒保持，鼓点间隙不断）
+  //   ② danceStartOk()    没在说话 / 刚说完 1.5 秒内 / 没在走跑睡
+  //   ③ clockT >= danceNextAt  上一句演完了
+  const DANCE_WORD = 'sway-1';
+  const DANCE_SIZE = 0.4;     // 肢体幅度 = Dance.Strength("soft").Size，和 DeepFish 完全一致。
+                              // **所有倍数都归 1（1:1 复刻）**：SIZE 0.4、ROLL 2.5、SHIFT 1.0、NOD 1.0，
+                              // 也就是每个参数都是原始关键帧 × 0.4，没有任何人为补偿。
+  const DANCE_ROLL = 1.0;     // ViewRoll 关键帧本身 ±2.5°，× DANCE_SIZE 0.4 = ±1.0°，等于他们实测峰值。
+                              // 2026-11-25 用 ?sweep=1 扫了 509 个参数，结论（推翻了之前的猜测）：
+                              //   腿不是 HipAngleX 驱动的（Δ两腿间距 0.0022 / Δ脚底y差 0.0001，等于没有），
+                              //   而是物理设置 #129 的输出 Param_Angle_Rotation84~89（scale 15~30），
+                              //   输入是 ParamBodyAngleX(w40)/ParamBodyAngleZ(w30)/LeanInput(w40)/Breath/Clothes2。
+                              // 也就是说**腿被上半身角度通过一条 pendulum 推着走**，慢半拍来自那条链的阻尼。
+                              // 所以整图旋转只负责「整体有没有在晃」，不该拿它去凑腿的幅度。
+  const DANCE_UPPER = 1.0;    // 上半身（AngleX/AngleZ）倍数 = 1。之前 0.42 是基于「定点在肚子、
+                              // 上反下同」的假设压下去的；假设已被 #129 的机制推翻，已归 1。
+  const DANCE_NOD = 1.0;      // AngleY 倍数 = 1：原曲线 -4.5~+9.5 × 0.4 = -1.8° ~ +3.8°（不是对称正弦）。
+  const DANCE_SHIFT = 3.8;    // 整图横移。**不能抄他们的参数值**：他们的 ViewX 单位是「窗口宽的 NDC」，
+                            // 我们的是「形象宽的一半」，同一个 0.008 落到屏幕上差 7 倍。
+                            // 按视觉量对齐：他们脚底横摆 15.2px / 形象高 1020px = 1.49% 图高（峰峰）；
+                            // 我们 1.0 倍时只有 0.4%（实测 shiftPx 0.47 / extH 232）。3.8 倍 ≈ 1.6%，对齐。
+  const DANCE_PIVOT = 0.27;   // 旋转基准点（等效旋转中心），形象高的 27% 处 = 肚子。
+                              // 依据他们的实测反解：脚底 x' = b(y−anc) + bodyX，令 x'=0 得 y=−0.463（NDC），
+                              // 换算成形象高度就是**离底 27%**。他们代码里没写这个数（anc 是 -0.92 脚底），
+                              // 是平移和旋转抵消出来的；我们 kit 的旋转中心在 ay=256（实测脚 cy=255，杠杆 1px），
+                              // 所以必须显式补这一层，否则脚钉死、只有上半身扫（用户说的「圆锥」）。
+  const DANCE_STRETCH = 2;    // Dance.Strength("soft").Stretch
+  const DANCE_BEATS = 12;     // Dance.Beats("摇摆一")
+  // 腿：物理 #129 的 pendulum 输出（Param_Angle_Rotation84~89）。1 = 物理原样。
+  // 测过：1:1 时 Rotation87 峰峰 11°，不是「看不见」；之前的 3~4° 是因为上半身被压到 0.42。
+  const LEG_GAIN = 1;
+  const LEG_PARAMS = ['Param_Angle_Rotation84', 'Param_Angle_Rotation85', 'Param_Angle_Rotation86',
+    'Param_Angle_Rotation87', 'Param_Angle_Rotation88', 'Param_Angle_Rotation89'];
+  // 接缝：新层的**起点对齐到句末时刻**（ctx.t0 = danceNextAt），不是当前帧的 clockT。
+  // 踩过的两个错法：① 起新句前 dropDance() 清旧层 → 峰值突降到 0，大跳一下；
+  // ② 提前重叠但 t0 仍用 clockT → 两层相加，旧层尾部降 + 新层头部升，折点比真空还顿。
+  // 现在：旧层演到 age > dur 自然被删（值已是末帧 0），新层用精确 t0 接上，天然无缝。
+  // 摆动模式（2026-11-25）：
+  //   'wave' 连续正弦（默认）—— 正弦在过零点速度最大，永远不会「停」；
+  //   'clip' 重播 sway-1 —— 和 DeepFish 一致，但接缝处必然有速度塌陷（见下）。
+  //
+  // 为什么换成 wave：sway-1 的首帧和末帧值都是 0，而 sampleKeys 用 smoothstep，
+  // **每一段两端速度都是 0**。旧句末帧穿过 0、新句首帧从 0 起步，两个「速度 0」撞在一起。
+  // 实测（2026-11-25 用户测试台，BPM 140）接缝处角速度掉到 2.1°/s，而峰值是 18.5°/s ——
+  // 掉到 11%，宽约 0.2 秒，肉眼就是「甩到中间卡一下」。
+  // DeepFish 数学上完全一样（main.cpp:583 的 part = part*part*(3-2*part) 就是 smoothstep），
+  // 差别只在他们的 BPM 来自真实音乐（Beat.cs），抒情歌 90~110 → 一句 14~16 秒，
+  // 那个谷被拉得很缓；我们固定 120~140 → 谷更陡，所以看得见。
+  const DANCE_MODE = profile.musicSway?.mode ?? 'clip';
+  const danceNatural = Math.max(...(paramActs[DANCE_WORD]?.keys ?? []).map((k) => k.t ?? 0), 0.5);
+
+  /** 从 sway-1 的关键帧里学出「幅度 + 周期」，供连续正弦用。
+   *  这样以后改动作表，正弦会自动跟着变，不用两处维护。
+   *  周期取相邻极值的平均间隔 × 2（一个完整来回）；AngleY 的关键帧数是 AngleX 的两倍
+   *  （每拍一个低谷），它的 period 自然就是半拍，调用处再判断要不要加倍频率。 */
+  const danceShape = (() => {
+    const keys = paramActs[DANCE_WORD]?.keys ?? [];
+    const byId = new Map();
+    for (const k of keys) {
+      if (!byId.has(k.id)) byId.set(k.id, []);
+      byId.get(k.id).push(k);
+    }
+    const out = {};
+    for (const [id, arr] of byId) {
+      arr.sort((a, b) => (a.t ?? 0) - (b.t ?? 0));
+      const vs = arr.map((f) => f.v ?? 0);
+      const hi = Math.max(...vs), lo = Math.min(...vs);
+      // **不对称的曲线不能当对称正弦用**：AngleY 是 -4.5 ~ +9.5（低头浅、抬头高），
+      // 用 ±max(9.5) 做正弦会让"低头"深到 -9.5，用户 2026-11-25：「点头顿挫感太强，
+      // 感觉很用力点下去了」。所以额外记 mid（中位）和 swing（单边半幅），
+      // 调用处对 AngleY 走 base=mid、amp=swing，值域才和原曲线一致（-1.44 ~ +3.04）。
+      const amp = Math.max(Math.abs(hi), Math.abs(lo));
+      const ext = [];
+      for (let i = 1; i < arr.length - 1; i++) {
+        const a = arr[i - 1].v ?? 0, b = arr[i].v ?? 0, c = arr[i + 1].v ?? 0;
+        if ((b > a && b >= c) || (b < a && b <= c)) ext.push(arr[i].t ?? 0);
+      }
+      let half = 0, n = 0;
+      for (let i = 1; i < ext.length; i++) { half += ext[i] - ext[i - 1]; n++; }
+      out[id] = {
+        amp, hi, lo,
+        mid: (hi + lo) / 2,
+        swing: (hi - lo) / 2,
+        period: n ? (half / n) * 2 : 1,
+      };
+    }
+    return out;
+  })();
+  let danceWaves = [];       // 当前这批正弦层的引用（要能被 BPM 变化重建 / 停止时淡出）
+  let danceWaveKey = '';     // 参数指纹：pace 或幅度变了才重建，否则每帧什么都不做
+
+  // ---- 物理：固定步长累加器（DeepFish 的等价物）----
+  // 他们渲染循环是死的 60fps（Settings.cs: Fps = 60，dt 恒 16.67ms），物理每帧固定一步。
+  // 我们的 dt 跟着帧间隔走：165Hz 屏上为了凑 60fps 是 12/18ms 交替，待机 30fps 是 33ms。
+  // 物理（摆锤模型）的阻尼对 dt 极敏感 —— 步长一大一小交替会把阻尼稀释成「紧贴同步」。
+  // 实测证据（2026-11-25 给他们的渲染器加日志，792 条采样）：hip 滞后 aX 0.049 秒、
+  // bX 滞后 0.016 秒、bX 增益 1.05x、hip 增益 1.25x；我们之前是「腿和头完全在一起」。
+  let danceNextAt = -99;   // 当前这句演完的时刻。**恢复时不重置**：上一句已经发出去收不回了，
+                           // 断一下又续上时若重置，两句会叠在一起变成双倍幅度（他们 2026-11-12 修过）
+
+  /** 清掉上一批正弦层。按 src+group 扫，不只按引用 —— 淡出中的残留也要一并清掉，
+   *  否则「取消勾选再勾上」会有两层叠着摆（幅度翻倍）。 */
+  function dropDanceWaves() {
+    for (let n = layers.length - 1; n >= 0; n--) {
+      const c = layers[n];
+      if (c.group === 'dance' && c.src === DANCE_WORD && c.kind === 'wave') layers.splice(n, 1);
+    }
+    danceWaves = [];
+    danceWaveKey = '';
+  }
+
+  /** 建（或按需重建）听歌用的连续正弦层。幂等：参数没变就直接返回。 */
+  function setDanceWaves(pace) {
+    const key = pace.toFixed(3) + '|' + DANCE_SIZE + '|' + DANCE_NOD + '|' + DANCE_ROLL + '|' + DANCE_SHIFT;
+    if (key === danceWaveKey) return;
+    dropDanceWaves();
+    danceWaveKey = key;
+
+    // 相位关系全部照 sway-1 的关键帧实测（2026-11-25 从 profile.paramActs 直接打出来的）：
+    //   AngleX   0.46:-19   1.10:+19      ← 头，作为基准
+    //   AngleZ   0.46:-8    1.10:+8       ← 歪头，和头**同号同刻**
+    //   AngleY   0.46:-4.5  0.78:+9.5     ← 点头，**低谷正好落在 AngleX 的极值处**
+    //   ViewRoll 0.32:+2.5  0.96:-2.5     ← 整图倾斜，**比头早 0.14 秒、符号相反**
+    //   ViewX    0.32:+0.02 0.96:-0.02    ← 整图平移，同 ViewRoll
+    //
+    // 三个都不能省：
+    //   ① View* 反相 —— 头往左甩、重心往右压，这才是「跳舞」，同相会叠加成上半身整片绕过去；
+    //   ② View* 早 0.14 秒 —— 他们 Track 的 lag 参数（身体先动、头晚到）；
+    //   ③ AngleY 用 cos（+0.25 相位）—— 否则头还没点到最左就被拉回来了。
+    const T0 = Math.max(0.3, danceShape.AngleX?.period ?? 2);   // AngleX 的一个完整来回
+    const LAG_V = 0.14;                                          // View* 比头早多少秒
+    const phaseOf = (id) => {
+      if (id === 'AngleY') return 0.25;                          // cos：谷落在 AngleX 极值
+      if (id === 'ViewX' || id === 'ViewRoll') return 0.5 - LAG_V / (T0 * pace);   // 反相 + 提前
+      return 0;                                                  // AngleX / AngleZ：同相
+    };
+
+    for (const [id, sh] of Object.entries(danceShape)) {
+      if (!(sh.amp > 0)) continue;
+      // 和 keys 层同一套缩放：肢体 × DANCE_SIZE，AngleY 再 × DANCE_NOD，View* 各自倍数
+      const vis = id === 'AngleY' ? DANCE_NOD
+        : id === 'ViewX' ? DANCE_SHIFT
+        : id.startsWith('View') ? DANCE_ROLL : 1;
+      // AngleY 的关键帧数是 AngleX 的两倍（每拍一个低谷），period 已经是半拍，不用再折
+      const per = Math.max(0.25, sh.period * pace);
+      const ph = ((phaseOf(id) % 1) + 1) % 1;
+      const scale = DANCE_SIZE * vis;
+      // 不对称曲线（目前只有 AngleY）走 base + swing；其余是对称的，base=0
+      const asym = id === 'AngleY';
+      const amp = (asym ? sh.swing : sh.amp) * scale;
+      const base = asym ? sh.mid * scale : 0;
+      layers.push({
+        id, kind: 'wave',
+        amp,
+        freq: 1 / per,            // 每秒几个周期
+        base, phase: ph, post: false,
+        dur: 1e9,                 // 永远不过期：正弦没有「句」的概念
+        in: 1.2, out: 0.5,        // 1.2 秒淡入（开口时不至于「啪」一下开始摆）；0.5 秒淡出
+        src: DANCE_WORD, group: 'dance', t0: clockT,
+      });
+      danceWaves.push(layers[layers.length - 1]);
+    }
+    audit('dance waves n=' + danceWaves.length
+      + ' period=' + (danceShape.AngleX ? (danceShape.AngleX.period * pace).toFixed(2) : '?') + 's'
+      + ' ampX=' + (danceShape.AngleX ? (danceShape.AngleX.amp * DANCE_SIZE).toFixed(1) : '?')
+      + ' phases=' + danceWaves.map((L) => L.id + ':' + L.phase.toFixed(2)).join(','));
+  }
+
+  /** 停止：不硬删，把 dur 收到「现在就进入淡出段」——envelope 按 out 秒线性收到 0，
+   *  参数不会从峰值啪地掉回 0。dur 要比 age+out 略小，否则 `age > dur - out` 不成立、
+   *  永远停在满幅（第一次写成了 out: 0，导致除零 + 层直接过期消失）。 */
+  function fadeDanceWaves() {
+    for (const L of danceWaves) {
+      const out = L.out ?? 0.5;
+      L.dur = (clockT - L.t0) + out - 0.02;
+    }
+    danceWaves = [];
+    danceWaveKey = '';
+  }
+  let danceOn = false;
+  let danceMissAt = -99;   // 判定第一次断掉的时刻（忍 1.5 秒）
+  let danceBpm = 120;      // 第一版固定 120（一句 12 秒）；接到 Beat.Tempo 后换真值
+
+  /** 这一句该演多久：12 拍 × 一拍时长 × stretch。BeatSeconds 的夹取照他们 Dance.cs。 */
+  const danceSeconds = (bpm) => DANCE_BEATS * clamp(60 / clamp(bpm, 40, 190), 0.32, 1.5) * (musicStrength?.stretch ?? DANCE_STRETCH);
+
+  /** 软让位：只拦「起新的一句」，不撤正在演的那句。 */
+  function danceStartOk(frame) {
+    if (skit || clipList.some(c => !c.def.musicFace)) return false;
+    if (layers.some(c => !c.clip && c.group !== 'dance' && c.src)) return false;
+    if ((frame.talk ?? 0) > 0.05) return false;                       // 在说话
+    if (lastSpeechEnd >= 0 && clockT - lastSpeechEnd < 1.5) return false;  // 刚说完，留点收势
+    const m = frame.mode ?? 'idle';
+    return m !== 'walk' && m !== 'run' && m !== 'sleep';               // 走路/跑/睡着不跳
+  }
+
+  /** 撤掉摇摆自己带进来的所有层（按 src + group 认领，不碰别人的）。 */
+  function dropDance() {
+    for (let n = layers.length - 1; n >= 0; n--) {
+      const c = layers[n];
+      if (c.src === DANCE_WORD && c.group === 'dance') layers.splice(n, 1);
+    }
+  }
+
+  /** 每帧调一次（在 applyParamActs 之前、applyChannel 之前）。 */
+  function stepMusicDance(frame) {
+    if (earMode === 'off') { dropDance(); dropDanceWaves(); danceOn = false; danceMissAt = -99; return; }
+
+    // 硬让位：立刻撤，不等这一句演完（摸头/拖拽/睡着）
+    const ruaOn = typeof frame.rua === 'object' ? !!frame.rua?.on : !!frame.rua;
+    if (ruaOn || frame.mode === 'drag' || frame.mode === 'sleep') {
+      if (danceOn || layers.some((c) => c.src === DANCE_WORD && c.group === 'dance')) { dropDance(); dropDanceWaves(); }
+      danceOn = false; danceMissAt = -99;
+      return;
+    }
+
+    if (!(musicIntent() && danceStartOk(frame))) {
+      // 判定偶尔断一下不算停：忍 1.5 秒。原因在第一次掉的那一刻记下来
+      if (danceOn) {
+        if (danceMissAt < 0) {
+          danceMissAt = clockT;
+          const why = (frame.talk ?? 0) > 0.05 ? '说话' : frame.mode ?? 'idle';
+          audit('dance miss ' + why);
+          return;
+        }
+        if (clockT - danceMissAt < 1.5) return;
+        danceOn = false;
+        fadeDanceWaves();   // 正弦不硬删：让它淡出，别从峰值啪地掉回 0
+        audit('dance stop');
+      }
+      return;
+    }
+    danceMissAt = -99;
+    danceOn = true;
+
+    const wanted = danceSeconds(danceBpm);
+    const pace = clamp(wanted / danceNatural, 0.45, 2.4);
+
+    // ---- 连续正弦：一条永不结束的波，没有「句」，所以也没有接缝 ----
+    if (DANCE_MODE === 'wave') { setDanceWaves(pace); return; }
+
+    if (clockT < danceNextAt) return;   // 上一句还没演完，等它
+
+    // 第一句：从当前帧开始（之后一直是「上一句起点 + 时长」累加，误差不随时间漂）
+    if (danceNextAt < clockT - Math.max(0.1, frameDt * 2)) danceNextAt = clockT;
+    // 兜底：只清**已经过期**的摇摆层。不清还在演的那句 —— 下一句是提前叠上来的，
+    // 这时旧层正走到尾巴（值已经趋近 0），新层从 0 起，两层相加仍是连续的一条曲线。
+    // 要是这里无条件全清，就会在接缝处「啪」掉一下再重新起手，观感是明显的小停顿。
+    for (let n = layers.length - 1; n >= 0; n--) {
+      const c = layers[n];
+      if (c.src === DANCE_WORD && c.group === 'dance' && clockT - c.t0 > c.dur) layers.splice(n, 1);
+    }
+    pendingMod = { scale: musicStrength?.size ?? DANCE_SIZE, pace, repeat: 1, explicit: true, viewScale: DANCE_ROLL, shiftScale: DANCE_SHIFT, nodScale: DANCE_NOD, axisScale: DANCE_UPPER };
+    // 不走 actWord：它会撤联动表情（脸红/眼泪）还会 stopSkit，每 12 秒来一次显然不对。
+    // ctx.dance 让 applyOneWord 跳过 performingUntil —— 否则整首歌视线都被压到 15%（头不跟鼠标）。
+    // ctx.t0 = danceNextAt：层的起点对齐到「上一句结束的那一刻」，不是当前帧的 clockT。
+    // 不这么做的话，帧边界跨过句末时会多等最多一帧（16.7ms），那段时间一条摇摆层都没有，
+    // 参数掉回 look 的值再被下一句拉走 —— 观感就是「放完顿一下又马上开始」（用户 2026-11-25 实测）。
+    applyOneWord(DANCE_WORD, null, {}, { group: 'dance', dance: true, t0: danceNextAt });
+    // 下一句的起点 = 这一句的起点 + 实际时长（不是 clockT + 时长，否则误差会累积）
+    danceNextAt += danceNatural * pace;
+    audit('dance start pace=' + pace.toFixed(2) + ' len=' + (danceNatural * pace).toFixed(1) + 's');
+  }
+
+  // 听歌动作与表情统一走layers，物理和矩阵只负责计算与最终绘制。
   let bornAt = -99;   // 词出生时刻：闲置语境（随机动作）的限时基准
   let performingUntil = -99;   // 3.9c 表演期：词活跃期间视线看向屏幕（用户：做表情/动作时看着我，别追鼠标）
   let performingBlend = 0;   // 表演期视线曲线的混合系数（0=正常跟随鼠标 → 1=看向屏幕，双向缓动）
@@ -1566,6 +1947,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
   }
   function startSkit() {
     if (!skits.length) return false;
+    // 听歌期间不演小剧场：kit 的 decide() 已经挡住了抽签，但歌间静音段会让 intent 短暂为 false，
+    // 抽中之后剧本一演就是十几秒。这里再兜一道（musicBusy 有 8 秒保持）。
+    if (musicBusy()) { return false; }
     const ready = skits.filter(skitOk);
     const special = ready.filter((s) => s.when);
     // 条件剧本更"应景"（0~3 点催睡、周五傍晚放松）：满足时六成演它，
@@ -1807,7 +2191,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
     }
     // 3.9c 表演期：词活跃期间视线看向屏幕。只算「演」的部分（dur），state 词的保持期
     // 不算——挂着红脸跟鼠标不冲突，全算的话表演期拖到 life 尾，脸退完了视线还压着（2026-11-20 用户反馈残留太久）
-    performingUntil = Math.max(performingUntil, now + dur + 0.5);
+    // 2026-11-25：ctx.dance 的词（听歌摇摆）不设表演期。这行会让「词活跃期间视线看向屏幕」，
+    // 下面把鼠标跟随压掉 85%；摇摆一句接一句，等于整首歌头都不跟鼠标（用户实测「头不跟了」）。
+    if (!ctx?.dance) performingUntil = Math.max(performingUntil, now + dur + 0.5);
     const inT = Math.min(0.45, dur * 0.2);
     // 2026-11-21 眼睛：照搬他们的 lid 乘数（main.cpp:559 `lid(id, 1 + (value-1)*weight)`）。
     // 关键：基准恒是 1（睁眼），不是参数默认值 —— 这个模型的 ParamEyeLOpen 默认值是 0（绑定姿势闭眼），
@@ -1913,12 +2299,25 @@ export async function createLive2DBody(base, opts, entry, kit) {
       for (const [id, frames] of byId) {
         frames.sort((a, b) => a[0] - b[0]);
         // 幅度 × scale，时间 × pace；×几 就把整条时间轴复制几份接在后面
+        // View* 是整图变换，语义和"肢体幅度"不同，给两个独立倍数：
+        //   ViewRoll 旋转整个形象（照片转圈），ViewX 整图左右平移（整张图滑过去）
+        // 听歌摇摆要的是"整张图左右轻轻滑"，不要"甩头"，所以肢体收小、ViewX 放大、ViewRoll 收小。
+        // 这些倍数不写进 paramActs —— 那边要保持和 DeepFish 逐点一致（gen-dance 会校验）。
         const span = frames[frames.length - 1][0];
+        const vis = id === 'AngleY' ? (mod.nodScale ?? 1)
+          : (id === 'AngleX' || id === 'AngleZ') ? (mod.axisScale ?? 1)
+          : id === 'ViewX' ? (mod.shiftScale ?? 1)
+          : id.startsWith('View') ? (mod.viewScale ?? 1) : 1;
         const out = [];
         for (let r = 0; r < mod.repeat; r++) {
-          for (const [t, v] of frames) out.push([(r * span + t) * mod.pace, mir(id, v) * effScale]);
+          for (const [t, v] of frames) out.push([(r * span + t) * mod.pace, mir(id, v) * effScale * vis]);
         }
-        addLayer({ id, kind: 'keys', frames: out, dur: clipHandHold ? 1e9 : dur, emo, post, hand: !!def.hand, bornS: sentenceCount, bornT: clockT, src: w, group: ctx.group, skit: ctx.skit });
+        // ctx.t0：调用方指定这层的起点（听歌摆动用它精确对齐句末，见 stepMusicDance）。
+        // addLayer 里默认 t0 = clockT，这里 o.t0 在后、会覆盖。
+        // 摆动层**不要包络**（in/out = 0）：他们重播「摇摆一」时轨道到期直接删，
+        // 首末帧本身就是 0，所以既不会跳、也不该被再乘一道斜坡。加了 0.2 秒淡出，
+        // 身体会提前减速、腿跟着停 → 接缝处就听不到腿的惯性余摆（用户 2026-11-25 的观察）。
+        addLayer({ id, kind: 'keys', frames: out, dur: clipHandHold ? 1e9 : dur, emo, post, hand: !!def.hand, bornS: sentenceCount, bornT: clockT, src: w, group: ctx.group, skit: ctx.skit, ...(ctx.dance ? { in: 0, out: 0 } : {}), ...(ctx.t0 !== undefined ? { t0: ctx.t0 } : {}) });
       }
     }
     audit('write ' + w);
@@ -2020,8 +2419,11 @@ export async function createLive2DBody(base, opts, entry, kit) {
   function envelope(c, age, gate) {
     const inT = c.in ?? 0.2, outT = c.out ?? 0.2;
     if (c.keep) return clamp(age / Math.max(1e-3, inT), 0, 1) * gate;
-    if (age < inT) return clamp(age / inT, 0, 1);
-    if (age > c.dur - outT) return clamp((c.dur - age) / outT, 0, 1);
+    // in/out 可以显式设 0 = **完全不要淡入淡出**。DeepFish 的轨道到点就直接 erase，
+    // 没有包络；默认的 0.2 秒淡出会把曲线尾巴再乘一个斜坡，身体提前减速，
+    // 腿（物理 pendulum）跟着一起减速 —— 接缝处就只剩「停住」，没有惯性余摆。
+    if (inT > 0 && age < inT) return clamp(age / inT, 0, 1);
+    if (outT > 0 && age > c.dur - outT) return clamp((c.dur - age) / outT, 0, 1);
     return 1;
   }
 
@@ -2828,6 +3230,14 @@ export async function createLive2DBody(base, opts, entry, kit) {
   }
 
   function stepMotion(frame, dt) {
+    // 听歌摆动期间：原生 Idle motion 让位（用户 2026-11-25 定）。
+    // 模型自带的待机动画在自动摆头（±15°），sway-1 的 ±6 叠上去变成 ±21，看着「用力摇」。
+    // 跳过它之后 AngleX/Y/Z 只由 applyFrame（视线跟随）和 sway-1 决定，和 DeepFish 一致。
+    // danceOn 是上一帧的值（stepMusicDance 在本函数之后跑），延迟 16ms，无感。
+    if (danceOn) {
+      if (currentId) { model._motionManager.stopAllMotions(); currentId = null; idlePlaying = false; }
+      return;
+    }
     if (SIMPLE) return;
     const g = frame.gesture;
     const want = g?.kind && clips.has(g.kind) ? g.kind : null;
@@ -3655,23 +4065,102 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 整图滚转：他们的 ViewRoll（main.cpp:565 的 bodyRoll，作用在整个图形矩阵上，单位度）。
     // kit 本来就会把 groupTilt 的返回值当整组旋转 —— 直接把 ViewRoll 加进去，不用改 kit。
     groupTilt(mode, tilt, lean) {
+      // 整图滚转：他们的 ViewRoll（main.cpp:641 `// Turning and squashing happen around her feet`，
+      // 绕脚底旋转，anchorY=-0.92）。kit 把返回值当整组旋转，中心是画布底边中心（ay=256）。
+      //
+      // **他们这里没有弹簧**：main.cpp 里 bodyRoll 是轨道值直接算进矩阵，无任何滤波。
+      // （有弹簧的只有窗口拖动时的 swayX/swayY，跳舞时那两项是 0。）
+      // 2026-11-25 加过一阶低通、又改成二阶弹簧，两次都是错的，已全部删除。
       const roll = virtualParams.get('ViewRoll')?.v ?? 0;
-      return tilt + lean + roll;
+      return tilt + lean + (layers.some(c => c.group === 'dance' && c.src === DANCE_WORD) ? -roll : roll);
     },
     // 整图平移：他们的 ViewX/ViewY（main.cpp:649 的 bodyX/bodyY），原本是 NDC（1 = 半个屏宽）。
     // 我们的形象只占窗口宽 43%（他们 94%），用屏宽当基准会显得位移大一倍 ——
     // 所以这里按**形象自身的半宽/半高**换算：返回值的 1 = 半个形象宽，kit 再乘 kx/ky 变成像素。
     // 视觉比例就和他们一致（同样是「形象宽的 1%」），曲线数值一个没改。
     groupMove() {
+      if (layers.some(c => c.group === 'dance' && c.src === DANCE_WORD)) {
+        const clothes = model._model.getParameterValueByIndex(paramIndex.get('Clothes2'));
+        const shape = clothes > 0.8 ? { anchorY: 0.3124, anchorScale: 0.45 }
+          : clothes > 0.1 ? { anchorY: -0.2845, anchorScale: 1 } : { anchorY: -0.92, anchorScale: 1.7 };
+        const result = musicTransform({ matrix: modelToLogoMatrix(), ...shape,
+          roll: virtualParams.get('ViewRoll')?.v ?? 0,
+          vx: (virtualParams.get('ViewX')?.v ?? 0) / DANCE_SHIFT,
+          vy: virtualParams.get('ViewY')?.v ?? 0,
+          nativeModelScale: 2 / model._model.getCanvasHeight() });
+        globalThis.__musicAuditLast = result;
+        return { x: result.x, y: result.y };
+      }
+
       const vx = virtualParams.get('ViewX')?.v ?? 0;
       const vy = virtualParams.get('ViewY')?.v ?? 0;
-      if (!vx && !vy) return null;
       const [x0, y0, x1, y1] = currentExtent();
-      return { x: vx * (x1 - x0) / 2, y: vy * (y1 - y0) / 2 };
+      let px = vx * (x1 - x0) / 2;
+      let py = vy * (y1 - y0) / 2;
+      // ---- 旋转基准点补偿（2026-11-25）----
+      // kit 的整组旋转绕 (ax, ay) = (128, 256)，256 是**画布底边**。实测形象脚底 cy = 255，
+      // 杠杆只有 1px —— 倾斜 6° 时脚的横移 = 1 × sin(6°) ≈ 0.1px，等于钉死在原地，
+      // 只有上半身在扫弧：这就是用户说的「圆锥」「定点在脚上」。
+      //
+      // 绕 C 转 θ 等价于「绕 P 转 θ 再平移 t」，t = (I−R)(P−C)。
+      // C 是 kit 的中心（脚底），P 是想要的不动点（P 在 C 上方 h，y 更小，所以 P−C = (0,−h)）：
+      //   (I−R)·(0,−h) = (−h·sinθ, −h(1−cosθ))
+      // 所以两项都是**负号**。2026-11-25 第一次写成正的，反而把定点推到画布外（y=305），
+      // 视觉上就是「整个人一起晃」—— 用户一耳朵就听出来了「肚子中心也在动」。
+      if (DANCE_PIVOT > 0) {
+        const roll = virtualParams.get('ViewRoll')?.v ?? 0;
+        if (roll) {
+          const rad = roll * Math.PI / 180;
+          const h = (y1 - y0) * DANCE_PIVOT;
+          px -= h * Math.sin(rad);
+          py -= h * (1 - Math.cos(rad));
+        }
+      }
+      if (!px && !py) return null;
+      return { x: px, y: py };
     },
     // 2.8 叠加层：外力源（rua/触摸）在主通道结果之上相加——不动词表、不触发 face 清场
     overlaySet,
     overlayClear,
+    // 听歌：body-host 把 /music 的快照转进来；null = 断开/无数据
+    // Audio feature snapshots arrive through the engine music WebSocket bridge.
+    music(data) {
+      if (!data || data.error || data.ready) {
+        musicRaw = null; musicOwnAnalysis = false; musicTimeOffset = null;
+        musicLastSample = null; musicDetector.reset(); return;
+      }
+      musicOwnAnalysis = !data.analysis;
+      if (musicOwnAnalysis) {
+        const now = musicNow();
+        if (Number.isFinite(data.sampleAt)) {
+          if (musicLastSample !== null && data.sampleAt < musicLastSample) {
+            musicDetector.reset(); musicTimeOffset = null;
+          }
+          musicLastSample = data.sampleAt;
+          if (musicTimeOffset === null) musicTimeOffset = now - data.sampleAt;
+        }
+        musicDetector.ingest(data, Number.isFinite(data.sampleAt) ? data.sampleAt + musicTimeOffset : now);
+        musicRaw = { ...data, analysis: musicDetector.read(now) };
+      } else musicRaw = data; // preanalysed input is used by deterministic test harnesses
+      musicAt = clockT;
+    },
+    /** 测试/调参用：改听歌摆动的 BPM（一句的时长 = 12 拍 × 60/BPM × 2）。下一句生效。 */
+    get musicLabDebug() { return globalThis.__musicLabStatus; },
+    debugMusicFaceAdvance(seconds) { stepLabMusicFace({ mode: 'idle', talk: 0 }, seconds); },
+    debugMusicStep(seconds, frame = { mode: 'idle', talk: 0 }) {
+      clockT += seconds; musicAt = clockT; stepMusicDance(frame); stepLabMusicFace(frame, 0.05);
+      return globalThis.__musicLabStatus;
+    },
+    setDanceStrength(name) {
+      const choices = { soft: {size:0.4,stretch:2}, normal: {size:0.45,stretch:1.6}, strong: {size:0.5,stretch:1.2} };
+      if (choices[name]) musicStrength = choices[name];
+      return { ...musicStrength };
+    },
+    setDanceBpm(v) {
+      const n = Number(v);
+      if (Number.isFinite(n) && n >= 40 && n <= 220) danceBpm = n;
+      return danceBpm;
+    },
     // 渲染组级抖动（kit 渲染循环每帧调用）：情绪词的"浑身抖动"——
     // 对齐 kit 脸配方 fc.shake 的组级语义（整组一起抖，身体+头），参数级 wave 只抖头不够。
     // 时间用 kit 传入的 T（秒）——iframe 沙箱里 performance.now 不可用（踩过）。
@@ -3704,6 +4193,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 3.9 统一闲时池：kit decide() 的 idle-word 选项从这里拿词表（{word,kind,w,life}），
     // 抽中后走 doWord(word, {idle, life}) 回到 actWord——音效/爱心/挤压在 kit 那头照发。
     idlePool() { return profile.idleRepertoire ?? []; },
+    // 听歌期间 kit 的 decide() 直接 return：随机漫游/待机词/小剧场都不抽（用户 2026-11-24 定）
+    // 用 hold 版：歌间静音段不放开（否则会钻空演小剧场）；真实停歌 8 秒后才恢复随机
+    musicActive() { return musicBusy(); },
     // kit 在 doWord 最前面调用：剥修饰 + 中文转 id，返回基础词
     baseWord,
     // Live2D 只有一个正面，镜像会把左右手整体换边（手里的狗尾草从右手换到左手），
@@ -3860,6 +4352,13 @@ export async function createLive2DBody(base, opts, entry, kit) {
       applyIdlePhysics(clockT);
       applyBodyFollow(dt, frame.mode, frame.facing);   // 必须在物理之前：写的是 PositionX/Z 这类物理输入
       stepIdleWords(clockT, frame.mode);
+      // 听歌摆动：在这里判「该不该起新的一句」。它往 layers 里塞层，
+      // 真正写进模型要等后面的 applyChannel —— 那一步在 saveParameters 之后，
+      // 所以动作不会进基准（停了能自己回去），和所有词同一个规矩。
+      if (musicOwnAnalysis && musicRaw) musicRaw.analysis = musicDetector.read(musicNow());
+      if (musicRaw?.analysis && Number.isFinite(musicRaw.analysis.bpm)) danceBpm = musicRaw.analysis.bpm;
+      stepMusicDance(frame);
+      stepLabMusicFace(frame, dt);
       applyParamActs(frame);
       applySchemeParams();
       // 基准只存 role + 状态。动作、表情、物理都是"每帧重算"的输出，
@@ -3998,7 +4497,25 @@ export async function createLive2DBody(base, opts, entry, kit) {
       }
       // 表演层（含 rua 摸后四档）的参数已经由 applyChannel → writeLayers 写完
       // （和词同一张表）。这里不再写参数，只留物理。
+      //
+      // SDK owns the 60 Hz accumulator and interpolation. Do not split twice.
       try { model._physics?.evaluate(model._model, dt); } catch { /* 物理失败不致命 */ }
+      // ---------- 腿的幅度放大（2026-11-25）----------
+      // 扫参数（?sweep=1，509 个参数）确认：腿真正的驱动是物理设置 #129 的输出
+      //   Param_Angle_Rotation84~89（scale 15~30），输入是 ParamBodyAngleX(w40) /
+      //   ParamBodyAngleZ(w30) / LeanInput(w40) / ParamBreath(w15) / Clothes2(w30)。
+      // 也就是说**腿就是被上半身角度推动的**，而且这条链是一条 pendulum，
+      // 自带固有频率和阻尼 —— 用户看到的「腿慢半拍、往另一条腿靠」就来自这里，不是 HipAngleX
+      // （HipAngleX 对脚底 y 和两腿间距的影响只有 0.0001/0.0022，等于没有）。
+      // 物理算出来的原始摆动只有 ±3~4°，换算到画面约 2px 所以看不见；这里把它放大，
+      // 时序、滞后、相位全部保持物理原样，只改观感幅度。1 = 不放大。
+      if (LEG_GAIN !== 1) {
+        for (const id of LEG_PARAMS) {
+          const i = paramIndex.get(id);
+          if (i === undefined) continue;
+          model._model.setParameterValueByIndex(i, model._model.getParameterValueByIndex(i) * LEG_GAIN);
+        }
+      }
       // ---------- 摸后的四个 mood（Behavior.cs:59-67）----------
       // 全部写在这里（saveParameters 之后、物理之前）：直写参数不会进基准，
       // 播完下一帧 loadParameters 就恢复（写进 applyFrame 会永久残留）。
@@ -4008,6 +4525,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
         const gv = (id) => { const i = paramIndex.get(id); return i !== undefined ? model._model.getParameterValueByIndex(i) : null; };
         const eL = gv('ParamEyeLOpen'), bodyAX = gv('ParamBodyAngleX'), bodyAY = gv('ParamBodyAngleY');
         const px = gv('PositionX'), py = gv('PositionY'), br = gv('ParamBreath'), aY = gv('AngleY'), pAY = gv('ParamAngleY'), pAX = gv('ParamAngleX'), hipX = gv('HipAngleX'), lookX = frame.look?.[0];
+        const aX = gv('AngleX'), aZ = gv('AngleZ'), bodyAZ = gv('ParamBodyAngleZ');
         // 眨眼：eyeL < 0.95 时每帧打，同时记 Date.now() 真实毫秒（验证 clockT 和实际时间是否一致）
         if (eL != null && eL < 0.95) {
           if (!globalThis.__blinkStart) globalThis.__blinkStart = Date.now();
@@ -4016,16 +4534,148 @@ export async function createLive2DBody(base, opts, entry, kit) {
           audit('blink-end real=' + (Date.now() - globalThis.__blinkStart) + 'ms t=' + clockT.toFixed(2));
           globalThis.__blinkStart = 0;
         }
-        // 每秒打身体/呼吸
-        if (Date.now() - (globalThis.__earDbg ?? 0) > 1000) {
-          globalThis.__earDbg = Date.now();
-          audit('dbg look=' + (lookX?.toFixed(2) ?? 'null') + ' px=' + (px?.toFixed(2) ?? 'null') + ' py=' + (py?.toFixed(2) ?? 'null') + ' aY=' + (aY?.toFixed(2) ?? 'null') + ' bAY=' + (bodyAY?.toFixed(2) ?? 'null') + ' pAX=' + (pAX?.toFixed(2) ?? 'null') + ' hipX=' + (hipX?.toFixed(2) ?? 'null'));
-        }
+        // 每 0.1 秒打点（clockT 驱动，无头固定步长跑也能密集采样）。
+        // 2026-11-25 加了 vx / dn / dage：查接缝到底断在哪——
+        //   vx   = ViewX 虚拟参数（整图平移）当前值
+        //   dn   = 当前活着的 sway-1 层数（正常在接缝处会短暂出现 2 层）
+        //   dage = 最新那句已经演了多久（对比 len 就知道有没有提前被删）
       }
       applyPhysicsWaves(clockT);
       applyActPostWaves(clockT);
       applyChannelPost(clockT);   // 通道里标了 post 的那批（腰/胯）：必须是物理之后当帧最终值
       try { model._pose?.updateParameters(model._model, dt); } catch { /* 姿势失败不致命 */ }
+          // 帧末打点：在 model.update() 之前，读的是**即将上屏**的值。
+          // 这里不能引用 draw 前半段的局部变量（lookX/px/gv 等），它们是 const 且有作用域边界，
+          // 2026-11-25 第一次移到帧末时就是这么报的 ReferenceError: lookX is not defined —— 全部自己重读。
+          if (clockT - (globalThis.__earDbg ?? -1) > 0.1) {
+            globalThis.__earDbg = clockT;
+            const gv2 = (id) => {
+              const gi = paramIndex.get(id);
+              return gi !== undefined ? model._model.getParameterValueByIndex(gi) : null;
+            };
+            const dlay = layers.filter((l) => l.src === DANCE_WORD && l.group === 'dance');
+            const vx = virtualParams.get('ViewX')?.v ?? 0;
+            const vroll = virtualParams.get('ViewRoll')?.v ?? 0;
+            const xfNow = fo?.parentNode?.getAttribute?.('transform') ?? '';
+            const rotNow = /rotate\(([-\d.]+)\)/.exec(xfNow)?.[1] ?? '-';
+            // 旋转中心 vs 脚底：kit 的 rotate 绕 (ax,ay)=(128,256)，256 是画布底边；
+            // 形象脚底在 extent 的 y1。杠杆 = 256 - cy：越大，倾斜时脚横移越多（浮空）；
+            // cy ≈ 256 则脚钉死（圆锥）。
+            const extNow = currentExtent();
+            const cyNow = extNow ? extNow[3] : 0;
+            // 整图横移的**实际画布像素**：groupMove 里就是 vx × extent 半宽。
+            // 换算成「占形象高度的百分比」才能和他们的 footX 摆动（1.5% 图高）直接比 ——
+            // 他们的 ViewX 单位是「窗口宽的 NDC」，我们的是「形象宽的倍数」，1:1 抄数值没有意义。
+            const extW = extNow ? (extNow[2] - extNow[0]) : 0;
+            const extH = extNow ? (extNow[3] - extNow[1]) : 0;
+            const shiftPx = vx * extW / 2;
+            const shiftPct = extH ? (shiftPx / extH * 100) : 0;
+            const f2 = (v) => (v == null ? '-' : v.toFixed(2));
+            audit('dbg trc t=' + clockT.toFixed(2)
+              + ' look=' + f2(frame.look?.[0])
+              + ' aY=' + f2(gv2('AngleY')) + ' bAY=' + f2(gv2('ParamBodyAngleY'))
+              + ' hipX=' + f2(gv2('HipAngleX'))
+              + ' | aX=' + f2(gv2('AngleX')) + ' bAX=' + f2(gv2('ParamBodyAngleX'))
+              + ' aZ=' + f2(gv2('AngleZ')) + ' bAZ=' + f2(gv2('ParamBodyAngleZ'))
+              + ' vx=' + vx.toFixed(4) + ' vroll=' + vroll.toFixed(2) + ' ROT=' + rotNow
+              + ' cy=' + cyNow.toFixed(0) + ' ay=256'
+              + ' extW=' + extW.toFixed(0) + ' extH=' + extH.toFixed(0)
+              + ' shiftPx=' + shiftPx.toFixed(2) + ' (' + shiftPct.toFixed(2) + '%H)'
+              + ' dn=' + dlay.length
+              // 腿的真实驱动是物理设置 #129 → Param_Angle_Rotation84~89（不是 HipAngleX！）。
+              // 2026-11-25 扫参数确认：Rotation87 的 Δ两腿间距 0.0651 / Δ脚底y差 0.1211，
+              // HipAngleX 只有 0.0022 / 0.0001。这里直接读它们的实际值。
+              + ' leg=' + [84, 85, 86, 87, 88, 89].map((k) => f2(gv2('Param_Angle_Rotation' + k))).join(','));
+          }
+
+      // 参数扫描（2026-11-25，?sweep=1）：照 DeepFish 的 Sweep 思路，把每个参数推到
+      // 最小/最大各测一次，量「下半身有没有动」。目的：搞清楚**到底哪个参数在驱动腿** ——
+      // ?hip= 那个测试已经证明 HipAngleX 对脚底 y 和两腿间距都没有影响（Δ<0.002）。
+      // 只跑一次，不改任何常驻行为。
+      if (globalThis.__sweep && !globalThis.__sweepDone) {
+        globalThis.__sweepDone = true;
+        const M = model._model;
+        const lower = () => {
+          const dn = M.getDrawableCount();
+          let loL = 1e9, loR = 1e9, cxL = 0, cxR = 0, nL = 0, nR = 0, lo = 1e9;
+          for (let d = 0; d < dn; d++) {
+            const cnt = M.getDrawableVertexCount(d);
+            if (!cnt) continue;
+            const vs = M.getDrawableVertices(d);
+            for (let i = 0; i < cnt * 2; i += 2) {
+              const x = vs[i], y = vs[i + 1];
+              if (y < lo) lo = y;
+              if (y > -0.2) continue;
+              if (x < 0) { if (y < loL) loL = y; cxL += x; nL++; }
+              else { if (y < loR) loR = y; cxR += x; nR++; }
+            }
+          }
+          return { gap: (nL && nR) ? cxR / nR - cxL / nL : 0, sole: loR - loL, lo };
+        };
+        const rows = [];
+        const pn = M.getParameterCount();
+        for (let p = 0; p < pn; p++) {
+          const id = M.getParameterId(p).getString();
+          if (!/Angle|Hip|Body|Position|Leg|Knee|Foot|Bust|Skirt|ParamBreath/i.test(id)) continue;
+          const dflt = M.getParameterValueByIndex(p);
+          const lo = M.getParameterMinimumValue(p), hi = M.getParameterMaximumValue(p);
+          const res = [];
+          for (const v of [lo, hi]) {
+            M.setParameterValueByIndex(p, v);
+            M.update();
+            res.push(lower());
+          }
+          M.setParameterValueByIndex(p, dflt);
+          M.update();
+          const dGap = Math.abs(res[1].gap - res[0].gap);
+          const dSole = Math.abs(res[1].sole - res[0].sole);
+          const dLo = Math.abs(res[1].lo - res[0].lo);
+          if (dGap > 0.002 || dSole > 0.002 || dLo > 0.003) {
+            rows.push({ id, dGap, dSole, dLo, lo, hi });
+          }
+        }
+        rows.sort((a, b) => (b.dGap + b.dLo) - (a.dGap + a.dLo));
+        for (const r of rows.slice(0, 22)) {
+          audit('sweep ' + r.id + ' Δ两腿间距=' + r.dGap.toFixed(4)
+            + ' Δ脚底y差=' + r.dSole.toFixed(4) + ' Δ最低点=' + r.dLo.toFixed(4)
+            + ' 范围=' + r.lo + '~' + r.hi);
+        }
+        audit('sweep 完成：' + rows.length + ' 个参数能带动下半身（共扫 ' + pn + ' 个）');
+      }
+
+      // 调试钩子（2026-11-25）：?hip=20 把胯角钉死在一个值上，用来单独验证
+      // 「HipAngleX 到底有没有驱动腿」—— 不动参数表，只在这一帧最后覆盖一次。
+      // 同时每 0.5 秒量一次**脚底左右两侧的最低顶点高度**：如果胯带动腿，
+      // 左右两侧会一高一低（脚底连线翘起来）；如果两边一样高，说明腿根本没被驱动。
+      if (globalThis.__forceHip != null) {
+        const hi = paramIndex.get('HipAngleX');
+        if (hi !== undefined) model._model.setParameterValueByIndex(hi, Number(globalThis.__forceHip));
+        if (clockT - (globalThis.__soleDbg ?? -1) > 0.5) {
+          globalThis.__soleDbg = clockT;
+          const M = model._model;
+          const dn = M.getDrawableCount();
+          let loL = 1e9, loR = 1e9;         // 左半 / 右半 最低点（y 越小越低）
+          let cxL = 0, cxR = 0, nL = 0, nR = 0;   // 左半 / 右半 的 x 中心（看两腿有没有靠近）
+          for (let d = 0; d < dn; d++) {
+            const cnt = M.getDrawableVertexCount(d);
+            if (!cnt) continue;
+            const vs = M.getDrawableVertices(d);
+            for (let i = 0; i < cnt * 2; i += 2) {
+              const x = vs[i], y = vs[i + 1];
+              if (y > -0.2) continue;              // 只看下半身（脚/小腿）
+              if (x < 0) { if (y < loL) loL = y; cxL += x; nL++; }
+              else { if (y < loR) loR = y; cxR += x; nR++; }
+            }
+          }
+          // 两脚间距：右半 x 中心 − 左半 x 中心。胯转时如果两腿互相靠，这个数会变小。
+          const gap = (nL && nR) ? (cxR / nR - cxL / nL) : NaN;
+          audit('sole hip=' + Number(globalThis.__forceHip).toFixed(0)
+            + ' 脚底y差=' + (loR - loL).toFixed(4)
+            + ' 两脚间距=' + (Number.isFinite(gap) ? gap.toFixed(4) : '-')
+            + ' (画布高 2.0；间距变小 = 两腿靠拢)');
+        }
+      }
+
       model._model.update();
       render();
 
@@ -4151,5 +4801,10 @@ export async function createLive2DBody(base, opts, entry, kit) {
   }
   // roam：不拦截 set，也不驱动 place。让 kit 自己的 decide 跑
   // look / walk / run / jump / sit / expr，和旧版一致。
+  // 听歌的数据入口必须挂在 body 上：figure-frame 拿到的是 kit.createBody 包装过的对象，
+  // music/musicActive 定义在 figure 上，kit 只会用 custom.musicActive() 问状态、
+  // 不会把音频快照转进来。少了这一行，body.music 是 undefined，`body.music?.()` 静默无效——
+  // 2026-11-24 真机上「一点反应都没有」就是这个原因。
+  if (typeof figure.music === 'function') body.music = (data) => figure.music(data);
   return body;
 }

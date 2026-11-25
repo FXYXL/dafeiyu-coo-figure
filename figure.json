@@ -195,6 +195,43 @@
           }
         }
       ]
+    },
+    {
+      "id": "ear",
+      "name": {
+        "zh": "听歌反应",
+        "en": "Music reaction"
+      },
+      "options": [
+        {
+          "id": "music",
+          "name": {
+            "zh": "只认音乐软件",
+            "en": "Music apps only"
+          }
+        },
+        {
+          "id": "musicweb",
+          "name": {
+            "zh": "音乐软件 + 浏览器",
+            "en": "Music apps + browser"
+          }
+        },
+        {
+          "id": "all",
+          "name": {
+            "zh": "所有系统声音",
+            "en": "All system audio"
+          }
+        },
+        {
+          "id": "off",
+          "name": {
+            "zh": "关闭",
+            "en": "Off"
+          }
+        }
+      ]
     }
   ],
   "presets": [],

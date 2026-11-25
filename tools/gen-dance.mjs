@@ -105,6 +105,7 @@ function groove(size, beats, hits, stretch = 1) {
 }
 
 const rep = (v, n) => Array.from({ length: n }, () => v);
+const DEAD = new Set(['ParamBodyAngleX', 'ParamBodyAngleZ']);
 const ALT6 = [1, -1, 1, -1, 1, -1];
 const ALT12 = rep(1, 12).map((_, i) => (i % 2 ? -1 : 1));
 
@@ -122,8 +123,6 @@ export const MAP = {
   FaceAngleX: { id: 'AngleX', post: false },
   FaceAngleY: { id: 'AngleY', post: false },
   FaceAngleZ: { id: 'AngleZ', post: false },
-  ParamBodyAngleX: { id: 'ParamBodyAngleX', post: true },
-  ParamBodyAngleZ: { id: 'ParamBodyAngleZ', post: true },
   ShoulderYy: { id: 'ShoulderY', post: false },
   ShoulderX: { id: 'ShoulderX', post: false },
   // ViewRoll / ViewX / ViewY 是他们的「整图变换」输入（main.cpp:565 的 bodyRoll/bodyX/bodyY）。
@@ -148,8 +147,13 @@ if (process.argv[1] && process.argv[1].endsWith('gen-dance.mjs')) {
     const problems = [];
     if (Math.abs((cur?.dur ?? 0) - dur) > 0.02) problems.push(`dur ${cur?.dur} ≠ ${dur}`);
     for (const [theirId, keys] of Object.entries(tracks)) {
-      const m = MAP[theirId]; if (!m) continue;
-      const have = ours.get(m.id);
+      const m = MAP[theirId];
+      if (!m) {
+        // ParamBodyAngleX/Z：DeepFish 写在物理之前、被物理覆盖（main.cpp:610 → :631），等效不存在。
+        // 我们若在 keysPost 里补写就是多出来的一截（2026-11-24 实测）。dance（摇摆二）是用户另外调过的，不查。
+        if (DEAD.has(theirId) && word !== 'dance' && ours.has(theirId)) problems.push(`${theirId} 不该物理后补写（DeepFish 里被物理覆盖）`);
+        continue;
+      }      const have = ours.get(m.id);
       if (!have) { problems.push(`${m.id} 缺整条`); continue; }
       if (have.length !== keys.length) { problems.push(`${m.id} 点数 ${have.length}≠${keys.length}`); continue; }
       let worst = 0;
@@ -160,7 +164,7 @@ if (process.argv[1] && process.argv[1].endsWith('gen-dance.mjs')) {
     }
     // 我们自己的适配轨道（PositionX 驱动胸晃、HipAngleX 扭胯…）不算差异
     const ADAPT = new Set(['PositionX', 'ParamBodyAngleRZ', 'HipAngleX', 'ParamAngleX', 'ParamAngleY', 'ParamAngleZ']);
-    const extra = [...ours.keys()].filter((id) => !Object.values(MAP).some((m) => m.id === id) && !ADAPT.has(id));
+    const extra = [...ours.keys()].filter((id) => !Object.values(MAP).some((m) => m.id === id) && !ADAPT.has(id) && !DEAD.has(id));
     if (problems.length || extra.length) {
       bad++;
       console.log(`✗ ${word}（理论 dur ${dur}）`);
