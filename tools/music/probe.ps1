@@ -327,7 +327,3 @@ public static class WhaleEar
 Add-Type -TypeDefinition $cs -ReferencedAssemblies @($dll, 'System.dll') -Language CSharp
 
 [WhaleEar]::Run($IntervalMs, $ParentPid)
-
-
-
-
