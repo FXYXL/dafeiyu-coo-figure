@@ -6,6 +6,25 @@ import fs from 'node:fs';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 const engine=process.argv[2];if(!engine)throw Error('Pass isolated patched engine');
+// Execute the actual public kit wrapper, with no accidental `custom` global.
+// createPet is a stub here to isolate the wrapper's scope from model/DOM rendering.
+const kitSource=fs.readFileSync(path.join(engine,'web/kit/body.js'),'utf8');
+const wrapperStart=kitSource.indexOf('export function createBody(host, opts) {');
+assert.ok(wrapperStart>=0);
+const kitContext={KIT_CSS:'',SVGNS:'svg',KIT_EXPRESSIONS:[],KIT_MOTIONS:[],
+  createPet(){return {pet:{},layout(){return null;},step(){},render(){},talk(){}};},
+};
+vm.runInNewContext(kitSource.slice(wrapperStart).replace('export function','function')+'\nglobalThis.createBody=createBody;',kitContext);
+const element=()=>({setAttribute(){},remove(){},children:[{},{},{}]});
+const doc={head:{appendChild(){}},createElement:element,createElementNS:element};
+const host={root:{ownerDocument:doc,appendChild(){}},bounds(){return {};}};
+let active=false,packet;
+const figure={musicActive:()=>active,music:d=>{packet=d;}};
+const kitBody=kitContext.createBody(host,{figure});
+assert.equal(kitBody.musicActive(),false);active=true;assert.equal(kitBody.musicActive(),true);
+kitBody.music({rms:.03});assert.equal(packet.rms,.03);
+delete figure.musicActive;assert.equal(kitBody.musicActive(),false);
+figure.musicActive=()=>active;
 let listener,frame;const sockets=[],posts=[],timers=new Map();let timerId=0;
 class Socket {constructor(){sockets.push(this);}close(){this.closed=true;} }
 const context={console,URL,performance,WebSocket:Socket,location:{pathname:'/pet',host:'localhost',href:'http://localhost/pet'},
@@ -24,7 +43,7 @@ assert.equal(sockets.length,1);const a=sockets[0];a.onmessage({data:'{"rms":0.03
 const frameSource=fs.readFileSync(path.join(engine,'web/figure-frame.js'),'utf8');
 const begin=frameSource.indexOf('      const __w = Date.now()'),end=frameSource.indexOf("    } else if (m.t === 'scheme')",begin);
 assert.ok(begin>=0&&end>begin,'real tick branch must be found');
-let reply;vm.runInNewContext(frameSource.slice(begin,end),{Date,m:{dt:1/60,draw:true},body:{step(){},layout(){return null;},musicActive(){return true;}},events:[],sounds:[],post(m){reply=m;}});
+let reply;vm.runInNewContext(frameSource.slice(begin,end),{Date,m:{dt:1/60,draw:true},body:kitBody,events:[],sounds:[],post(m){reply=m;}});
 await listener({source:frame.contentWindow,data:reply});assert.equal(body.musicActive(),true);
 await listener({source:frame.contentWindow,data:{t:'frame',layout:null,musicActive:false}});assert.equal(body.musicActive(),false);
 // setScheme returns an acknowledgment promise; use actual host acknowledgments.
