@@ -32,7 +32,7 @@ run(['--revert']);
 targets.forEach((p,i)=>assert.deepEqual(fs.readFileSync(path.join(fixture,p)),original[i],'rollback '+p));
 assert.equal(fs.existsSync(asset),false);
 // A missing required anchor must fail before any target is modified.
-const body=path.join(fixture,targets[0]);fs.writeFileSync(body,original[0].toString().replace('rotate(${f(rot)})','rotate(0)'));
+const body=path.join(fixture,targets[0]);fs.writeFileSync(body,original[0].toString().replace('rotate(${f(rot)})','rotate(0)').replace('rotate(${rot.toFixed(5)})','rotate(0)'));
 const before=targets.map(p=>fs.readFileSync(path.join(fixture,p)));
 run([],1);
 targets.forEach((p,i)=>assert.deepEqual(fs.readFileSync(path.join(fixture,p)),before[i],'failure atomicity '+p));

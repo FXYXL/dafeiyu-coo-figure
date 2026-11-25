@@ -1,5 +1,7 @@
 # 听歌集成补丁 · 2026-11-26
 
+修复记录：首次真机运行报 `custom is not defined`，原因是 createBody 公共包装层的 musicActive 查询误用内部作用域变量。已改为 `opts.figure?.musicActive?.()`；补丁兼容升级已安装的错误版本。桥接回归现在执行真实 createBody 包装层，再将其接入实际 frame tick 分支，覆盖开/关和未提供查询的形象。
+
 本目录是 `../patch-pet-kit.mjs` 的资源源文件，随标准版 / HD 包分发。
 形象侧实现位于 `../../backends/live2d.js` 和 `../../backends/music/`。
 本次为本地开发提交，未升级发布版本，未出包、推送或部署 Coo。

@@ -1599,11 +1599,15 @@ function toneOf(text: string): string {
   {
     file: 'body', id: 'musicPaceQuery',
     desc: 'kit 暴露 musicActive 查询（pet-app 提帧要用，figure 的判定结果得能读出来）',
-    detect: (s) => s.includes('musicActive: () => custom?.musicActive?.()'),
+    detect: (s) => s.includes('musicActive: () => opts.figure?.musicActive?.() === true'),
     apply: (s) => {
+      const broken = 'musicActive: () => custom?.musicActive?.() === true';
+      const fixed = 'musicActive: () => opts.figure?.musicActive?.() === true';
+      // Upgrade already deployed v1 as well as applying to an unpatched kit.
+      if (s.includes(broken)) return s.replace(broken, fixed);
       const a = '    music: (d) => opts.figure.music?.(d),';
       if (!s.includes(a)) throw new Error('musicPaceQuery：锚点未命中（先打 musicForward）');
-      return s.replace(a, a + '\n    musicActive: () => custom?.musicActive?.() === true,');
+      return s.replace(a, a + '\n    ' + fixed + ',');
     },
   },
   {
