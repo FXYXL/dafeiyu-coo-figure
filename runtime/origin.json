@@ -1,0 +1,16 @@
+{
+  "source": "Coopanion / cortico-world-desktop-pet",
+  "repository": "https://github.com/Pal-AI-Lab/Coopanion",
+  "sourcePath": "packages/cortico-world-desktop-pet/web/kit",
+  "author": "Pal AI Lab",
+  "license": "AGPL-3.0-or-later",
+  "cooVersion": "0.2.24",
+  "sourcePackageVersion": "0.2.0",
+  "modified": true,
+  "modifications": "Existing DaFeiYu kit patches (47 entries); accepted on 2026-11-26. Runtime algorithms unchanged from the accepted installation.",
+  "files": {
+    "kit/body.js": "570d6b505681d2a667bd2bd286449cb51b7c2e7f82bca2e05ac8a26f72e7bf46",
+    "kit/rig.js": "9751ad311707423a0899c4f45a412d1496173fda7c0a1c694546125c4f6ad00b"
+  },
+  "upstreamBodyHash": "ede3feed0b43474fb833ba2a4a56b6c0fde255bcca54a09c350d235f8749df5a"
+}

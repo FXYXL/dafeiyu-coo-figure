@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 const engine=process.argv[2];if(!engine)throw Error('Pass isolated patched engine');
 // Execute the actual public kit wrapper, with no accidental `custom` global.
 // createPet is a stub here to isolate the wrapper's scope from model/DOM rendering.
-const kitSource=fs.readFileSync(path.join(engine,'web/kit/body.js'),'utf8');
+const kitSource=fs.readFileSync(new URL('../runtime/kit/body.js',import.meta.url),'utf8');
 const wrapperStart=kitSource.indexOf('export function createBody(host, opts) {');
 assert.ok(wrapperStart>=0);
 const kitContext={KIT_CSS:'',SVGNS:'svg',KIT_EXPRESSIONS:[],KIT_MOTIONS:[],

@@ -1,9 +1,9 @@
 # 大肥鱼 · Coo 桌宠形象包（高清版）
 
-> 高清版 **HD 1.6.19** ｜ 标准版 **1.14.50**（[主分支](https://github.com/FXYXL/dafeiyu-coo-figure)）
+> 高清版 **HD 1.6.20** ｜ 标准版 **1.14.51**（[主分支](https://github.com/FXYXL/dafeiyu-coo-figure)）
 > 更新记录：[Releases](https://github.com/FXYXL/dafeiyu-coo-figure/releases)
 
-> 本版更新：默认闭嘴、动作角度连续交权、输入平滑、摸头俯仰与松手视线交接，以及摸头期间回复动作保护；修复听歌采集器在 Windows PowerShell 5.1 下的编码兼容问题。**升级后须重跑随包引擎补丁，再从托盘完全退出并启动 Coo。**
+> 本版更新：形象包自带 kit，保留已验收的摸头、平滑和听歌效果；宿主补丁由 86 项减为 39 项，加入更新兼容检查与同版本回退保护。**首次升级请同时更新已安装的标准/HD 包，完全退出 Coo 并等更新结束后，运行本版补丁，再自行启动。**
 
 这是 **HD（高清）分支**，功能与标准版完全一致，只是贴图换成了原始高分辨率素材
 （渲染画布 2048²，贴图原始 4096×8192 / 8192²，运行时按 4096 封顶）。
@@ -35,7 +35,7 @@
 
 | | 标准版 | 高清版 HD |
 |---|---|---|
-| 当前版本 | **1.14.50** | **1.6.19** |
+| 当前版本 | **1.14.51** | **1.6.20** |
 | 渲染画布 | 1024 × 1024 | 2048 × 2048 |
 | 贴图 | 长边 ≤ 2048 | 原始 4096×8192 / 8192²，运行时按 4096 封顶 |
 | 压缩包 | 约 28 MB | 约 60 MB |
@@ -46,10 +46,9 @@ HD 的贴图更大、显存占用更高，机器吃力就用标准版。
 
 ## 安装（两步 + 重启）
 
-分两步：**放形象** + **打补丁**。只放形象不跑补丁的话，摸头、戳一戳、悬停、拖拽、小剧场
-这些实时反应都不会出现——那些逻辑在桌宠引擎里，不在形象包里。
+分两步：**放形象** + **检查并应用宿主补丁**。形象包现在自带 kit，摸头、物理与动作逻辑在包内；真实鼠标路由、对话保护、听歌采集等仍需宿主接入，尚不是零补丁。
 
-> 打补丁需要 **Node.js 18 或更新**（[下载](https://nodejs.org/)）。只是用形象不跑补丁的话不需要。
+> 补丁工具需要 **Windows、Node.js 24 或更新**（[下载](https://nodejs.org/)）。此版在 Coo **0.2.24** 真机验收通过；其他版本必须重新检查，不能只凭版本号认为兼容。
 
 ### 第 1 步：放形象
 
@@ -68,45 +67,38 @@ C:\Users\<你>\AppData\Roaming\Coopanion\data\home\companion\data\figures\
 
 目录名随意（比如 `dafeiyu`），但里面必须有 `figure.json`，Coo 靠它识别形象。
 
-### 第 2 步：打补丁（必须）
+### 第 2 步：检查并应用宿主补丁（必须）
 
-听歌集成与微抖修正、补丁测试和回退说明见 [tools/music/README.md](tools/music/README.md)。
+**先更新所有已安装的大肥鱼标准版与 HD 包，再从托盘完全退出 Coo，等待自动更新安装结束。** 不要只关闭窗口。更新后用新包里的工具；不要混用旧版本补丁或旧 `--revert`。
 
+`runtime/kit/` 携带已验收的 47 项 kit 改动。宿主剩余 **39 项补丁，分布在 9 个源码文件**，另有音频资源。其他形象使用宿主 kit；宿主对话/窗口/音乐桥仍有全局改动，不能保证所有第三方包零影响。
 
-桌宠引擎（`cortico-world-desktop-pet`）是随 Coo 安装的，补丁改的是它里面的文件——
-一共 **86 个补丁，分布在 10 个文件**（`body.js` 47 个，另有 `pet-app.js` / `script.ts` /
-`server.ts` / `world` 等）。
-
-```bash
+```powershell
 cd <本包目录>
+node tools/patch-pet-kit.mjs --dir="C:/你的/Coo安装目录" --check
 node tools/patch-pet-kit.mjs --dir="C:/你的/Coo安装目录"
 ```
 
-- `--dir` 传 **Coo 根目录** 或 **引擎目录** 都行，脚本会自己找
-- 不传 `--dir` 时会自动探测常见安装位置（Program Files、`%LOCALAPPDATA%\Programs`、D/E 盘的 `Coopanion`）
-- **不知道 Coo 装在哪**：任务管理器 → 详细信息 → 右键 `Coopanion.exe` → 「打开文件位置」
-- 路径里有空格要加引号；也可以直接拖文件夹到命令行里取路径
+- `--dir` 可传 Coo 根目录或引擎目录；迁移旧全局 kit 时必须提供完整 Coo 根目录。省略时自动探测常见安装位置。
+- `--check` 只读检查；退出码 0 表示当前宿主补丁及包内 runtime 文件校验通过，不代替完整运行验收。
+- 默认命令先检查 Coo 启动文件，在隔离副本应用补丁、检查语法和真实音乐采集，全部通过才备份并写入；Coo/更新器仍运行时拒绝写入。不会退出或启动 Coo。
+- `--prepare` 仅检查和准备，允许 Coo 运行；`--prepare --offline` 可跳过采集，只能生成离线报告，不能应用。
+- 报告及本次原字节备份默认保存到 `%LOCALAPPDATA%\DaFeiYu\patch-reports\`，命令会输出具体目录；请保留它。
+- 识别到本项目旧全局 kit 时，仅在基础源码指纹一致、所有已装标准/HD 都已升级后恢复同代原版宿主 kit；未知旧补丁或源码变化会停止，不猜测还原。
 
-常用参数：
+需要回退时，先完全退出 Coo 并等更新结束，使用**本次已应用报告**：
 
-| 命令 | 作用 |
-|---|---|
-| `node tools/patch-pet-kit.mjs --dir="..."` | 打补丁（已打的会跳过） |
-| `... --check` | 只检查，不写文件 —— 想知道自己打没打全就跑这个 |
-| `... --revert` | 按补丁事务快照还原到本次应用前的状态 |
+```powershell
+node tools/patch-pet-kit.mjs --revert --report="本次报告目录"
+```
 
-**验证是否打全**：`--check` 应以「全部补丁和资源内容检查通过」结束；缺失补丁或资源内容不符会返回非零退出码。
+回退仅恢复本次宿主改动前的字节，不回退形象包。版本或文件变化、备份损坏会拒绝回退；不使用旧 `.bak-petkit` 或旧 `.petkit-transaction.json`。若需降级形象包，应同时恢复与旧包配套的宿主状态。
 
-> **Coo 每次更新都会覆盖这些文件**，更新完重跑一次补丁。
-> 应用前会预检全部目标，并用 `.petkit-transaction.json` 保存首次应用前的快照。`--revert` 恢复原文件和原有资源，不误删此前已有的音乐资源；旧 `.bak-petkit` 仅作无事务快照时的兼容回退。
+**Coo 更新后仍需重新运行本版检查/补丁**。缺 Core、锚点不匹配或回归失败时会生成报告并停止；请在 [Issues](https://github.com/FXYXL/dafeiyu-coo-figure/issues) 附上 Coo 版本和错误摘要，勿上传聊天日志或凭据。`tools/patch-host-internal.mjs` 是内部隔离执行器，不是安装入口。详见 [维护与听歌说明](tools/music/README.md)。
 
-> **如果 Coo 更新后补丁开始报 `✗ 找不到锚点`**：说明引擎源码结构变了，补丁需要跟着适配。
-> 到 [Issues](https://github.com/FXYXL/dafeiyu-coo-figure/issues) 提一下，附上 `--check` 的完整输出
-> 和你的 Coo 版本号（设置 → 关于）即可。形象包本身仍然能用，只是对应的那几个新交互会失效。
+### 第 3 步：自行启动
 
-### 第 3 步：完全退出再启动
-
-不是关窗口——**从托盘退出 Coo**，再启动。然后在形象面板里选「大肥鱼」。
+补丁完成后启动 Coo，在形象面板选「大肥鱼」。标准/HD 的摸头、对话保护、音乐与其他形象切换已在 Coo 0.2.24 真机验收；不同机器请按同样项目复验。
 
 ## 她会怎么回应你
 
@@ -349,11 +341,12 @@ models/deepseek/*.moc3, textures/   模型与贴图
 sdk/                         Live2D Cubism SDK（Core + framework + 着色器）
 vendor/                      kit 依赖（木偶引擎由宿主提供，这里只带必要部分）
 thumb/                       形象与各选项的缩略图
-tools/patch-pet-kit.mjs      引擎补丁（86 个补丁，装完必跑）
+tools/patch-pet-kit.mjs      宿主补丁入口（39 项，检查后应用）
 tools/gen-words-doc.mjs      从 figure.json 生成 WORDS.md
 port-custom.py               重新打包后恢复定制层的脚本
 WORDS.md                     完整词表（自动生成）
-LICENSES.txt                 三块代码各自的许可说明
+runtime/kit/                 随包 kit（承接47项改动，含上游源码与许可）
+LICENSES.txt                 各部分代码的许可说明
 ```
 
 ## 已知限制
@@ -372,6 +365,7 @@ sdk/                        Live2D Cubism SDK，见 sdk/LICENSE-*.txt（Core 为
 vendor/soullink/            Apache-2.0
 模型、贴图、moc3             版权归原画作者，不在上述许可范围内
 profile.js 的定制配置        随本仓库以 AGPL-3.0-or-later 发布
+runtime/kit/、runtime/upstream/  Coopanion / Pal AI Lab，AGPL-3.0-or-later（修改说明见 runtime/origin.json）
 ```
 
 完整说明见 `LICENSES.txt`。

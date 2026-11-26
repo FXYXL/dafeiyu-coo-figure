@@ -1,0 +1,466 @@
+[
+  {
+    "relative": "package.json",
+    "hash": "419edb7fa171c7d403e3c25216e855089641dcd97ed09c4e6cd49d87bfb62d24"
+  },
+  {
+    "relative": "src/asr/hotkey.ts",
+    "hash": "5f2609c5689e4768ed523915f8a1851882e99f4540db8f23c515843ef5e96724"
+  },
+  {
+    "relative": "src/asr/result.ts",
+    "hash": "e8d206c34d29ba1e98211e91faae07d574a5bbf6b9946e86c083e947cd2f88a7"
+  },
+  {
+    "relative": "src/asr/segmenter.ts",
+    "hash": "f55cbc020b3efbeec728581a770fb3db6e2159362a8d3b609702cda6259605fb"
+  },
+  {
+    "relative": "src/asr/sherpa.ts",
+    "hash": "d89d23c7da725068737cf63cf263b9fe9917af3df1756b2936255350d5a0ead1"
+  },
+  {
+    "relative": "src/asr/simplify.ts",
+    "hash": "55f9c981477a61b3caa12a8748b5bdaec51510d61a4d6a267237039cc581d121"
+  },
+  {
+    "relative": "src/asr/system-recognizer.ts",
+    "hash": "fca4297c3eb3c5614e8457743ff3dcdf589967d1131f648a32a7363c20e47e0a"
+  },
+  {
+    "relative": "src/asr/transcription-api.ts",
+    "hash": "327fcf8774c8aa806bc22c31b034af13d886f68a741ce8a1e979c18d69c738fb"
+  },
+  {
+    "relative": "src/config.ts",
+    "hash": "f38b6e3ac15d5382a5b734d66b0d71d45a76867726b111ce7211122672bb30dc"
+  },
+  {
+    "relative": "src/cua/config.ts",
+    "hash": "a5c2bc7bc967c37f4190a13de844673ae5e013e4ced87a3db03cb4babed3069e"
+  },
+  {
+    "relative": "src/cua/cua.ts",
+    "hash": "3e647752b4d962f65fbf9679fb4d102277b8451b2e7073878e09bdbc0e8d1513"
+  },
+  {
+    "relative": "src/cua/engine-child.ts",
+    "hash": "fdd661864c8bd0e3e096d170d0b6c717cc2783a5cec84c669b9710f5b9c5bfa0"
+  },
+  {
+    "relative": "src/cua/engine-ipc.ts",
+    "hash": "961a50ff2752e69e7bf14b21710d5f8f4dc42afe1ed6757300551edd966e1132"
+  },
+  {
+    "relative": "src/cua/engine/darwin.ts",
+    "hash": "5e2309020e8900d16bd629ae769cab73bc2f0d7a1ee78236bb5e49c71e4e1425"
+  },
+  {
+    "relative": "src/cua/engine/display.ts",
+    "hash": "b69f6bad9610ae339bc853fe98f9b45ac5327e042098f8a2d6acd4f4569bddaf"
+  },
+  {
+    "relative": "src/cua/engine/fail.ts",
+    "hash": "f11faee4e87a66071965e681302a74e2264429961fd151630ee379726c83cf6a"
+  },
+  {
+    "relative": "src/cua/engine/foreground.ts",
+    "hash": "421f01ace858cfa6e7672eafb077fc6990e1a7e346925c90246b48ba471e97a0"
+  },
+  {
+    "relative": "src/cua/engine/image.ts",
+    "hash": "33f25b4ec3f34b5779b78841e13bc2b354fbf60254575a9694b384560fa56f33"
+  },
+  {
+    "relative": "src/cua/engine/keys.ts",
+    "hash": "3dae526ff20e7c4d5043bd2375d30866f13aa70595d5c24cd12125a1259601b0"
+  },
+  {
+    "relative": "src/cua/engine/linux-keys.ts",
+    "hash": "bd6b125678f4d8f28784fad0f8a863c63fad8d236b71d06899fef4d86a76d3f2"
+  },
+  {
+    "relative": "src/cua/engine/linux.ts",
+    "hash": "bc466df9492166f562f4b6677b66996dbc514bd3eadbd77ab00c932c8d55d7ad"
+  },
+  {
+    "relative": "src/cua/engine/mac-keys.ts",
+    "hash": "8ced8d18727b2a2b151eb25b2da0d7867f2ed38ede9aabd50fc8109377f56cd3"
+  },
+  {
+    "relative": "src/cua/engine/user-activity.ts",
+    "hash": "44956f0f162caccca9477b4557a27dc54a1383eba9e95976c0418138c475d3f1"
+  },
+  {
+    "relative": "src/cua/engine/wait-idle.ts",
+    "hash": "e87837455a8fde8c5840641d786f21ed036b3d8c447f6d98229eaecf7766bedf"
+  },
+  {
+    "relative": "src/cua/engine/win32.ts",
+    "hash": "4ea887a2fe8b094c91368638fcc8cb3b870733d764f17fc4dca4be4dfdcae868"
+  },
+  {
+    "relative": "src/cua/i18n/de.ts",
+    "hash": "aa0108dc5623fa75b1c555b514f2e0d0023c6b8b80d00d0e746483a775c0ed2a"
+  },
+  {
+    "relative": "src/cua/i18n/en.ts",
+    "hash": "44543d3a990428d5a2a317770f7ff015ec66d9e05c51da8503d29a421685f253"
+  },
+  {
+    "relative": "src/cua/i18n/es-419.ts",
+    "hash": "52f1e45e6c03ac7d8e4f0b1e315f75c7dc2ddadb726a2e062068799362ae6ce7"
+  },
+  {
+    "relative": "src/cua/i18n/fr.ts",
+    "hash": "cbac5d42079c74fc02c54e1d7785c2f6ce723f8217e07e77e6093bce5a721ba2"
+  },
+  {
+    "relative": "src/cua/i18n/index.ts",
+    "hash": "fd3c06c5210e4ba8bc1ea1df00b3926a8295659268120568524f1152bd040f59"
+  },
+  {
+    "relative": "src/cua/i18n/it.ts",
+    "hash": "96ace4acd9544fcdbe20abd93123c687e6e5bda2e45639bb4c36b11187485533"
+  },
+  {
+    "relative": "src/cua/i18n/ja.ts",
+    "hash": "2ce001bdc3f6da66369857d69abdba631eb6a5276b76e5616f016f8e3027dc5d"
+  },
+  {
+    "relative": "src/cua/i18n/ko.ts",
+    "hash": "5274a5ed2f38c74204cface31945810ca0beef2d02e6e2c2e20985ad8a70252c"
+  },
+  {
+    "relative": "src/cua/i18n/pt-BR.ts",
+    "hash": "3d84bf6239f1ed0e18e7cd01635382546a608185660617fc2d13ad34a4a3f1a6"
+  },
+  {
+    "relative": "src/cua/i18n/ru.ts",
+    "hash": "d28681a1bdb0f49e3d6d98dcf7d248cf5a5432dc9daa56bffa9ee531259f0f9b"
+  },
+  {
+    "relative": "src/cua/i18n/zh-Hant.ts",
+    "hash": "cc7cb214b6a3706320ae4fd1618f873833aa118b1e695b7d17d61081d5809b9b"
+  },
+  {
+    "relative": "src/cua/i18n/zh.ts",
+    "hash": "73a74fbd6b1cc3ab57512233419f477f50c7fd0accc3e9029a3e63de09c424d3"
+  },
+  {
+    "relative": "src/cua/model-text.ts",
+    "hash": "1ec619ec8b3056040181127d450e227d13718b4efe2277040196cfeef629d7d4"
+  },
+  {
+    "relative": "src/cua/terminal.ts",
+    "hash": "be56b74857adc81a4d1cfbadb62837462beea0540654232328bf4d53ca3af9a6"
+  },
+  {
+    "relative": "src/cua/tools.ts",
+    "hash": "d98a82375a721a9710ce0988b5c2a81613a66f7ab905bfee6837ae1ac2bf8bbf"
+  },
+  {
+    "relative": "src/definition.ts",
+    "hash": "2e9a46b2332230bc4b61b679e9b66fd94d41b9bd6fb72615cb2ebf4d9af4eed6"
+  },
+  {
+    "relative": "src/host-reason.ts",
+    "hash": "ac081570b53b40a525d092d7b8f3d55ef3d5684c9b5eed1b56ce1a7f96ccb1a6"
+  },
+  {
+    "relative": "src/i18n/de.ts",
+    "hash": "daae58b73b240e0fd302d861ab51a8732ad856bc371ccd4938af76b3547a2c54"
+  },
+  {
+    "relative": "src/i18n/en.ts",
+    "hash": "90f02b3741f7360a044ecac261e87e5605261c1d0620aa0abca248fea891b005"
+  },
+  {
+    "relative": "src/i18n/es-419.ts",
+    "hash": "f06f2f19e26342cfdf0ed3bee2254e1e3f0237820f40c195840276c95d1bc730"
+  },
+  {
+    "relative": "src/i18n/fr.ts",
+    "hash": "ab8012d37d09ca22b91a6a80e6899b64c9a580260e6d252e68278ad2d6b4650b"
+  },
+  {
+    "relative": "src/i18n/index.ts",
+    "hash": "d2bfdf772ec781852eac840a370ae7bb8af81c3833eec4d89445537cf917df6b"
+  },
+  {
+    "relative": "src/i18n/it.ts",
+    "hash": "b1255dd3851768d9ac86e45d0dc4282516b0ae14e0429b2868aa380c3dfad07a"
+  },
+  {
+    "relative": "src/i18n/ja.ts",
+    "hash": "109432a6f4adf969380a5f9a6248817ec8d36f99ae08c35e53f224a68d62239a"
+  },
+  {
+    "relative": "src/i18n/ko.ts",
+    "hash": "3855a8ed04f549378097a53bfeb446382e82adb35394701d66899ed4fa2769fc"
+  },
+  {
+    "relative": "src/i18n/pt-BR.ts",
+    "hash": "2169b76a9ef0db55be80d4d5b669b8093c845d0355e54bfa338815c9a03592af"
+  },
+  {
+    "relative": "src/i18n/ru.ts",
+    "hash": "a3dcf5e8aba35edd7287031434cc6e8ec84498ef5694b18891d1777c0fd2432e"
+  },
+  {
+    "relative": "src/i18n/zh-Hant.ts",
+    "hash": "8428e104059ef54a6f1f6bb76f6504848d041b4596a018457612d893c0f4eff9"
+  },
+  {
+    "relative": "src/i18n/zh.ts",
+    "hash": "b4d3c23ca2de47b9784d2d95e07d6553dcd0ec4a2fb451e317733609f7bdc199"
+  },
+  {
+    "relative": "src/index.ts",
+    "hash": "79eb6c9bdd8bdc9426729dce73573156c50d6b8b7873f94f390a0cc73fa9ae08"
+  },
+  {
+    "relative": "src/moves.ts",
+    "hash": "18ca920ff045f7b4226beddaebf5a36031a82995f7b1d04f34c6c0fb4499ee01"
+  },
+  {
+    "relative": "src/pack-import.ts",
+    "hash": "486138ff20594890238d73bb1efd35506ac3b902aaa53280b4cab86da4cd34e1"
+  },
+  {
+    "relative": "src/runtime/download.ts",
+    "hash": "03417b1f57c1c4a93d10a131521966bda0de5abedf1744d1495f923102a5fd6f"
+  },
+  {
+    "relative": "src/runtime/store.ts",
+    "hash": "11ef29c420c3b42284a18bb768f0c340bab4013081d4fc5fdc2295761ee18f04"
+  },
+  {
+    "relative": "src/self.ts",
+    "hash": "bf8cd05e5aebfc4267f36ca27fdc65775574d68be287c229cd7162b3f660dc82"
+  },
+  {
+    "relative": "src/speech/data/zh.json",
+    "hash": "16bb9836239e9c7c90c12bfd39629716af107f570ff8b68c807695884bdc23cc"
+  },
+  {
+    "relative": "src/speech/index.ts",
+    "hash": "fbd421e22fa80de08d0acfef8584d0c7d49bcfb92f9788cd5d8b3efff4fe813f"
+  },
+  {
+    "relative": "src/speech/ipa.ts",
+    "hash": "fbf3d65c54c7894c04ee1fcfa2b943c279977b4da15a1f21c0c01e8d46a2f106"
+  },
+  {
+    "relative": "src/speech/japanese.ts",
+    "hash": "04504689fe37e9e359e80c5c1b697761339f8a92decd45140b294a8c3a689f36"
+  },
+  {
+    "relative": "src/speech/jukujikun.ts",
+    "hash": "821b0c52330669430bdd560d48ee075cb950e5247c8e00d34a84798ffbfea71c"
+  },
+  {
+    "relative": "src/speech/korean.ts",
+    "hash": "57df99cb161f6e0023297d5dc8c3090ce4fade2530af06fa23a2895c647e4fda"
+  },
+  {
+    "relative": "src/speech/lang.ts",
+    "hash": "fa4dd9802bd1e52368ed7568298171b23919868c250f6440cf06400956d3d38c"
+  },
+  {
+    "relative": "src/speech/rules.ts",
+    "hash": "dbed7c79489dc7ff9e717b4509990f46ad6d4c69d21f233ce98fff04fb603218"
+  },
+  {
+    "relative": "src/speech/syllable.ts",
+    "hash": "ca5dc426575faf240b9573864cbb3478a6200ff20a23b58ef9d6e830c004b3c9"
+  },
+  {
+    "relative": "src/status.ts",
+    "hash": "63f072ac297c110c217a8b71eb4716e9904e0ee667d62a2ffcca477e07d6a128"
+  },
+  {
+    "relative": "src/tools.ts",
+    "hash": "6708e0862208ab4c182a3d8594c298d1271ebdbe240f42f8fefcc5395c59537c"
+  },
+  {
+    "relative": "src/webui/api-rows.ts",
+    "hash": "7192b644ddde9a2e0b9673e4fe2fc24cad63cadf29cf6f297240bef0c18f6022"
+  },
+  {
+    "relative": "src/webui/client.ts",
+    "hash": "6ca0c6859b1b6ecc01360d6c94e83beadead4f9ba51d87f91c7208df204e953c"
+  },
+  {
+    "relative": "src/webui/dress-dialog.ts",
+    "hash": "81933ec7d15f5523fca7fab11714d66d783436bb49151ceefee0bc5d6fa00b61"
+  },
+  {
+    "relative": "src/webui/key-capture.ts",
+    "hash": "61a5fdada00a410f0676a654aec28fa24733c8685bf76065e2db933b446d9818"
+  },
+  {
+    "relative": "src/window-host.ts",
+    "hash": "73ed4a666e10093bb27bdac9cf4caeaeba0f947efbe27a4111e75579fa00827d"
+  },
+  {
+    "relative": "web/appearance.js",
+    "hash": "d1e4f7721be6c823db1d174996c84be50b416b294134025b831cc47ba6321b97"
+  },
+  {
+    "relative": "web/coo/coo.js",
+    "hash": "2639644aaf832be20411170a4ef8ee3306443aae162b9259bd46e2a161c0b3eb"
+  },
+  {
+    "relative": "web/coo/figure.js",
+    "hash": "80a881e3bd7872da65a2904ce27fb41b81b0197ffa4e77961a88e8176bc948bb"
+  },
+  {
+    "relative": "web/coo/figure.json",
+    "hash": "050944a4da40767d93a30a2ce3bd0de0b45d6ebe44b73122d5e8c6ab729e5e9b"
+  },
+  {
+    "relative": "web/dist/dress-dialog.js",
+    "hash": "4c592de644de02698e3dcb7b1ab6bdfd9d881729b0c3e56b10040d07c8cf0b4b"
+  },
+  {
+    "relative": "web/drag-row.js",
+    "hash": "8fb421c0c4361cb34ab9b731427d65ea60bda6d9097cc53d894e32b6ccc01672"
+  },
+  {
+    "relative": "web/drag.js",
+    "hash": "45aed66ffc32762c5f17b7e2d05c191f468553fab3d31f069605c90dba8432c3"
+  },
+  {
+    "relative": "web/dress.js",
+    "hash": "85d6315861e4b6d7b2d6779c3554251ced438c6e16f1c58efd12b746954682ec"
+  },
+  {
+    "relative": "web/frame-loop.js",
+    "hash": "1ccb2007738de9a8e25ff878bbe4382ccf0aec59c669344c79e41fc76e4dc810"
+  },
+  {
+    "relative": "web/hints.js",
+    "hash": "f381d3b85f8ae6a03d6be849e4784f38c8bd797ad2692ddec74652060938c2e3"
+  },
+  {
+    "relative": "web/i18n.js",
+    "hash": "f885012064a87e15b42f159012b1b66bf0a53f6140b509d5be3559718bda28d0"
+  },
+  {
+    "relative": "web/i18n/de.js",
+    "hash": "fa15d37686c30f3bba99ddcdbdcf852b23f256d009ea6b5320f405be54574ec6"
+  },
+  {
+    "relative": "web/i18n/en.js",
+    "hash": "06a0aa6ea69d7739333f28f6ff28505b20fecf0c44986d096d5cef4300061d32"
+  },
+  {
+    "relative": "web/i18n/es-419.js",
+    "hash": "3b76de8a0aae75aeadfbb26b00d92108fc5ccd234675b98b9e9e5c6976727c52"
+  },
+  {
+    "relative": "web/i18n/fr.js",
+    "hash": "fd07ca8c60dfe6c4413731ef44ab7c2ce32b6648106c7efd3179852f49c1dd29"
+  },
+  {
+    "relative": "web/i18n/it.js",
+    "hash": "b77cdb1bd3f149cee78c12f768766f64694c277c745267c090b09cb8c9399a70"
+  },
+  {
+    "relative": "web/i18n/ja.js",
+    "hash": "0f0d94104b206c04c3c611db7612bf3d6c959cef0f5b1004ad93f8e0fd22e7a1"
+  },
+  {
+    "relative": "web/i18n/ko.js",
+    "hash": "ec208d6f743a851b701edb5cffd6b72714de2b5eaab2efc90d9821d70f164a65"
+  },
+  {
+    "relative": "web/i18n/pt-BR.js",
+    "hash": "8c6f5a3a1b7c263d14e092f75f8b200913754d6234c37c29f7ddd7d3edbad4f2"
+  },
+  {
+    "relative": "web/i18n/ru.js",
+    "hash": "4730d7c2d91a08d4124fe80f45a3db9b6cf2c680abb31431b5cf2f41b3939972"
+  },
+  {
+    "relative": "web/i18n/zh-Hant.js",
+    "hash": "68a6da7a6c49b16206fcdc7ad7f35461468df9eaf3b52eb6b01cdc2ba4619cb0"
+  },
+  {
+    "relative": "web/i18n/zh.js",
+    "hash": "4670804b80c7a2fd641cc420bc95c739089c9d5dd97ba2d554a93354fab2a2a9"
+  },
+  {
+    "relative": "web/kit/rig.js",
+    "hash": "9751ad311707423a0899c4f45a412d1496173fda7c0a1c694546125c4f6ad00b"
+  },
+  {
+    "relative": "web/looks.js",
+    "hash": "bc91224b00426b021ebc716d3f4c4a6dc2745edace4ba424faafb4809d719578"
+  },
+  {
+    "relative": "web/mic-worklet.js",
+    "hash": "4e96255e10f9ee36b7e1b29ec1e83f2ed869aa5a70b4f78e03d4249e3e722aef"
+  },
+  {
+    "relative": "web/mic.js",
+    "hash": "05af5721a6f7bbd4e7b5e11852500f11c38696e6ce1ba4ead92aec162344a6a5"
+  },
+  {
+    "relative": "web/motion-frames.js",
+    "hash": "85af5142902b754be28d51cd52b14335e95314e40c77c35e8087af8ab3f3f07b"
+  },
+  {
+    "relative": "web/motion-level.js",
+    "hash": "5df5206386852577b669c31fba851d022ed328e03be1aaefbeb7494dddc91d6d"
+  },
+  {
+    "relative": "web/overlay.js",
+    "hash": "130c14a994e0853b5c1dc631061e1f7ca49153ab82af3c836369b637084fa47b"
+  },
+  {
+    "relative": "web/scale-slider.js",
+    "hash": "b23e8999df1d0de89134b63538f5efbc63830920409795143be2d0063f073193"
+  },
+  {
+    "relative": "web/show-hide.js",
+    "hash": "f63d5b613ec70f3676c9f35d43169ffb02ab193a96f8f1d803ce019e0a911268"
+  },
+  {
+    "relative": "web/sound.js",
+    "hash": "55928abf42c1ba2bd9c4ee00be3f86988b53a31b04a4deac471e6c915e8cabb7"
+  },
+  {
+    "relative": "web/speech.js",
+    "hash": "10bd3b6806f21e73057f7ac75b024934a79adf6469a2d3f7e6c9f8159b8ffe77"
+  },
+  {
+    "relative": "web/speech/zh.json",
+    "hash": "e7079a5591f1d8607fa8cd8bba9d871b8f636d6acfae39f5bf1e14e08d386b5f"
+  },
+  {
+    "relative": "web/stage.js",
+    "hash": "af2dd4e670627879e60a4f5946da0ff47113efbfcd2db2167e7a89d568493572"
+  },
+  {
+    "relative": "web/swap-motion.js",
+    "hash": "9bc77f08c74aa8acacb8c01fcd171ab0aa011aa80e12816b58e98cb7a47bff7d"
+  },
+  {
+    "relative": "web/ui.js",
+    "hash": "96840b87757dd9b3b8b2e6b06f15518d8d7f9d4f439c4a6e2c363e83dbcede20"
+  },
+  {
+    "relative": "web/whale/figure.js",
+    "hash": "33b71be18a2d9551395ceeb8e306d7edc26108dea643b1613f2c475a14810128"
+  },
+  {
+    "relative": "web/whale/figure.json",
+    "hash": "cc18557d2d2d8726b3f31382c0ccec320c5a94aba404c7588200629c58a8af77"
+  },
+  {
+    "relative": "web/whale/model.json",
+    "hash": "8f17f8cd2d9830a07952b985a780dacc545fb83c68cab30a38d0ec013c8dc511"
+  }
+]
