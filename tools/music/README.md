@@ -4,7 +4,7 @@
 
 本目录是 `../patch-pet-kit.mjs` 的资源源文件，随标准版 / HD 包分发。
 形象侧实现位于 `../../backends/live2d.js` 和 `../../backends/music/`。
-本次对应标准版1.14.50 / HD1.6.19，已完成用户Coo试用验收；发行包与引擎补丁需配套更新。
+本次对应标准版1.14.51 / HD1.6.20，已完成用户Coo试用验收；发行包与引擎补丁需配套更新。
 
 ## 内容与机制
 
@@ -20,22 +20,20 @@
 
 ## 补丁命令
 
-从形象包根目录运行：
+本版使用包内 kit + 39项宿主接入补丁。先同时更新已装标准/HD，完全退出Coo并等待自动更新结束，安装 Node.js 24 或更新，然后运行：
 
 ```powershell
 node tools/patch-pet-kit.mjs --dir="C:/你的/Coo安装目录" --check
 node tools/patch-pet-kit.mjs --dir="C:/你的/Coo安装目录"
-node tools/patch-pet-kit.mjs --dir="C:/你的/Coo安装目录" --revert
+node tools/patch-pet-kit.mjs --revert --report="本次已应用报告目录"
 ```
 
-`--check` 检查最终补丁及资源字节内容，缺失返回非0；apply 先预检全部目标，任何失败均不写文件。
-`.petkit-transaction.json` 保存首次应用前的文件快照，重复执行不覆盖它；revert 恢复原文件，删除仅由本次补丁新建的资源，保留原来已有资源。
-回退到本次应用前状态，不代表移除所有历史补丁。没有事务快照时只使用旧 `.bak-petkit`，不会删除未知资源。
+`--check`只读；`--prepare`仅隔离准备。默认入口执行完整兼容检查与真实WASAPI后再写入，不重启Coo；报告与回退备份位于 `%LOCALAPPDATA%\DaFeiYu\patch-reports\`。未知版本/源码、锚点或采集失败会停止。回退拒绝跨版本或覆盖外部修改，不使用旧 `.bak-petkit` / `.petkit-transaction.json`。不要混用旧安装器；完整升级与兼容边界见[根README](../../README.md#安装两步--重启)。
 
 ## 本地验证
 
 ```powershell
-node tools/test-pet-kit-patch.mjs --engine="只读引擎源码目录" --out="隔离测试输出目录"
+node tools/test-pet-kit-patch.mjs --engine="只读原版引擎目录" --out="隔离测试输出目录"
 node tools/test-music-ear.mjs "隔离测试输出目录"
 node tools/test-music-bridge.mjs "已打补丁的隔离引擎目录"
 node tools/test-music-probe-live.mjs

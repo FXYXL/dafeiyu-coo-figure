@@ -5,7 +5,9 @@
  * 加模型只要往 models/ 里再丢一份、并在 figure.json 的 axes 里加个选项。
  */
 export async function createFigureBody(base, opts) {
-  const { kit } = opts;
+  // Experiment: own the implementation; keep the same public body/host contract.
+  const kit = await import('./runtime/kit/body.js');
+  opts = { ...opts, kit };
   if (!kit) throw new Error('缺 kit：Live2D 后端需要 kit.createBody');
 
   const { models } = await import('./models/index.js');

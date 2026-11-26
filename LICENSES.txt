@@ -1,8 +1,8 @@
 本形象包 / This figure pack
 ========================================
 
-包里运行着三块代码，各自许可如下。
-The files in this pack come from three sources, each under its own license.
+包内代码分别遵循以下许可。
+The components in this pack retain their respective licenses.
 
 1. figure.js、backends/
    Live2D 简易工作台 / Live2D Simple Workbench
@@ -30,3 +30,12 @@ The files in this pack come from three sources, each under its own license.
 模型、贴图、moc3 由使用者自行提供，不在上述许可范围内，版权归原作者所有。
 Models, textures and moc3 files are supplied by the user and are not covered
 by these licenses.
+
+4. runtime/kit/、runtime/upstream/
+   Coopanion / cortico-world-desktop-pet，Pal AI Lab
+   GNU Affero General Public License v3.0 or later
+   完整文本：runtime/LICENSE
+   源码：https://github.com/Pal-AI-Lab/Coopanion/tree/main/packages/cortico-world-desktop-pet
+   runtime/kit/body.js 含大肥鱼既有47项修改；rig.js 保留上游实现。
+   runtime/upstream/body.js 是与来源指纹绑定的同代原版，仅供识别迁移，不用于覆盖未知新版。
+   修改日期、来源与SHA256见 runtime/origin.json。完整衍生源码随包分发。

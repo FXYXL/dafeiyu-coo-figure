@@ -4,7 +4,7 @@ import path from 'node:path';
 import vm from 'node:vm';
 import assert from 'node:assert/strict';
 const engine=process.argv[2];if(!engine)throw Error('Pass an isolated patched engine');
-const kit=fs.readFileSync(path.join(engine,'web/kit/body.js'),'utf8');
+const kit=fs.readFileSync(new URL('../runtime/kit/body.js',import.meta.url),'utf8');
 const start=kit.indexOf('  function doWord(w, o) {'),end=kit.indexOf('\n  /**',start);
 assert(start>=0&&end>start);
 const calls=[],pet={sqv:0},options={force:true};
