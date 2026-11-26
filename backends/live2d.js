@@ -31,6 +31,7 @@ import { musicTransform } from './music/transform.js';
 import { MusicAnalysis } from './music/analysis.js';
 import { MusicFaceClock, MUSIC_FACES } from './music/face.js';
 // music-integration-v1: accepted matrix, audio analysis, faces and continuous physics.
+// interaction-integration-v1: accepted mapping, rua handoff/protection, neutral face and pose lifecycle.
 
 // SDK 内置眨眼（效仿 DeepFish main.cpp CubismEyeBlink，不自己造曲线）
 // 呼吸用 SDK 公式（CubismBreath 没导出，照 updateParameters 逻辑写：offset+peak*sin(2πt/cycle)）
@@ -93,6 +94,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
   } catch {
     throw new Error(`模型 ${entry.id} 缺 profile.js（role 表 / 表情配方 / 取景）`);
   }
+  const interaction = { headPitchScale: 1, bodyPitchScale: 1, gazeReturnSeconds: .9, ...profile.interaction };
   {
     // 包里有原生 motion 时才关掉简易模式；没有动作的模型保持轻量路径。
     if (profile.motion?.native === true && (entry.motions ?? []).length) SIMPLE = false;
@@ -529,7 +531,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
     const hair = partBox(hairParts, bone.y1 + mh * 0.06);
     if (!hair) return bone;
     const x0 = Math.min(bone.x0, hair.x0), x1 = Math.max(bone.x1, hair.x1);
-    const y0 = Math.min(bone.y0, hair.y0), y1 = Math.max(bone.y1, hair.y1);
+    const y0 = bone.y0; // Back hair must not extend the top of the touch region.
+    const y1 = Math.max(bone.y1, hair.y1);
     return {
       x: (x0 + x1) / 2, y: (y0 + y1) / 2, rx: (x1 - x0) / 2, ry: (y1 - y0) / 2,
       x0, y0, x1, y1, model: bone.model,
@@ -636,7 +639,37 @@ export async function createLive2DBody(base, opts, entry, kit) {
   const POS_LAG = 0.1;
   const posSm = { PositionX: 0, PositionY: 0, PositionZ: 0 };
   const posHas = { PositionX: false, PositionY: false, PositionZ: false };
+  // Compose layer Position targets, then advance each mapping filter once before physics.
+  let positionFrameOpen = false;
+  const positionTargets = new Map(), positionActive = new Set();
+  function beginPositionFrame() {
+    positionFrameOpen = true;
+    positionTargets.clear();
+  }
+  function queuePosition(id, v) {
+    positionTargets.set(id, v);
+  }
+  function flushPositionFrame() {
+    const enabled = positionFrameOpen;
+    positionFrameOpen = false; // Post-physics writes retain their existing semantics.
+    if (enabled) for (const id of Object.values(ANGLE_TO_POS)) {
+      const i = paramIndex.get(id);
+      if (i === undefined) continue;
+      const base = model._model.getParameterValueByIndex(i);
+      const hasTarget = positionTargets.has(id);
+      if (!hasTarget && !positionActive.has(id)) {
+        posSm[id] = base; posHas[id] = true;
+        continue; // Gaze-only baseline already has its own mapping filter.
+      }
+      if (!positionActive.has(id)) { posSm[id] = base; posHas[id] = true; }
+      const target = hasTarget ? positionTargets.get(id) : base;
+      writePos(id, target);
+      if (hasTarget || Math.abs(posSm[id] - base) > 0.001) positionActive.add(id);
+      else positionActive.delete(id);
+    }
+  }
   function writePos(posId, v) {
+    if (positionFrameOpen) { queuePosition(posId, v); return; }
     const pi = paramIndex.get(posId);
     if (pi === undefined) return;
     if (POS_LAG <= 0 || !posHas[posId]) { posSm[posId] = v; posHas[posId] = true; }
@@ -645,6 +678,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
   }
 
   function setParamByName(id, v) {
+    if (positionFrameOpen && Object.values(ANGLE_TO_POS).includes(id)) {
+      queuePosition(id, v); return;
+    }
     const i = paramIndex.get(id);
     if (i === undefined) return;
     model._model.setParameterValueByIndex(i, v);
@@ -656,6 +692,14 @@ export async function createLive2DBody(base, opts, entry, kit) {
    *  他们 main.cpp:585 `input->second += value` 的同款语义。夹范围是必要的——
    *  Cubism 写超范围不会自己 clamp，超了模型会明显变形（几个动作叠在一起就是这样）。 */
   function addParam(id, delta) {
+    if (positionFrameOpen && Object.values(ANGLE_TO_POS).includes(id)) {
+      const i = paramIndex.get(id);
+      if (i === undefined) return;
+      const current = positionTargets.get(id) ?? model._model.getParameterValueByIndex(i);
+      queuePosition(id, clamp(current + delta,
+        model._model.getParameterMinimumValue(i), model._model.getParameterMaximumValue(i)));
+      return;
+    }
     const i = paramIndex.get(id);
     if (i === undefined) {
       const cur = virtualParams.get(id)?.v ?? 0;
@@ -994,6 +1038,22 @@ export async function createLive2DBody(base, opts, entry, kit) {
     return [130, 13];
   }
   let ruaOnNow = false;
+  let ruaSessionNow = false;
+  let ruaGazePrevOn = false, ruaGazeReleaseAt = -Infinity;
+  let ruaGazeFrom = { x: 0, y: 0 }, ruaGazeLast = { x: 0, y: 0, eyeX: 0, eyeY: 0 };
+  const ruaGazeBlend = () => Math.max(0, Math.min(1, (clockT - ruaGazeReleaseAt) / interaction.gazeReturnSeconds));
+  function ruaGazeTarget(axis, target, on) {
+    if (on) { ruaGazeLast[axis] = target; return target; }
+    if (clockT >= ruaGazeReleaseAt + interaction.gazeReturnSeconds) return target;
+    const t = ruaGazeBlend(), w = t * t * (3 - 2 * t);
+    return ruaGazeFrom[axis] * (1 - w) + target * w;
+  }
+  function ruaGazeEye(axis, screen, hand, on) {
+    if (on) { ruaGazeLast['eye' + axis.toUpperCase()] = hand; return hand; }
+    if (clockT >= ruaGazeReleaseAt + interaction.gazeReturnSeconds) return screen;
+    const t = ruaGazeBlend(), w = t * t * (3 - 2 * t);
+    return ruaGazeLast['eye' + axis.toUpperCase()] * (1 - w) + screen * w;
+  }
   // vtube 映射的平滑状态（main.cpp:606 `lag = smoothing*0.005`）：
   // 大肥鱼.vtube.json 里 FaceAngleX→15、Y→4、Z→30，对应 lag 0.075 / 0.02 / 0.15 秒。
   const mapS = { X: 0, Y: 0, Z: 0, started: false };
@@ -1001,6 +1061,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
   const swayS = { x: 0, y: 0, tx: 0, ty: 0 };
   // 嘴的缓动（main.cpp:623 张快 30 / 闭慢 16）
   let mouthS = 0;
+  let faceExpressionWeight = 0;
   // 2026-11-21 照搬他们 Spring（springK=130/springC=13）：所有头角度都过弹簧，有惯性/过冲才自然。
   // 原来是 kit 的 look lerp（一阶、无过冲）→ 直接写值 → 机械感。
   const angleS = { x: 0, xv: 0, y: 0, yv: 0, z: 0, zv: 0 };
@@ -1421,7 +1482,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
    * kit 在 doWord 最前面调这个：返回基础 id 就继续走 act()，返回 null 表示没我什么事。
    * 认三种写法：`nod`、`点头`、`微点头×2`、`快摇头`。
    */
-  function baseWord(w) {
+  function baseWord(w, o) {
+    if (!allowWord(w,o)) return null;
     if (typeof w !== 'string') return null;
     let s = w.trim();
     if (!s) return null;
@@ -1480,7 +1542,45 @@ export async function createLive2DBody(base, opts, entry, kit) {
   const layers = [];
   /** 常量层：同参数**替换**（原来是 Map 的语义）。不替换的话，旧词演完会把
    *  已被新词顶掉的参数"复活"（旧条目的 t0 更早，寿命还没到）。 */
+  const POSE_IDS = new Set(['AngleX','AngleY','AngleZ','LeanInput','PositionX','PositionY','PositionZ']);
+  const poseTransitionEnabled = () => !ruaSessionNow && ruaW <= .002 && !clipList.some(c => c.def.mood);
+  const isPoseClip = g => Object.keys(g.def.sets ?? {}).some(id => POSE_IDS.has(resolveId(id)));
+  function composePose(id, byClip, t) {
+    if (!poseTransitionEnabled() || !POSE_IDS.has(id)) return false;
+    const i = paramIndex.get(id);
+    if (i === undefined) return false;
+    if (![...byClip].some(([g, acc]) => isPoseClip(g) && acc.has(id))) return false;
+    let value = 0, weight = 0, remaining = 1, additive = 0;
+    // Newest expression acquires the pose. Once acquired, an older expression
+    // cannot reappear when the newer one fades. Keep all lifecycle data on its
+    // existing clip/layers; there is no second action scheduler.
+    for (const [g, acc] of [...byClip].reverse()) {
+      if (!acc.has(id)) continue;
+      // Pure movements (nod/shake etc.) retain their authored additive tracks.
+      if (!isPoseClip(g)) { additive += acc.get(id); continue; }
+      const age = Math.max(0, t - g.t0 - (g.def.delay ?? 0));
+      const u = Math.min(1, age / .4), acquire = u * u * (3 - 2 * u);
+      const poseWeight = Math.min(g.w, acquire);
+      const peaks = g.posePeaks ??= new Map();
+      const yields = g.poseYields ??= new Map();
+      const availability = Math.min(remaining, 1 - (yields.get(id) ?? 0));
+      yields.set(id, Math.max(yields.get(id) ?? 0, remaining < .005 ? 1 : 1 - remaining));
+      const peak = Math.max(peaks.get(id) ?? 0, poseWeight);
+      peaks.set(id, peak);
+      value += acc.get(id) * (g.w > 0 ? poseWeight / g.w : 0) * availability;
+      weight += poseWeight * availability;
+      remaining *= 1 - peak;
+    }
+    const scale = vtsOut(id, 1) - vtsOut(id, 0);
+    const base = model._model.getParameterValueByIndex(i);
+    writeParamVal(id, value + additive + base / scale * Math.max(0, 1 - weight), t);
+    return true;
+  }
   function setLayer(id, def) {
+    if (poseTransitionEnabled() && POSE_IDS.has(id)) {
+      const i = paramIndex.get(id);
+      if (i !== undefined) def = { ...def, from: model._model.getParameterValueByIndex(i), poseTransition: true };
+    }
     for (let n = layers.length - 1; n >= 0; n--) {
       if (layers[n].kind === 'set' && layers[n].id === id) layers.splice(n, 1);
     }
@@ -2103,7 +2203,18 @@ export async function createLive2DBody(base, opts, entry, kit) {
     const ids = [...(def.params ?? []).map((q) => resolveId(q.id)), ...(def.keys ?? []).map((q) => resolveId(q.id))];
     return ids.some((id) => CLIP_OWNED.has(id));
   };
+  function ruaProtectionActive(kitRua = false) {
+    return (kitRua || ruaSessionNow || clipList.some(c => c.def.mood));
+  }
+  function recordRuaDrop(w, stage) {
+    audit('rua-word-drop ' + w + ' (' + stage + ')');
+  }
+  function allowWord(w, o, kitRua = false) {
+    if(o?.force || !ruaProtectionActive(kitRua))return true;
+    recordRuaDrop(w,'admission');return false;
+  }
   function actWord(w, fromFace, o) {
+    if (!allowWord(w,o)) return true;
     if (w === 'skit') return startSkit();
     // S4：情绪词走整段 clip（贴图 + 常量 + 关键帧 + 时长一起演），不再只是换一张贴图。
     // 工具动作（走/跳/坐/点头…）没有 EMO_CLIPS 条目，照旧走通道。
@@ -2519,7 +2630,14 @@ export async function createLive2DBody(base, opts, entry, kit) {
       let k = envelope(c, age, gate);
       k = clamp(k, 0, 1);
       k = k * k * (3 - 2 * k);                             // 平滑进/出，避免硬切
-      const v = c.from + (c.to - c.from) * k;
+      let v = c.from + (c.to - c.from) * k;
+      if (c.poseTransition && poseTransitionEnabled()) {
+        const ease = x => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
+        const enter = ease(age / Math.max(.001, c.in ?? .2));
+        const exit = c.keep ? ease(gate) : (c.out > 0 ? ease((c.dur - age) / c.out) : 1);
+        const base = virtual ? 0 : model._model.getParameterValueByIndex(i);
+        v = base * (1 - exit) + (c.from + (c.to - c.from) * enter) * exit;
+      }
       if (virtual) virtualParams.set(c.id, { v, t: clockT });
       else setParamByName(c.id, v);
     }
@@ -2547,12 +2665,19 @@ export async function createLive2DBody(base, opts, entry, kit) {
             // EyeOpen 的 0 是「不动眼睛」，不能算一次写入 —— 否则它会占住这个参数槽，
             // 把另一条表演的闭眼/眨眼稀释掉（问候 clip 闭眼被刚起的歪头 clip 顶开）。
             // sets 在这里就乘上权重（整组一起淡入淡出）；keys 不乘。
-            if (c.id !== 'EyeOpen' || Math.abs(c.val) > .002) acc.set(c.id, (acc.get(c.id) ?? 0) + c.val * g.w);
+            if (c.id !== 'EyeOpen' || Math.abs(c.val) > .002) acc.set(c.id, (acc.get(c.id) ?? 0) + c.val * (
+              g.def.mood === 'melt'
+              && c.id === 'LeanInput' && ruaMeltHold > 0.001 && age < g.def.dur ? 1 : g.w));
           }
         } else if (age < g.def.dur) {
           // 关键帧只在演的时候写（和以前一致）：演完就交还给别的来源，
           // 否则收尾那 0.7 秒里它还在写最后一帧的值，把待机/鼠标跟随压住。
-          const sv = sampleKeys(c.frames, age);
+          let sv = sampleKeys(c.frames, age);
+          if (g.def.mood === 'clingy'
+              && c.id === 'LeanInput' && ruaMeltHold > 0.001) {
+            sv = sv * g.w + (-17 * ruaMeltHold) * (1 - g.w);
+          }
+          if (poseTransitionEnabled() && isPoseClip(g) && POSE_IDS.has(c.id)) sv *= g.w;
           if (c.id !== 'EyeOpen' || Math.abs(sv) > .002) acc.set(c.id, (acc.get(c.id) ?? 0) + sv);
         }
       }
@@ -2575,7 +2700,22 @@ export async function createLive2DBody(base, opts, entry, kit) {
             }
           }
         }
-        for (const [id, { sum, wsum }] of blend) writeParamVal(id, sum / Math.max(1, wsum), t);
+        for (const [id, { sum, wsum }] of blend) {
+          if (composePose(id, byClip, t)) continue;
+          const pi = paramIndex.get(id);
+          const handoff = /^(Angle[XYZ]|ParamEyeBall[XY])$/.test(id) && pi !== undefined;
+          const base = handoff ? model._model.getParameterValueByIndex(pi) : 0;
+          writeParamVal(id, sum / Math.max(1, wsum), t);
+          if (handoff) {
+            const residual = base * (1 - Math.min(1, wsum));
+            model._model.setParameterValueByIndex(pi, model._model.getParameterValueByIndex(pi) + residual);
+            const pos = ANGLE_TO_POS[id];
+            if (pos) {
+              const p = paramIndex.get(pos);
+              model._model.setParameterValueByIndex(p, model._model.getParameterValueByIndex(p) + residual / (id === 'AngleY' ? 1.5 : 1));
+            }
+          }
+        }
         for (const [id, { v }] of pick) writeParamVal(id, v, t);
       }
     }
@@ -2588,7 +2728,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
         const i = paramIndex.get(o.pid);
         if (i === undefined) { overlay.delete(k); continue; }
         const kk = clamp(age / Math.max(1e-3, o.in ?? 0.2), 0, 1);  // 只淡入；淡出靠 overlayClear（松手即撤）
-        model._model.setParameterValueByIndex(i, model._model.getParameterValueByIndex(i) + (o.to ?? 0) * kk);
+        if (positionFrameOpen && Object.values(ANGLE_TO_POS).includes(o.pid)) {
+          queuePosition(o.pid, (positionTargets.get(o.pid) ?? model._model.getParameterValueByIndex(i)) + (o.to ?? 0) * kk);
+        } else model._model.setParameterValueByIndex(i, model._model.getParameterValueByIndex(i) + (o.to ?? 0) * kk);
       }
     }
   }
@@ -3074,7 +3216,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       // sets（他们叫 Parameters）的权重：和 main.cpp:549 的 Hold 一模一样 ——
       //   weight += (on ? 1 : 0 - weight) * (1 - exp(-dt / 0.15))
       // clear 之后他们还会留 0.7 秒把这个权重衰到 0 才 erase，所以我们也不能 dur 一到就整条删。
-      const dt = Math.min(.1, Math.max(0, t - c.lastT));
+      const dt = Math.min(.1, Math.max(0, t - Math.max(c.lastT, c.t0 + (d.delay ?? 0))));
       c.lastT = t;
       const playing = age < d.dur;
       c.w = (c.w ?? 0) + ((playing ? 1 : 0) - (c.w ?? 0)) * (1 - Math.exp(-dt / 0.15));
@@ -3285,6 +3427,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
 
   // ---------- 每帧：base → 表演层 / 表情 → 程序动画 ----------
   function applyFrame(face, frame, dt, neutralPose = false) {
+    ruaSessionNow = !!frame.rua;
     const t = frame.t ?? 0;
 
     // ---------- rua 的淡出权重（整帧唯一来源）----------
@@ -3319,6 +3462,14 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 弧度改由通道驱动——条目退场/被顶掉/恢复时标记消失，弧度自动回中性）
     const emoFace = layers.find((c) => c.emo)?.emo ?? null;
     const engine = performance && !neutralPose ? performance.update(t, dt, emoFace ?? frame.face) : null;
+    if (engine && profile.neutralFace === 'model') {
+      // DeepFish leaves neutral mouth/eyes at the moc3 defaults. Keep expression
+      // accents when requested, and release them smoothly back to that baseline.
+      const active = (emoFace ?? frame.face ?? 'neutral') !== 'neutral';
+      faceExpressionWeight += ((active ? 1 : 0) - faceExpressionWeight) * (1 - Math.exp(-dt / .18));
+      for (const key of ['eyeSmile','mouthForm','mouthOpen']) engine[key] = (engine[key] ?? 0) * faceExpressionWeight;
+      engine.eyeOpen = 1 + ((engine.eyeOpen ?? 1) - 1) * faceExpressionWeight;
+    }
     lastEngine = engine;   // 留给 moodScale：下一次动作的默认幅度跟着当前情绪走
     const recipe = neutralPose
       ? {}
@@ -3367,7 +3518,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
     //    并且写完做 max(当前值, mouth) —— 只增不减，呼吸和表情不会把嘴关上。
     const gap = face.gap?.[0] ?? 50;
     const talk = neutralPose ? 0 : clamp(Math.max(frame.talk ?? 0, skitTalk()), 0, 1);
-    const talkOpen = clamp((gap - 44) / 22 + talk * 0.35, 0, 1);
+    // kit's neutral SVG face has gap=50: it is not a request to open Live2D's mouth.
+    const restGap = profile.neutralFace === 'model' && (frame.face ?? 'neutral') === 'neutral' ? 50 : 44;
+    const talkOpen = clamp((gap - restGap) / 22 + talk * 0.35, 0, 1);
     const mouthTarget = neutralPose ? 0 : clamp(Math.max(talkOpen, (engine?.mouthOpen ?? 0) * 0.85), 0, 1);
     mouthS += (mouthTarget - mouthS) * (1 - Math.exp(-dt * (mouthTarget > mouthS ? 30 : 16)));
     writeRole('mouthOpen', mouthS);
@@ -3432,6 +3585,11 @@ export async function createLive2DBody(base, opts, entry, kit) {
       }
       audit('rua-interrupt 打断当前动作');
     }
+    if (!ruaOn && ruaGazePrevOn) {
+      ruaGazeReleaseAt = clockT;
+      ruaGazeFrom = { x: ruaGazeLast.x, y: ruaGazeLast.y };
+    }
+    ruaGazePrevOn = ruaOn;
     ruaWasOn = ruaOn;
     ruaOnNow = ruaOn;
     const _rux = frame.rua?.ux ?? 0, _ruy = frame.rua?.uy ?? 0;
@@ -3446,7 +3604,9 @@ export async function createLive2DBody(base, opts, entry, kit) {
     // 关键不是让目标慢慢降（那样弹簧只是追踪，永远不过冲），而是**目标当帧归 0**
     // 交给欠阻尼弹簧（150/14，见 ruaKc）自己弹回去 —— 惯性 + 过冲就是那个「黏着」。
     const ruaRX = ruaOn ? _rux * 22 : 0;
-    const ruaRY = ruaOn ? _ruy * 14 : 0;
+    const ruaRY = ruaOn ? (frame.rua?.angleUy ?? _ruy) * 14 * (interaction.headPitchScale) : 0;
+    const ruaBodyRY = ruaOn ? (frame.rua?.bodyUy ?? _ruy) * 14
+      * (interaction.bodyPitchScale) : 0;
     const ruaSide = frame.rua?.side ?? 0;
     const ruaSecs = frame.rua?.seconds ?? 0;
     const ruaMelt = frame.rua?.melt ?? 0;
@@ -3514,8 +3674,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
       // 2026-11-21 眼睛归一化（之前 lookEye 是度数 ±5，×0.55=±2.75 被 clamp 卡在 ±1 一直饱和 →
       // 走神衰减前 60% 眼睛毫无变化、只有头在转，看着就是「头先走」）。对齐他们 -0.9*(eyeLook+saccade)。
       // 他们 StepStroke:330-331：眼睛看向手 —— ParamEyeBallX = -ux*.9（负 = 朝屏幕右）、Y = -uy*.9
-      writeRole('eyeBallX', ruaOn ? clamp(-_rux * .9, -1, 1) : clamp(ex * 0.6 + (lookEye[0] ?? 0) / 5 * 0.6 + sac.x * 0.6, -1, 1));
-      writeRole('eyeBallY', ruaOn ? clamp(-_ruy * .9, -1, 1) : clamp(ey * 0.6 + (lookEye[1] ?? 0) / 4 * 0.7 + sac.y * 0.7, -1, 1));   // 2026-11-21 去掉负号：他们 EyeRightY = +0.7*(eyeLookY+saccadeY)
+      writeRole('eyeBallX', ruaGazeEye('x', clamp(ex * 0.6 + (lookEye[0] ?? 0) / 5 * 0.6 + sac.x * 0.6, -1, 1), clamp(-_rux * .9, -1, 1), ruaOn));
+      writeRole('eyeBallY', ruaGazeEye('y', clamp(ey * 0.6 + (lookEye[1] ?? 0) / 4 * 0.7 + sac.y * 0.7, -1, 1), clamp(-_ruy * .9, -1, 1), ruaOn));   // 2026-11-21 去掉负号：他们 EyeRightY = +0.7*(eyeLookY+saccadeY)
     // 2026-11-21 单位修正：kit 的 look/tilt/lean 都是度数（look ±5、tilt ±7、lean -6~11），
       // 之前当 -1~1 用 → 放大 5 倍鼠标敏感 + lean 接错位置。全部÷范围归一化。
       // 2026-11-21 度数域（role space 已改 [-30,30]）：直接对齐 DeepFish 度数（FaceAngleX=lookX*22 等）
@@ -3529,8 +3689,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
         ? clamp((ruaUxHold * 7 - (frame.rua?.fx ?? 0) * 5
           + 6 * Math.sin(Math.PI * ruaMeltHold) + 3 * ruaMeltHold) * ruaW, -30, 30)
         : 0;
-      const angleXVal = clamp((lookHead[0] ?? 0) / 5 * 22 * _lookW + driftX + ruaRX, -30, 30);
-      const angleYVal = clamp(ay * 30 + (lookHead[1] ?? 0) / 4 * 16 * _lookW + driftY + ruaRY, -30, 30);
+      const angleXVal = ruaGazeTarget('x', clamp((lookHead[0] ?? 0) / 5 * 22 * _lookW + driftX + ruaRX, -30, 30), ruaOn);
+      const angleYVal = ruaGazeTarget('y', clamp(ay * 30 + (lookHead[1] ?? 0) / 4 * 16 * _lookW + driftY + ruaRY, -30, 30), ruaOn);
       // 拖拽两级（见下面 else 分支的同一处注释）：只在 drag 补，其他 mode 恒 0
       const _dragLag = frame.mode === 'drag' ? clamp(-tilt * 2.5, -15, 15) : 0;
       const angleZVal = clamp(az * 30 + driftZ + _ruaTilt + _dragLag, -30, 30);
@@ -3546,11 +3706,14 @@ export async function createLive2DBody(base, opts, entry, kit) {
       // 2026-11-21 vtube 原样：PositionX = FaceAngleX（1:1）。不再混 lean/swing。
       // 2026-11-21 vtube 映射原样（main.cpp:596-609）：PositionX/Y/Z = FaceAngle 经**每条映射自己的平滑**，
       // lag = smoothing*0.005。大肥鱼.vtube.json：FaceAngleX 15→0.075s、Y 4→0.02s、Z 30→0.15s。
-      if (!mapS.started) { mapS.X = angleXVal; mapS.Y = angleYVal; mapS.Z = angleZVal; mapS.started = true; }
+      const _bodyX = angleXVal;
+      const _bodyY = angleYVal - ruaRY + ruaBodyRY;
+      const _bodyZ = angleZVal;
+      if (!mapS.started) { mapS.X = _bodyX; mapS.Y = _bodyY; mapS.Z = _bodyZ; mapS.started = true; }
       else {
-        mapS.X += (angleXVal - mapS.X) * (1 - Math.exp(-dt / 0.075));
-        mapS.Y += (angleYVal - mapS.Y) * (1 - Math.exp(-dt / 0.02));
-        mapS.Z += (angleZVal - mapS.Z) * (1 - Math.exp(-dt / 0.15));
+        mapS.X += (_bodyX - mapS.X) * (1 - Math.exp(-dt / 0.075));
+        mapS.Y += (_bodyY - mapS.Y) * (1 - Math.exp(-dt / 0.02));
+        mapS.Z += (_bodyZ - mapS.Z) * (1 - Math.exp(-dt / 0.15));
       }
       writeRole('bodyX', clamp(mapS.X, -30, 30));
       // 2026-11-21：对齐 vtube.json FaceAngleY→PositionY / FaceAngleZ→PositionZ（1:1，-30~30）→ 摆锤7 推身体上下
@@ -3582,8 +3745,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
     } else {
       // 2026-11-21 同上：眼珠归一化（度数 ÷5/÷4），否则 ±5 直接饱和看不出走神
       // 2026-11-22 rua：眼睛看着手（他们 ParamEyeBallX = -ux*.9 / Y = -uy*.9）
-      writeRole('eyeBallX', ruaW > 0.002 ? clamp(-ruaUxHold * .9 * ruaW, -1, 1) : clamp((lookEye[0] ?? 0) / 5 * 0.6 + sac.x * 0.6, -1, 1));
-      writeRole('eyeBallY', ruaW > 0.002 ? clamp(-ruaUyHold * .9 * ruaW, -1, 1) : clamp((lookEye[1] ?? 0) / 4 * 0.7 + sac.y * 0.7, -1, 1));   // 2026-11-21 去掉负号（原来上下和鼠标反）
+      writeRole('eyeBallX', ruaGazeEye('x', clamp((lookEye[0] ?? 0) / 5 * 0.6 + sac.x * 0.6, -1, 1), clamp(-_rux * .9, -1, 1), ruaOn));
+      writeRole('eyeBallY', ruaGazeEye('y', clamp((lookEye[1] ?? 0) / 4 * 0.7 + sac.y * 0.7, -1, 1), clamp(-_ruy * .9, -1, 1), ruaOn));   // 2026-11-21 去掉负号（原来上下和鼠标反）
       // 2026-11-21 度数域（role space 已改 [-30,30]）
       // 2026-11-22 rua 补齐（engine 分支里有、这条 else 里一直没有 —— 这只模型走的就是这里）：
       //   look 归零（头完全由手决定）、Z 加 ux*7-fx*5+tilt、弹簧 k/c 按档位切
@@ -3591,8 +3754,8 @@ export async function createLive2DBody(base, opts, entry, kit) {
       const _ruaTilt = ruaOn
         ? clamp(_rux * 7 - (frame.rua?.fx ?? 0) * 5 + 6 * Math.sin(Math.PI * ruaMelt) + 3 * ruaMelt, -30, 30)
         : 0;
-      const angleXVal = clamp((lookHead[0] ?? 0) / 5 * 22 * _lookW + driftX + ruaRX, -30, 30);
-      const angleYVal = clamp((lookHead[1] ?? 0) / 4 * 16 * _lookW + driftY + ruaRY, -30, 30);
+      const angleXVal = ruaGazeTarget('x', clamp((lookHead[0] ?? 0) / 5 * 22 * _lookW + driftX + ruaRX, -30, 30), ruaOn);
+      const angleYVal = ruaGazeTarget('y', clamp((lookHead[1] ?? 0) / 4 * 16 * _lookW + driftY + ruaRY, -30, 30), ruaOn);
       // 拖拽两级（2026-11-24，照 PetWindow.Touch.cs:403-405 的比例）：
       // groupTilt 把 tilt 转在**整张图**上 —— 头和身体一起（刚体），所以甩起来没有相对运动。
       // 这里让头**反向**补：整图转 +tilt，头的参数补 -1.8·tilt（clamp ±20）→
@@ -3616,11 +3779,14 @@ export async function createLive2DBody(base, opts, entry, kit) {
       // 2026-11-21 vtube 原样：PositionX = FaceAngleX（1:1）。不再混 lean/swing。
       // 2026-11-21 vtube 映射原样（main.cpp:596-609）：PositionX/Y/Z = FaceAngle 经**每条映射自己的平滑**，
       // lag = smoothing*0.005。大肥鱼.vtube.json：FaceAngleX 15→0.075s、Y 4→0.02s、Z 30→0.15s。
-      if (!mapS.started) { mapS.X = angleXVal; mapS.Y = angleYVal; mapS.Z = angleZVal; mapS.started = true; }
+      const _bodyX = angleXVal;
+      const _bodyY = angleYVal - ruaRY + ruaBodyRY;
+      const _bodyZ = angleZVal;
+      if (!mapS.started) { mapS.X = _bodyX; mapS.Y = _bodyY; mapS.Z = _bodyZ; mapS.started = true; }
       else {
-        mapS.X += (angleXVal - mapS.X) * (1 - Math.exp(-dt / 0.075));
-        mapS.Y += (angleYVal - mapS.Y) * (1 - Math.exp(-dt / 0.02));
-        mapS.Z += (angleZVal - mapS.Z) * (1 - Math.exp(-dt / 0.15));
+        mapS.X += (_bodyX - mapS.X) * (1 - Math.exp(-dt / 0.075));
+        mapS.Y += (_bodyY - mapS.Y) * (1 - Math.exp(-dt / 0.02));
+        mapS.Z += (_bodyZ - mapS.Z) * (1 - Math.exp(-dt / 0.15));
       }
       writeRole('bodyX', clamp(mapS.X, -30, 30));
       { const _pyi = paramIndex.get('PositionY'), _pzi = paramIndex.get('PositionZ'), _ryi = paramIndex.get('ParamBodyAngleRY');
@@ -4183,6 +4349,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
     },
     // kit 的 doWord 会先问这里：返回 true 表示这个词形象自己处理（通道叠加），
     // 不走 kit 的单槽 pulse。白名单外的词返回 false，保持旧行为。
+    allowWord: allowWord,
     actWord,
     // ---- 生命周期事件（2026-11-23 补导出）----
     // pet-app 的 say 会 body.set({speechStart})，运行时 kit 转发到 opts.figure.onSpeechStart()。
@@ -4343,6 +4510,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       //  9. pose.updateParameters
       // 10. update → draw
       model._model.loadParameters();
+      beginPositionFrame();
       stepRuaState(frame);   // 松手反应（按峰值时长）
       applyFrame(face, frame, dt, !extent);
       // 服装/大小这类"状态"要压在 role 之上、并进入基准（换装后应该持久）。
@@ -4451,7 +4619,16 @@ export async function createLive2DBody(base, opts, entry, kit) {
           // 全部乘 ruaW —— 松手后 0.35 秒淡回 0，而不是「啪」一下没了。
           // 自动过别名表：他们的名字（FaceAngleY / ParamMouthPressLipOpen…）在这里统一换成我们的。
           // 2026-11-22：8 秒档的「微张嘴」写的就是 ParamMouthPressLipOpen，模型里没有 → 一次都没生效。
-          const _sp = (id, v) => { const _i = paramIndex.get(resolveId(id)); if (_i !== undefined) model._model.setParameterValueByIndex(_i, v); };
+          const _sp = (id, v) => {
+            const resolved = resolveId(id), i = paramIndex.get(resolved);
+            if (i === undefined) return;
+            {
+              const mapped = vtsOut(resolved, v);
+              // The live stroke yields continuously to the already composed clip.
+              const base = _ruaOn ? 0 : model._model.getParameterValueByIndex(i) * (1 - ruaW);
+              model._model.setParameterValueByIndex(i, base + mapped);
+            }
+          };
           _sp('EyeSmile', ruaW);
           _sp('ParamMouthForm', ruaW);
           // 8 秒档：眉心上抬 + 微张嘴（他们 BrowInnerUp .5 / MouthPressLipOpen .4）
@@ -4498,6 +4675,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
       // 表演层（含 rua 摸后四档）的参数已经由 applyChannel → writeLayers 写完
       // （和词同一张表）。这里不再写参数，只留物理。
       //
+      flushPositionFrame();
       // SDK owns the 60 Hz accumulator and interpolation. Do not split twice.
       try { model._physics?.evaluate(model._model, dt); } catch { /* 物理失败不致命 */ }
       // ---------- 腿的幅度放大（2026-11-25）----------
@@ -4768,6 +4946,7 @@ export async function createLive2DBody(base, opts, entry, kit) {
   const ADDON_WORDS = new Set(['blush', 'sweat', 'tears', 'bunny-teeth']);
   const faceBigWords = new Set(profile.exclusiveGroups?.['face-big'] ?? []);
   const onBeat = () => {
+    if (ruaProtectionActive()) return;
     // 气泡边界：face-big 成员让位（一个情绪一次一张脸）。
     // 组合词展开后参数挂在零件上（眉毛/嘴/眼泪各自一条），靠条目的 group 认祖——
     // 按 def.params 遍历的话组合词是空壳，一个参数都清不到。

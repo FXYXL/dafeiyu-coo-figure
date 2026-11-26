@@ -3,6 +3,8 @@
 > 标准版 **1.14.49** ｜ 高清版 **HD 1.6.18**（[`hd` 分支](https://github.com/FXYXL/dafeiyu-coo-figure/tree/hd)）
 > 更新记录：[Releases](https://github.com/FXYXL/dafeiyu-coo-figure/releases)
 
+> 本地集成候选（尚未发布）：默认闭嘴、动作角度连续交权、每帧一次位置映射，以及摸头俯仰/身体幅度、视线与松手交接、回复动作保护。需重跑本包 `tools/patch-pet-kit.mjs`，再从托盘完全退出并启动 Coo；真实回复链仍待本地验收。
+
 把「DeepSeek 免费公皮」（原本是 VTube Studio 生态的 Live2D 模型）改造成
 [Coopanion](https://github.com/Pal-AI-Lab/Coopanion)（[官网](https://coo.palailab.org/)）桌面宠物可用的形象包：
 会跟着鼠标看、会走神、能摸能拖、服装配件自由搭配，动作 / 表情 / 物理共用一条时间轴。
