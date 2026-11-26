@@ -38,7 +38,10 @@ node tools/patch-pet-kit.mjs --dir="C:/你的/Coo安装目录" --revert
 node tools/test-pet-kit-patch.mjs --engine="只读引擎源码目录" --out="隔离测试输出目录"
 node tools/test-music-ear.mjs "隔离测试输出目录"
 node tools/test-music-bridge.mjs "已打补丁的隔离引擎目录"
+node tools/test-music-probe-live.mjs
 ```
+
+`test-music-probe-live.mjs` 使用Windows PowerShell 5.1运行实际随包probe和NAudio，要求ready及至少40个真实WASAPI特征快照，不能用假特征源代替。probe必须保持ASCII：中文行尾注释在无BOM解码后可被C#编译器识别为换行字符，导致下一行声明被吞掉（2026-11-26回归）。补丁预检同时拒绝非ASCII的probe；发布前需测试提交/归档中的实际资源字节。
 
 已验证：当前安装引擎与2026-11-23历史快照可应用、重复执行、check、同大小资源损坏检测、精确回退、已有资源保留、锚点缺失时不写文件。
 真实 PowerShell 子进程验证订阅、时间戳、多客户端、最后释放与重新启动；使用假特征源，不据此宣称歌曲估速已在 Coo 真机通过。
