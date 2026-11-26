@@ -11,6 +11,9 @@
  *   - extent 由运行时实测（贴图就绪第 3 帧读 alpha 包围盒）；只有实测不准时才在 profile.extent 覆盖
  */
 export default {
+  // Test-bench accepted defaults; pitch and body response use separate input gains.
+  neutralFace: 'model',
+  interaction: { headPitchScale: 1.5, bodyPitchScale: .5, gazeReturnSeconds: .9 },
   fit: { mode: 'contain', anchor: 'bottom', padding: [0.04, 0.02], offset: [0, 0], zoom: 1 },
   // roam：跟随 Coo 的走动偏好；stand：固定站定（后端强制 roam off）
   motion: {"kind":"roam","speed":1,"native":true},

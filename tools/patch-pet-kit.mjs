@@ -158,7 +158,7 @@ const PATCHES = [
   {
     file: 'body', id: 'wordBase',
     desc: 'doWord 词还原：修饰词（微/大/快/慢/×几）+ 中文别名由形象包解析',
-    detect: (s) => /custom\?\.baseWord\?\.\(w\)/.test(s),
+    detect: (s) => /custom\?\.baseWord\?\.\(w(?:, o)?\)/.test(s),
     apply: (s) => s.replace(
       '  function doWord(w) {',
       '  function doWord(w) {\n    const base = custom?.baseWord?.(w);\n    if (base) w = base;',
@@ -1715,6 +1715,45 @@ function toneOf(text: string): string {
       .replace('      musicWs.onopen = () => { musicRetry = 0; };', '      const ownMusicWs = musicWs;\n      musicWs.onopen = () => { if (musicWs === ownMusicWs) musicRetry = 0; };')
       .replace("musicWs.onmessage = (e) => { try { post", "musicWs.onmessage = (e) => { if (musicWs !== ownMusicWs || !musicWanted) return; try { post")
       .replace('musicWs.onclose = () => { musicWs = null;', 'musicWs.onclose = () => { if (musicWs !== ownMusicWs) return; musicWs = null;'),
+  },
+  {
+    file: 'body', id: 'ruaWordAdmission',
+    desc: 'rua整段会话/摸后保护：解析前拒绝外来动作，不清姿势、不触发音效/爱心/挤压，保留说话',
+    detect: (s) => s.includes('// rua-word-admission-v1')
+      && s.includes('custom?.allowWord?.(w, o, !!rua) === false')
+      && s.includes('custom?.baseWord?.(w, o)'),
+    apply: (s) => {
+      const anchor = '    const base = custom?.baseWord?.(w);';
+      if (s.split(anchor).length !== 2) throw new Error('ruaWordAdmission：词入口锚点缺失或不唯一');
+      return s.replace(anchor, `    // rua-word-admission-v1: consume rejected words before parser side effects or kit extras.
+    if (custom?.allowWord?.(w, o, !!rua) === false) return true;
+    const base = custom?.baseWord?.(w, o);`);
+    },
+  },
+  {
+    file: 'body', id: 'ruaBodyInput',
+    desc: '透传rua原始垂直身体输入，与头部俯仰映射增益分开',
+    detect: (s) => s.includes('uy: rua.uy, bodyUy: rua.uy, side: rua.side'),
+    apply: (s) => {
+      const anchor = 'uy: rua.uy, side: rua.side';
+      if (s.split(anchor).length !== 2) throw new Error('ruaBodyInput：frame锚点缺失或不唯一');
+      return s.replace(anchor, 'uy: rua.uy, bodyUy: rua.uy, side: rua.side');
+    },
+  },
+  {
+    file: 'petapp', id: 'ruaCancelRelease',
+    desc: '失焦或丢失指针捕获时收尾，避免rua保护卡住；正常跨屏拖拽仍沿原路径',
+    detect: (s) => s.includes('// rua-cancel-release-v1')
+      && s.includes("stage.addEventListener('lostpointercapture', cancelBodyPress)"),
+    apply: (s) => {
+      const anchor = "stage.addEventListener('pointercancel', up);";
+      if (s.split(anchor).length !== 2) throw new Error('ruaCancelRelease：取消入口锚点缺失或不唯一');
+      return s.replace(anchor, `${anchor}
+// rua-cancel-release-v1: do not leave a held interaction alive after losing the window.
+const cancelBodyPress = () => { if (pressing) up(); };
+stage.addEventListener('lostpointercapture', cancelBodyPress);
+window.addEventListener('blur', cancelBodyPress);`);
+    },
   },
 ];
 
