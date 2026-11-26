@@ -1,10 +1,10 @@
 param([int]$IntervalMs = 50, [int]$ParentPid = 0)
 
-# 大肥鱼的耳朵：抓电脑正在播放的声音，每 IntervalMs 毫秒往 stdout 打一行 JSON：
-#   {"peak":0.0578,"rms":0.0181,"bands":[16 个 0~1]}
-# 设备级 WASAPI loopback（和 OBS 一样），不录音、不落盘，只算音量和 16 段频谱。
-# 借自 dsh-whale-pulse 的 runtime/probe.ps1（MIT），去掉了按应用抓取，改成从 $PSScriptRoot 读 NAudio.dll。
-# 本文件刻意全用 ASCII：PowerShell 5.1 读无 BOM 的 UTF-8 中文会乱码，注释里就不写中文了。
+# WASAPI loopback features only: RMS, peak and 16 spectrum bands.
+# Emits JSON to stdout; no raw audio is stored.
+# Derived from dsh-whale-pulse runtime/probe.ps1 (MIT).
+# Reads NAudio.dll from PSScriptRoot.
+# Keep this script ASCII for Windows PowerShell 5.1 without a UTF-8 BOM.
 
 $ErrorActionPreference = 'Stop'
 
@@ -145,7 +145,7 @@ public static class WhaleEar
                             if (level < 0.004) continue;
                             uint pid = session.GetProcessID;
                             if (pid == 0) continue;
-                            if (pid == (uint)Process.GetCurrentProcess().Id) continue; // 采集器自己在声卡上的会话，不能算成放音乐的软件（本机修，2026-11-12）
+                            if (pid == (uint)Process.GetCurrentProcess().Id) continue; // Ignore the capture process itself.
                             string name = Process.GetProcessById((int)pid).ProcessName.ToLowerInvariant();
                             double before;
                             if (!found.TryGetValue(name, out before) || level > before) found[name] = level;

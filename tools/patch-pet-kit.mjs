@@ -1807,6 +1807,10 @@ for (const [from,to] of MUSIC_ASSETS) {
   const source=path.join(HERE,from), f=path.join(DIR,to);
   if (!fs.existsSync(source)) { errors.push('包内缺 '+from); continue; }
   const after=fs.readFileSync(source),before=fs.existsSync(f)?fs.readFileSync(f):null;
+  if (from === 'music/probe.ps1' && after.some(byte => byte > 127)) {
+    errors.push('probe.ps1必须为ASCII：Windows PowerShell 5.1会误读无BOM的UTF-8，导致内嵌C#编译失败');
+    continue;
+  }
   if (!before || !before.equals(after)) {
     if (mode==='check') errors.push('资源内容不符 '+to);
     else plan.push({f,before,after});
