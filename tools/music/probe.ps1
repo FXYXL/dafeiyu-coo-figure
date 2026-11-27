@@ -1,4 +1,4 @@
-param([int]$IntervalMs = 50, [int]$ParentPid = 0)
+param([int]$IntervalMs = 50, [int]$ParentPid = 0, [string]$DllPath = '')
 
 # WASAPI loopback features only: RMS, peak and 16 spectrum bands.
 # Emits JSON to stdout; no raw audio is stored.
@@ -8,7 +8,7 @@ param([int]$IntervalMs = 50, [int]$ParentPid = 0)
 
 $ErrorActionPreference = 'Stop'
 
-$dll = Join-Path $PSScriptRoot 'NAudio.dll'
+$dll = if ($DllPath) { $DllPath } else { Join-Path $PSScriptRoot 'NAudio.dll' }
 if (-not (Test-Path -LiteralPath $dll)) {
     Write-Output '{"error":"naudio-missing"}'
     exit 1
@@ -36,6 +36,42 @@ using NAudio.CoreAudioApi;
 using NAudio.CoreAudioApi.Interfaces;
 using NAudio.Dsp;
 
+// Pure monotonic-time policy, also exercised by the isolated replay tests.
+public sealed class CaptureHealth
+{
+    private long _suspectAt = -1;
+    private long _checkedAt = -1;
+
+    public bool IsStalled(long now, long lastDataAt, double endpointPeak)
+    {
+        // Silence, a brief gap or an unreadable meter is not proof of failure.
+        // Reset after a long monitor gap (e.g. sleep/resume).
+        if (_checkedAt >= 0 && now - _checkedAt > 2500) _suspectAt = -1;
+        _checkedAt = now;
+        if (double.IsNaN(endpointPeak) || endpointPeak < 0.01 || now - lastDataAt < 1500)
+        {
+            _suspectAt = -1;
+            return false;
+        }
+        if (_suspectAt < 0) _suspectAt = now;
+        return now - _suspectAt >= 6000;
+    }
+}
+
+public sealed class TopologyHealth
+{
+    private readonly string _initial;
+    private string _pending;
+    private long _pendingAt;
+    public TopologyHealth(string initial) { _initial = initial; }
+    public bool IsChanged(long now, string fingerprint)
+    {
+        if (fingerprint == null || fingerprint == _initial) { _pending = null; return false; }
+        if (fingerprint != _pending) { _pending = fingerprint; _pendingAt = now; return false; }
+        return now - _pendingAt >= 1000;
+    }
+}
+
 public static class WhaleEar
 {
     private const int FftSize = 1024;
@@ -49,6 +85,29 @@ public static class WhaleEar
     private static double _peak;
     private static double _energy;
     private static long _count;
+    private static readonly Stopwatch Clock = Stopwatch.StartNew();
+
+    private sealed class CaptureSlot : IDisposable
+    {
+        public WasapiLoopbackCapture Capture;
+        public string Id;
+        public long LastDataAt = Clock.ElapsedMilliseconds;
+        public volatile bool Stopped;
+        public readonly CaptureHealth Health = new CaptureHealth();
+        public void Dispose()
+        {
+            try { Capture.StopRecording(); } catch { }
+            try { Capture.Dispose(); } catch { }
+        }
+    }
+
+    private sealed class Snapshot : IDisposable
+    {
+        public readonly System.Collections.Generic.List<MMDevice> All = new System.Collections.Generic.List<MMDevice>();
+        public readonly System.Collections.Generic.List<MMDevice> Targets = new System.Collections.Generic.List<MMDevice>();
+        public string Fingerprint;
+        public void Dispose() { foreach (var device in All) { try { device.Dispose(); } catch { } } }
+    }
 
     public static void Run(int intervalMs, int parentPid)
     {
@@ -56,80 +115,119 @@ public static class WhaleEar
         if (intervalMs < 20) intervalMs = 20;
         try { Console.OutputEncoding = new UTF8Encoding(false); } catch { }
 
-        var captures = new System.Collections.Generic.List<WasapiLoopbackCapture>();
-        string name = "(default)";
+        var captures = new System.Collections.Generic.List<CaptureSlot>();
+        Snapshot initial = null;
         try
         {
-            name = OpenAll(captures);
+            initial = ReadSnapshot();
+            var names = new System.Collections.Generic.List<string>();
+            foreach (var device in initial.Targets)
+            {
+                var slot = new CaptureSlot { Id = device.ID };
+                try
+                {
+                    slot.Capture = new WasapiLoopbackCapture(device);
+                    var state = slot;
+                    slot.Capture.DataAvailable += (sender, e) => {
+                        if (e.BytesRecorded > 0) Interlocked.Exchange(ref state.LastDataAt, Clock.ElapsedMilliseconds);
+                        OnData(sender, e);
+                    };
+                    slot.Capture.RecordingStopped += (sender, e) => { state.Stopped = true; };
+                    slot.Capture.StartRecording();
+                    names.Add(device.FriendlyName);
+                }
+                catch { slot.Dispose(); slot.Capture = null; }
+                // A device that could not start is monitored too: if it later becomes
+                // audible, retry instead of leaving it permanently uncaptured.
+                captures.Add(slot);
+            }
+            if (names.Count == 0) { Error("start-failed"); return; }
+            Line("{\"ready\":true,\"recovery\":true,\"device\":\"" + Json(string.Join(" + ", names)) + "\"}");
+
+            var topology = new TopologyHealth(initial.Fingerprint);
+            var bands = new double[Bands];
+            long monitorAt = Clock.ElapsedMilliseconds;
+            int monitorErrors = 0;
+            string apps = "[]";
+            var text = new StringBuilder(260);
+            while (true)
+            {
+                Thread.Sleep(intervalMs);
+                if (_parentPid > 0 && !ParentAlive()) return;
+                foreach (var slot in captures)
+                    if (slot.Capture != null && slot.Stopped) { Error("capture-stopped"); return; }
+
+                double peak, rms;
+                TakeFeatures(bands, out peak, out rms);
+
+                long now = Clock.ElapsedMilliseconds;
+                if (now - monitorAt >= 1000)
+                {
+                    monitorAt = now;
+                    try
+                    {
+                        using (var snapshot = ReadSnapshot())
+                        {
+                            if (topology.IsChanged(now, snapshot.Fingerprint)) { Error("devices-changed"); return; }
+                            foreach (var slot in captures)
+                            {
+                                double meter = double.NaN;
+                                foreach (var device in snapshot.Targets)
+                                    if (device.ID == slot.Id)
+                                    {
+                                        try { meter = device.AudioMeterInformation.MasterPeakValue; } catch { }
+                                        break;
+                                    }
+                                if (slot.Health.IsStalled(now, Interlocked.Read(ref slot.LastDataAt), meter))
+                                { Error("capture-stalled"); return; }
+                            }
+                            apps = AppsJson(snapshot.All);
+                        }
+                        monitorErrors = 0;
+                    }
+                    catch
+                    {
+                        // One transient enumeration failure is not a device change.
+                        apps = "[]";
+                        topology.IsChanged(now, null);
+                        if (++monitorErrors >= 3) { Error("device-monitor-failed"); return; }
+                    }
+                }
+                text.Length = 0;
+                text.Append("{\"peak\":").Append(F(peak, 4));
+                text.Append(",\"rms\":").Append(F(rms, 4));
+                text.Append(",\"bands\":[");
+                for (int b = 0; b < Bands; b++)
+                {
+                    if (b > 0) text.Append(',');
+                    text.Append(F(bands[b], 3));
+                }
+                text.Append("],\"apps\":").Append(apps).Append("}");
+                Line(text.ToString());
+            }
         }
         catch (Exception error)
         {
             Line("{\"error\":\"device-open-failed\",\"message\":\"" + Json(error.Message) + "\"}");
-            Environment.Exit(1);
-            return;
+            Environment.ExitCode = 1;
         }
-
-        int started = 0;
-        foreach (var capture in captures)
+        finally
         {
-            capture.DataAvailable += OnData;
-            try { capture.StartRecording(); started++; }
-            catch { try { capture.Dispose(); } catch { } }
-        }
-        if (started == 0)
-        {
-            Line("{\"error\":\"start-failed\",\"message\":\"no loopback device could start\"}");
-            Environment.Exit(1);
-            return;
-        }
-
-        Line("{\"ready\":true,\"device\":\"" + Json(name) + "\"}");
-
-        var bands = new double[Bands];
-        int appTick = 0;
-        string apps = "[]";
-        var text = new StringBuilder(260);
-        while (true)
-        {
-            Thread.Sleep(intervalMs);
-            if (_parentPid > 0 && !ParentAlive()) return;
-
-            double peak, rms;
-            lock (Gate)
-            {
-                peak = _peak;
-                rms = Math.Sqrt(_count > 0 ? _energy / _count : 0);
-                _peak = 0;
-                _energy = 0;
-                _count = 0;
-            }
-            ComputeBands(bands);
-            // which app is making the sound (music-app whitelist, 2026-11-10): refresh about once a second
-            if (++appTick % 20 == 0) apps = AppsJson();
-
-            text.Length = 0;
-            text.Append("{\"peak\":").Append(F(peak, 4));
-            text.Append(",\"rms\":").Append(F(rms, 4));
-            text.Append(",\"bands\":[");
-            for (int b = 0; b < Bands; b++)
-            {
-                if (b > 0) text.Append(',');
-                text.Append(F(bands[b], 3));
-            }
-            text.Append("],\"apps\":").Append(apps).Append("}");
-            Line(text.ToString());
+            foreach (var slot in captures) slot.Dispose();
+            if (initial != null) initial.Dispose();
+            if (_parentProc != null) _parentProc.Dispose();
         }
     }
 
-    private static readonly MMDeviceEnumerator Devices = new MMDeviceEnumerator();
+    private static void Error(string reason) { Line("{\"error\":\"" + reason + "\"}"); Environment.ExitCode = 1; }
 
     // Loudest few audio sessions right now: [["spotify",0.42],["chrome",0.11]] (music-app whitelist).
-    private static string AppsJson()
+    private static string AppsJson(System.Collections.Generic.List<MMDevice> devices)
     {
         try
         {
             var found = new System.Collections.Generic.Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
-            foreach (var device in Devices.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active))
+            foreach (var device in devices)
             {
                 try
                 {
@@ -146,7 +244,8 @@ public static class WhaleEar
                             uint pid = session.GetProcessID;
                             if (pid == 0) continue;
                             if (pid == (uint)Process.GetCurrentProcess().Id) continue; // Ignore the capture process itself.
-                            string name = Process.GetProcessById((int)pid).ProcessName.ToLowerInvariant();
+                            string name;
+                            using (var process = Process.GetProcessById((int)pid)) name = process.ProcessName.ToLowerInvariant();
                             double before;
                             if (!found.TryGetValue(name, out before) || level > before) found[name] = level;
                         }
@@ -207,18 +306,6 @@ public static class WhaleEar
         catch { return false; }
     }
 
-    private static bool HasSession(MMDevice device)
-    {
-        try
-        {
-            var sessions = device.AudioSessionManager.Sessions;
-            for (int i = 0; i < sessions.Count; i++)
-                if ((int)sessions[i].State == 1) return true;
-        }
-        catch { }
-        return false;
-    }
-
     // FxSound / Voicemeeter / VB-Audio / CABLE endpoints are pass-through: capturing them gives silence.
     private static bool IsVirtual(string name)
     {
@@ -229,39 +316,31 @@ public static class WhaleEar
             || n.Contains("cable output") || n.Contains("stereo mix");
     }
 
-    private static string OpenAll(System.Collections.Generic.List<WasapiLoopbackCapture> captures)
+    private static Snapshot ReadSnapshot()
     {
-        var names = new System.Collections.Generic.List<string>();
-        using (var enumerator = new MMDeviceEnumerator())
+        var snapshot = new Snapshot();
+        try
         {
-            try
+            using (var enumerator = new MMDeviceEnumerator())
             {
+                string defaultId = "";
+                try { using (var device = enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia)) defaultId = device.ID; }
+                catch { }
                 foreach (var device in enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active))
                 {
-                    if (IsVirtual(device.FriendlyName)) continue;
-                    try
-                    {
-                        captures.Add(new WasapiLoopbackCapture(device));
-                        names.Add(device.FriendlyName);
-                    }
-                    catch { }
+                    snapshot.All.Add(device);
+                    if (!IsVirtual(device.FriendlyName)) snapshot.Targets.Add(device);
                 }
+                if (snapshot.Targets.Count == 0)
+                    foreach (var device in snapshot.All) if (device.ID == defaultId) { snapshot.Targets.Add(device); break; }
+                var ids = new System.Collections.Generic.List<string>();
+                foreach (var device in snapshot.Targets) ids.Add(device.ID);
+                ids.Sort(StringComparer.Ordinal);
+                snapshot.Fingerprint = defaultId + "|" + string.Join("|", ids);
             }
-            catch { }
-            if (captures.Count == 0)
-            {
-                try
-                {
-                    var fallback = enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
-                    captures.Add(new WasapiLoopbackCapture(fallback));
-                    names.Add(fallback.FriendlyName);
-                }
-                catch { }
-            }
+            return snapshot;
         }
-        if (captures.Count == 0) captures.Add(new WasapiLoopbackCapture());
-        if (names.Count == 0) names.Add("(default)");
-        return string.Join(" + ", names);
+        catch { snapshot.Dispose(); throw; }
     }
 
     private static void OnData(object sender, WaveInEventArgs e)
@@ -284,6 +363,23 @@ public static class WhaleEar
             _energy += energy;
             _count += cnt;
         }
+    }
+
+    private static void TakeFeatures(double[] bands, out double peak, out double rms)
+    {
+        bool fresh;
+        lock (Gate)
+        {
+            peak = _peak;
+            fresh = _count > 0;
+            rms = Math.Sqrt(fresh ? _energy / _count : 0);
+            _peak = 0;
+            _energy = 0;
+            _count = 0;
+            // Do not replay the old FFT after callbacks stop or playback pauses.
+            if (!fresh) Array.Clear(Samples, 0, Samples.Length);
+        }
+        if (fresh) ComputeBands(bands); else Array.Clear(bands, 0, bands.Length);
     }
 
     private static void ComputeBands(double[] bands)
